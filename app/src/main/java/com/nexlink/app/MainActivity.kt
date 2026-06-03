@@ -1,9 +1,11 @@
 package com.nexlink.app
 
 import android.Manifest
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.provider.Settings
 import android.provider.Telephony
 import android.telecom.TelecomManager
 import androidx.appcompat.app.AlertDialog
@@ -11,6 +13,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import com.nexlink.app.services.NexLinkNotificationListener
 import com.nexlink.app.databinding.ActivityMainBinding
 import com.nexlink.app.ui.calls.CallsFragment
 import com.nexlink.app.ui.contacts.ContactsFragment
@@ -47,6 +50,7 @@ class MainActivity : AppCompatActivity() {
         requestMissingPermissions()
         promptDefaultSmsApp()
         promptDefaultDialer()
+        promptNotificationAccess()
 
         loadFragment(inboxFragment)
 
@@ -74,6 +78,24 @@ class MainActivity : AppCompatActivity() {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
         if (missing.isNotEmpty()) ActivityCompat.requestPermissions(this, missing.toTypedArray(), 0)
+    }
+
+    private fun promptNotificationAccess() {
+        val enabled = Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: ""
+        val comp = ComponentName(this, NexLinkNotificationListener::class.java).flattenToString()
+        if (comp in enabled) return
+        AlertDialog.Builder(this)
+            .setTitle("Allow Notification Access")
+            .setMessage(
+                "NexLink needs Notification Access to show messages from WhatsApp, " +
+                "Signal, Telegram and Messenger in your Inbox.\n\n" +
+                "Tap Grant, then enable NexLink in the list."
+            )
+            .setPositiveButton("Grant") { _, _ ->
+                startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            }
+            .setNegativeButton("Not Now", null)
+            .show()
     }
 
     private fun promptDefaultDialer() {

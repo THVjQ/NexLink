@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="wrap_content"
-    android:orientation="horizontal" android:padding="12dp" android:gravity="center_vertical">
+    android:orientation="horizontal"
+    android:paddingHorizontal="14dp" android:paddingVertical="12dp"
+    android:gravity="center_vertical"
+    android:background="?attr/selectableItemBackground">
 
     <TextView android:id="@+id/tvAvatar"
         android:layout_width="42dp" android:layout_height="42dp"
@@ -11,8 +14,10 @@
 
     <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
         android:layout_weight="1" android:orientation="vertical">
+
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="horizontal" android:gravity="center_vertical">
+            android:orientation="horizontal" android:gravity="center_vertical"
+            android:layout_marginBottom="3dp">
             <TextView android:id="@+id/tvName"
                 android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
                 android:textColor="@color/text" android:textSize="13sp" android:textStyle="bold"
@@ -26,9 +31,19 @@
                 android:textColor="@color/muted" android:textSize="10sp"
                 android:layout_marginStart="8dp"/>
         </LinearLayout>
+
         <TextView android:id="@+id/tvText"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:textColor="@color/muted" android:textSize="12sp"
             android:singleLine="true" android:ellipsize="end"/>
     </LinearLayout>
+
+    <!-- Open/call button -->
+    <ImageButton android:id="@+id/btnOpenCall"
+        android:layout_width="36dp" android:layout_height="36dp"
+        android:background="@drawable/bg_action_btn"
+        android:padding="8dp"
+        android:layout_marginStart="10dp"
+        android:visibility="gone"/>
+
 </LinearLayout>

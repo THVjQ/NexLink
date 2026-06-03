@@ -8,12 +8,14 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.*
+import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexlink.app.R
 import com.nexlink.app.databinding.FragmentContactsBinding
+import com.nexlink.app.db.DeepLinkHelper
 import com.nexlink.app.ui.sms.ConversationActivity
 
 data class Contact(val name: String, val number: String)
@@ -104,9 +106,36 @@ class ContactsFragment : Fragment() {
     }
 
     private fun placeCall(c: Contact) {
-        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CALL_PHONE)
-            != PackageManager.PERMISSION_GRANTED) return
-        startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:${c.number}")))
+        val ctx = requireContext()
+        val options = mutableListOf<String>()
+        val actions = mutableListOf<() -> Unit>()
+
+        options += "📞  Phone call"
+        actions += {
+            if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.CALL_PHONE)
+                == PackageManager.PERMISSION_GRANTED) {
+                startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:${c.number}")))
+            }
+        }
+
+        if (ctx.packageManager.getLaunchIntentForPackage("com.whatsapp") != null) {
+            options += "🟢  WhatsApp"
+            actions += { DeepLinkHelper.whatsApp(ctx, c.number) }
+        }
+        if (ctx.packageManager.getLaunchIntentForPackage("org.telegram.messenger") != null) {
+            options += "✈️  Telegram"
+            actions += { DeepLinkHelper.telegram(ctx, c.number) }
+        }
+        if (ctx.packageManager.getLaunchIntentForPackage("org.thoughtcrime.securesms") != null) {
+            options += "🔵  Signal"
+            actions += { DeepLinkHelper.signal(ctx) }
+        }
+
+        AlertDialog.Builder(ctx)
+            .setTitle("Call ${c.name} via…")
+            .setItems(options.toTypedArray()) { _, i -> actions[i]() }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     override fun onDestroyView() { super.onDestroyView(); _b = null }
