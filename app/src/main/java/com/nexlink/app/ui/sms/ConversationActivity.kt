@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexlink.app.R
 import com.nexlink.app.databinding.ActivityConversationBinding
+import com.nexlink.app.db.ReadTracker
 import com.nexlink.app.db.SmsHelper
 
 class ConversationActivity : AppCompatActivity() {
@@ -44,7 +45,9 @@ class ConversationActivity : AppCompatActivity() {
         b.recycler.adapter = adapter
 
         loadMessages()
+        // Mark read in system store (works if default SMS app) AND locally (always works)
         SmsHelper.markRead(this, address)
+        ReadTracker.markRead(this, address)
 
         b.btnSend.setOnClickListener { sendMessage() }
     }

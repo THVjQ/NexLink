@@ -7,6 +7,7 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.nexlink.app.R
 import com.nexlink.app.db.Conversation
+import com.nexlink.app.db.ReadTracker
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -33,32 +34,41 @@ class ConversationAdapter(private val onClick: (Conversation) -> Unit) :
 
     override fun onBindViewHolder(h: VH, pos: Int) {
         val c = items[pos]
-        val initials = c.contactName.split(" ").take(2).joinToString("") { it.take(1).uppercase() }
-            .ifBlank { c.address.take(2) }
+        val ctx = h.itemView.context
+        val initials = c.contactName.split(" ").take(2)
+            .joinToString("") { it.take(1).uppercase() }.ifBlank { c.address.take(2) }
+
         h.avatar.text  = initials
-        h.name.text    = c.contactName
+        h.name.text    = c.contactName.ifBlank { c.address }
         h.preview.text = c.lastMessage
         h.time.text    = formatTime(c.timestamp)
-        if (c.unreadCount > 0) {
+
+        // Treat as read if system says 0 unread OR user locally viewed it
+        val effectivelyRead = c.unreadCount == 0 ||
+            ReadTracker.isLocallyRead(ctx, c.address, c.timestamp)
+
+        if (!effectivelyRead) {
             h.badge.visibility = View.VISIBLE
-            h.badge.text = c.unreadCount.toString()
-            h.name.alpha = 1f
+            h.badge.text       = c.unreadCount.toString()
+            h.name.setTypeface(null, android.graphics.Typeface.BOLD)
+            h.preview.alpha    = 1f
         } else {
             h.badge.visibility = View.GONE
-            h.name.alpha = 0.6f
+            h.name.setTypeface(null, android.graphics.Typeface.NORMAL)
+            h.preview.alpha    = 0.6f
         }
+
         h.itemView.setOnClickListener { onClick(c) }
     }
 
     private fun formatTime(ms: Long): String {
-        val now = System.currentTimeMillis()
-        val diff = now - ms
+        val diff = System.currentTimeMillis() - ms
         return when {
-            diff < 60_000            -> "now"
-            diff < 3_600_000         -> "${diff / 60_000}m"
-            diff < 86_400_000        -> "${diff / 3_600_000}h"
-            diff < 7 * 86_400_000L   -> SimpleDateFormat("EEE", Locale.getDefault()).format(Date(ms))
-            else                     -> SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(ms))
+            diff < 60_000           -> "now"
+            diff < 3_600_000        -> "${diff / 60_000}m"
+            diff < 86_400_000       -> "${diff / 3_600_000}h"
+            diff < 7 * 86_400_000L  -> SimpleDateFormat("EEE", Locale.getDefault()).format(Date(ms))
+            else                    -> SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(ms))
         }
     }
 }

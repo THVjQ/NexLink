@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg">#0a0a0f</color>
-    <color name="surface">#12121a</color>
-    <color name="surface2">#1a1a26</color>
-    <color name="accent">#6c5ce7</color>
-    <color name="accent2">#a29bfe</color>
-    <color name="text">#f0f0ff</color>
-    <color name="muted">#6e6e90</color>
+    <!-- Samsung One UI dark palette -->
+    <color name="bg">#000000</color>
+    <color name="surface">#1c1c1e</color>
+    <color name="surface2">#2c2c2e</color>
+    <color name="surface3">#3a3a3c</color>
+    <color name="accent">#0178FF</color>
+    <color name="accent2">#4ca3ff</color>
+    <color name="text">#ffffff</color>
+    <color name="text2">#ebebf5</color>
+    <color name="muted">#8e8e93</color>
+    <color name="divider">#38383a</color>
 </resources>

@@ -1,14 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="wrap_content"
-    android:orientation="vertical" android:gravity="start" android:padding="4dp">
+    android:orientation="vertical" android:gravity="start"
+    android:paddingHorizontal="12dp" android:paddingVertical="3dp">
     <TextView android:id="@+id/tvBubble"
         android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:background="@drawable/bg_bubble_in" android:padding="12dp"
+        android:background="@drawable/bg_bubble_in"
+        android:paddingHorizontal="14dp" android:paddingVertical="10dp"
         android:textColor="@color/text" android:textSize="15sp"
-        android:maxWidth="260dp"/>
+        android:lineSpacingExtra="2dp"
+        android:maxWidth="280dp"/>
     <TextView android:id="@+id/tvTime"
         android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:textColor="@color/muted" android:textSize="10sp"
-        android:layout_marginTop="2dp" android:layout_marginStart="4dp"/>
+        android:textColor="@color/muted" android:textSize="11sp"
+        android:layout_marginTop="3dp" android:layout_marginStart="4dp"/>
 </LinearLayout>

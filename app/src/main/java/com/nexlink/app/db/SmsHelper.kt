@@ -22,39 +22,66 @@ data class SmsMessage(
 
 object SmsHelper {
 
+    private val contactCache = HashMap<String, String>()
+
     fun getConversations(ctx: Context): List<Conversation> {
         val list = mutableListOf<Conversation>()
         val uri = Telephony.Sms.CONTENT_URI
-        val proj = arrayOf(
-            Telephony.Sms.ADDRESS,
-            Telephony.Sms.BODY,
-            Telephony.Sms.DATE,
-            Telephony.Sms.READ
-        )
+        val proj = arrayOf(Telephony.Sms.ADDRESS, Telephony.Sms.BODY, Telephony.Sms.DATE)
+
+        // Single upfront pass: gather unread counts for all addresses at once
+        val unreadMap = buildUnreadMap(ctx)
+
         val seen = mutableSetOf<String>()
         try {
             ctx.contentResolver.query(uri, proj, null, null, "${Telephony.Sms.DATE} DESC")?.use { c ->
                 while (c.moveToNext()) {
+                    if (seen.size >= 60) break          // cap — don't scan thousands of rows
                     val addr = c.getString(0) ?: continue
                     if (addr in seen) continue
                     seen += addr
-                    val body    = c.getString(1) ?: ""
-                    val date    = c.getLong(2)
-                    val unread  = unreadCount(ctx, addr)
-                    list += Conversation(addr, getContactName(ctx, addr), body, date, unread)
+                    list += Conversation(
+                        address      = addr,
+                        contactName  = getContactName(ctx, addr),
+                        lastMessage  = c.getString(1) ?: "",
+                        timestamp    = c.getLong(2),
+                        unreadCount  = unreadMap[addr] ?: 0
+                    )
                 }
             }
         } catch (_: Exception) {}
         return list
     }
 
+    /** One query to get ALL unread rows, grouped by address. Replaces N per-address queries. */
+    private fun buildUnreadMap(ctx: Context): Map<String, Int> {
+        val map = mutableMapOf<String, Int>()
+        try {
+            ctx.contentResolver.query(
+                Telephony.Sms.CONTENT_URI,
+                arrayOf(Telephony.Sms.ADDRESS),
+                "${Telephony.Sms.READ} = 0",
+                null, null
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    val addr = c.getString(0) ?: continue
+                    map[addr] = (map[addr] ?: 0) + 1
+                }
+            }
+        } catch (_: Exception) {}
+        return map
+    }
+
     fun getMessages(ctx: Context, address: String): List<SmsMessage> {
         val list = mutableListOf<SmsMessage>()
-        val uri = Telephony.Sms.CONTENT_URI
-        val proj = arrayOf(Telephony.Sms._ID, Telephony.Sms.ADDRESS, Telephony.Sms.BODY, Telephony.Sms.DATE, Telephony.Sms.TYPE)
-        val sel = "${Telephony.Sms.ADDRESS} = ?"
+        val proj = arrayOf(Telephony.Sms._ID, Telephony.Sms.ADDRESS, Telephony.Sms.BODY,
+                           Telephony.Sms.DATE, Telephony.Sms.TYPE)
         try {
-            ctx.contentResolver.query(uri, proj, sel, arrayOf(address), "${Telephony.Sms.DATE} ASC")?.use { c ->
+            ctx.contentResolver.query(
+                Telephony.Sms.CONTENT_URI, proj,
+                "${Telephony.Sms.ADDRESS} = ?", arrayOf(address),
+                "${Telephony.Sms.DATE} ASC LIMIT 300"
+            )?.use { c ->
                 while (c.moveToNext()) {
                     list += SmsMessage(
                         id         = c.getLong(0),
@@ -69,25 +96,20 @@ object SmsHelper {
         return list
     }
 
-    private fun unreadCount(ctx: Context, address: String): Int {
-        var count = 0
-        val uri = Telephony.Sms.CONTENT_URI
-        val sel = "${Telephony.Sms.ADDRESS} = ? AND ${Telephony.Sms.READ} = 0"
-        try {
-            ctx.contentResolver.query(uri, arrayOf(Telephony.Sms._ID), sel, arrayOf(address), null)?.use {
-                count = it.count
-            }
-        } catch (_: Exception) {}
-        return count
-    }
-
     fun getContactName(ctx: Context, address: String): String {
         if (address.isBlank()) return address
+        contactCache[address]?.let { return it }
         try {
             val uri = ContactsContract.PhoneLookup.CONTENT_FILTER_URI.buildUpon()
                 .appendPath(address).build()
-            ctx.contentResolver.query(uri, arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME), null, null, null)?.use {
-                if (it.moveToFirst()) return it.getString(0)
+            ctx.contentResolver.query(
+                uri, arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME), null, null, null
+            )?.use {
+                if (it.moveToFirst()) {
+                    val name = it.getString(0)
+                    contactCache[address] = name
+                    return name
+                }
             }
         } catch (_: Exception) {}
         return address

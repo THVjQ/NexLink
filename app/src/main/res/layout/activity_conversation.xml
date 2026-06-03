@@ -7,30 +7,45 @@
         android:id="@+id/toolbar"
         android:layout_width="match_parent" android:layout_height="?attr/actionBarSize"
         android:background="@color/surface"
-        android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"/>
+        android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
+        android:elevation="0dp"/>
+
+    <View android:layout_width="match_parent" android:layout_height="1dp"
+        android:background="@color/divider"/>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recycler"
         android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
-        android:padding="8dp" android:clipToPadding="false"/>
+        android:paddingTop="8dp" android:paddingBottom="8dp" android:clipToPadding="false"/>
 
+    <!-- Compose bar — Samsung Messages style -->
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:padding="8dp" android:background="@color/surface"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp" android:paddingVertical="10dp"
+        android:background="@color/surface"
         android:gravity="center_vertical">
 
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/etInput"
+        <EditText android:id="@+id/etInput"
             android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-            android:hint="Message" android:textColor="@color/text" android:textColorHint="@color/muted"
-            android:background="@drawable/bg_input" android:padding="12dp"
-            android:imeOptions="actionSend" android:inputType="textMultiLine"
-            android:maxLines="4" android:textSize="15sp"/>
+            android:hint="Message" android:textColor="@color/text"
+            android:textColorHint="@color/muted"
+            android:background="@drawable/bg_input"
+            android:paddingHorizontal="16dp" android:paddingVertical="10dp"
+            android:textSize="15sp" android:maxLines="5"
+            android:inputType="textMultiLine|textCapSentences"/>
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSend"
-            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            style="@style/Widget.Material3.Button.Icon"
+            android:layout_width="44dp" android:layout_height="44dp"
             android:layout_marginStart="8dp"
-            android:text="Send" android:backgroundTint="@color/accent"/>
+            android:insetTop="0dp" android:insetBottom="0dp"
+            android:backgroundTint="@color/accent"
+            app:cornerRadius="22dp"
+            app:icon="@drawable/ic_send"
+            app:iconTint="#ffffff"
+            app:iconGravity="textStart"
+            xmlns:app="http://schemas.android.com/apk/res-auto"/>
 
     </LinearLayout>
 </LinearLayout>

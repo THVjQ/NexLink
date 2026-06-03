@@ -1,36 +1,60 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="wrap_content"
-    android:orientation="horizontal" android:padding="12dp" android:gravity="center_vertical">
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp" android:paddingVertical="12dp"
+    android:gravity="center_vertical">
 
+    <!-- Circle avatar -->
     <TextView android:id="@+id/tvAvatar"
-        android:layout_width="50dp" android:layout_height="50dp"
-        android:background="@drawable/bg_avatar" android:gravity="center"
-        android:textColor="#fff" android:textSize="16sp" android:textStyle="bold"
-        android:layout_marginEnd="12dp"/>
+        android:layout_width="52dp" android:layout_height="52dp"
+        android:background="@drawable/bg_avatar"
+        android:gravity="center"
+        android:textColor="#ffffff"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginEnd="14dp"
+        android:fontFamily="sans-serif-medium"/>
 
     <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
         android:layout_weight="1" android:orientation="vertical">
+
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="horizontal" android:gravity="center_vertical">
+            android:orientation="horizontal" android:gravity="center_vertical"
+            android:layout_marginBottom="3dp">
             <TextView android:id="@+id/tvName"
-                android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                android:textColor="@color/text" android:textSize="14sp" android:textStyle="bold"
-                android:singleLine="true"/>
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="@color/text"
+                android:textSize="15sp"
+                android:singleLine="true"
+                android:ellipsize="end"/>
             <TextView android:id="@+id/tvTime"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:textColor="@color/muted" android:textSize="11sp"/>
+                android:textColor="@color/muted"
+                android:textSize="12sp"
+                android:layout_marginStart="8dp"/>
         </LinearLayout>
-        <TextView android:id="@+id/tvPreview"
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:textColor="@color/muted" android:textSize="13sp"
-            android:singleLine="true" android:ellipsize="end"/>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical">
+            <TextView android:id="@+id/tvPreview"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="@color/muted"
+                android:textSize="13sp"
+                android:singleLine="true"
+                android:ellipsize="end"/>
+            <TextView android:id="@+id/tvBadge"
+                android:layout_width="22dp" android:layout_height="22dp"
+                android:background="@drawable/bg_badge"
+                android:gravity="center"
+                android:textColor="#ffffff"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:layout_marginStart="8dp"
+                android:visibility="gone"/>
+        </LinearLayout>
+
     </LinearLayout>
-
-    <TextView android:id="@+id/tvBadge"
-        android:layout_width="22dp" android:layout_height="22dp"
-        android:background="@drawable/bg_badge" android:gravity="center"
-        android:textColor="#fff" android:textSize="11sp" android:textStyle="bold"
-        android:layout_marginStart="8dp" android:visibility="gone"/>
-
 </LinearLayout>
