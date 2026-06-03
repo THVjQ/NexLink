@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:background="@color/surface"
+    android:paddingBottom="30dp">
+
+    <TextView android:text="Dialpad" android:textSize="18sp" android:textStyle="bold"
+        android:textColor="@color/text" android:gravity="center"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:padding="16dp"/>
+
+    <TextView android:id="@+id/tvDialNumber"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:textSize="32sp" android:textStyle="bold" android:textColor="@color/text"
+        android:gravity="center" android:padding="8dp" android:letterSpacing="0.05"
+        android:minHeight="60dp"/>
+
+    <GridLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:columnCount="3" android:padding="16dp">
+
+        <Button android:id="@+id/k1" style="@style/DialKey" android:text="1"/>
+        <Button android:id="@+id/k2" style="@style/DialKey" android:text="2"/>
+        <Button android:id="@+id/k3" style="@style/DialKey" android:text="3"/>
+        <Button android:id="@+id/k4" style="@style/DialKey" android:text="4"/>
+        <Button android:id="@+id/k5" style="@style/DialKey" android:text="5"/>
+        <Button android:id="@+id/k6" style="@style/DialKey" android:text="6"/>
+        <Button android:id="@+id/k7" style="@style/DialKey" android:text="7"/>
+        <Button android:id="@+id/k8" style="@style/DialKey" android:text="8"/>
+        <Button android:id="@+id/k9" style="@style/DialKey" android:text="9"/>
+        <Button android:id="@+id/kStar" style="@style/DialKey" android:text="*"/>
+        <Button android:id="@+id/k0" style="@style/DialKey" android:text="0"/>
+        <Button android:id="@+id/kHash" style="@style/DialKey" android:text="#"/>
+
+    </GridLayout>
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center" android:paddingHorizontal="24dp">
+
+        <View android:layout_width="64dp" android:layout_height="64dp"/>
+
+        <Button android:id="@+id/kCall"
+            android:layout_width="70dp" android:layout_height="70dp"
+            android:background="@drawable/bg_call_green"
+            android:layout_marginHorizontal="20dp"
+            android:drawableTop="@drawable/ic_call"
+            android:drawableTint="#fff"/>
+
+        <Button android:id="@+id/kDel"
+            android:layout_width="64dp" android:layout_height="64dp"
+            android:background="@drawable/bg_card"
+            android:drawableTop="@drawable/ic_backspace"
+            android:drawableTint="@color/text"/>
+
+    </LinearLayout>
+</LinearLayout>

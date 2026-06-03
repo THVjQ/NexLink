@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="horizontal" android:padding="12dp" android:gravity="center_vertical">
+
+    <TextView android:id="@+id/tvAvatar"
+        android:layout_width="46dp" android:layout_height="46dp"
+        android:background="@drawable/bg_avatar" android:gravity="center"
+        android:textColor="#fff" android:textSize="15sp" android:textStyle="bold"
+        android:layout_marginEnd="12dp"/>
+
+    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+        android:layout_weight="1" android:orientation="vertical">
+        <TextView android:id="@+id/tvName"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:textColor="@color/text" android:textSize="14sp" android:textStyle="bold"
+            android:singleLine="true"/>
+        <TextView android:id="@+id/tvDetail"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:textSize="11sp"/>
+    </LinearLayout>
+
+    <ImageButton android:id="@+id/btnCall"
+        android:layout_width="38dp" android:layout_height="38dp"
+        android:background="@drawable/bg_call_btn"
+        android:src="@drawable/ic_call"
+        android:tint="#25d366"
+        android:padding="8dp"/>
+
+</LinearLayout>
