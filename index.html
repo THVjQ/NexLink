@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0a0f">
+<title>NexLink</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0a0a0f;--surface:#12121a;--surface2:#1a1a26;--surface3:#22223a;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#f0f0ff;--muted:#6e6e90;
+  --accent:#6c5ce7;--accent2:#a29bfe;
+  --sms:#00cec9;--signal:#3a9bd5;--telegram:#229ed9;--whatsapp:#25d366;--messenger:#0099ff;
+  --glow:rgba(108,92,231,0.3);--r:14px;--r-sm:10px;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+  font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;-webkit-text-size-adjust:100%}
+.app{width:100vw;height:100vh;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+.pages{flex:1;position:relative;overflow:hidden;min-height:0}
+.page{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  opacity:0;transform:translateY(8px);transition:opacity .2s ease,transform .2s ease;
+  pointer-events:none;scrollbar-width:none;padding-bottom:80px}
+.page::-webkit-scrollbar{display:none}
+.page.active{opacity:1;transform:translateY(0);pointer-events:all}
+.page-header{padding:16px 16px 10px;display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:10;background:linear-gradient(to bottom,var(--bg) 80%,transparent)}
+.page-title{font-family:'Syne',system-ui,sans-serif;font-size:24px;font-weight:800;letter-spacing:-.5px;
+  background:linear-gradient(120deg,var(--text) 0%,var(--accent2) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.page-sub{font-size:12px;color:var(--muted);margin-top:1px}
+.hdr-actions{display:flex;gap:8px}
+.icon-btn{width:36px;height:36px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;cursor:pointer}
+.icon-btn:active{background:var(--surface3)}
+
+/* CHIPS */
+.chips{display:flex;gap:7px;padding:0 16px 12px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.chips::-webkit-scrollbar{display:none}
+.chip{display:flex;align-items:center;gap:5px;padding:6px 14px;border-radius:99px;
+  font-size:13px;font-weight:500;white-space:nowrap;cursor:pointer;
+  border:1px solid var(--border);background:var(--surface);color:var(--muted);flex-shrink:0;
+  user-select:none;-webkit-user-select:none}
+.chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip .cdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.sec-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.09em;
+  color:var(--muted);padding:8px 16px 6px}
+.divider{height:1px;background:var(--border);margin:2px 16px 6px}
+.glow-line{height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent);margin:0 16px 12px;opacity:.35}
+
+/* CONV LIST */
+.conv-list{padding:0 8px 16px;display:flex;flex-direction:column}
+.conv-item{display:flex;align-items:center;gap:12px;padding:12px 10px;border-radius:var(--r);
+  cursor:pointer;user-select:none;-webkit-user-select:none;position:relative;transition:background .1s;
+  content-visibility:auto;contain-intrinsic-size:0 74px}
+.conv-item:active{background:var(--surface2)}
+.av-wrap{position:relative;flex-shrink:0}
+.avatar{width:50px;height:50px;border-radius:16px;display:flex;align-items:center;justify-content:center;
+  font-family:'Syne',system-ui,sans-serif;font-weight:700;font-size:16px}
+.pbadge{position:absolute;bottom:-2px;right:-2px;width:18px;height:18px;border-radius:6px;
+  display:flex;align-items:center;justify-content:center;border:2px solid var(--bg)}
+.pbadge svg{width:10px;height:10px}
+.online-dot{position:absolute;top:1px;left:1px;width:10px;height:10px;border-radius:50%;
+  background:#00e96a;border:2px solid var(--bg)}
+.conv-info{flex:1;min-width:0}
+.conv-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px}
+.conv-name{font-size:14px;font-weight:500;color:var(--muted)}
+.conv-item.unread .conv-name{font-weight:600;color:var(--text)}
+.conv-time{font-size:11px;color:var(--muted);flex-shrink:0;margin-left:4px}
+.conv-prev{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conv-item.unread .conv-prev{color:rgba(240,240,255,.65)}
+.ubadge{min-width:20px;height:20px;border-radius:10px;background:var(--accent);color:#fff;
+  font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 5px;flex-shrink:0}
+
+/* SMS HEADER CARD */
+.sms-header-card{margin:0 16px 14px;
+  background:linear-gradient(135deg,rgba(0,206,201,.14),rgba(0,206,201,.04));
+  border:1px solid rgba(0,206,201,.22);border-radius:18px;padding:16px}
+.sms-hc-top{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.sms-icon-big{width:48px;height:48px;border-radius:15px;background:rgba(0,206,201,.18);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sms-hc-info{flex:1}
+.sms-hc-title{font-family:'Syne',system-ui,sans-serif;font-weight:800;font-size:15px;color:var(--sms)}
+.sms-hc-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.sms-hc-badge{background:var(--sms);color:#0a0a0f;font-size:12px;font-weight:800;padding:4px 10px;border-radius:20px}
+.sms-stats{display:flex;gap:8px}
+.sms-stat{flex:1;background:rgba(0,206,201,.08);border-radius:10px;padding:10px 8px;text-align:center;border:1px solid rgba(0,206,201,.12)}
+.sms-stat-n{font-family:'Syne',system-ui,sans-serif;font-weight:700;font-size:18px;color:var(--sms)}
+.sms-stat-l{font-size:10px;color:var(--muted);margin-top:1px;text-transform:uppercase;letter-spacing:.06em}
+
+/* SOCIAL GRID (kept in merged Inbox) */
+.social-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 16px 12px}
+.social-card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:14px 12px;
+  cursor:pointer;position:relative;overflow:hidden;user-select:none;-webkit-user-select:none}
+.social-card:active{opacity:.85}
+.sc-icon{width:40px;height:40px;border-radius:13px;display:flex;align-items:center;justify-content:center;margin-bottom:10px}
+.sc-name{font-family:'Syne',system-ui,sans-serif;font-weight:700;font-size:14px;margin-bottom:2px}
+.sc-stats{font-size:11px;color:var(--muted)}
+.sc-unread{position:absolute;top:10px;right:10px;color:#fff;font-size:10px;font-weight:700;
+  min-width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.sc-name.linked::after{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;
+  background:#00e96a;margin-left:6px;vertical-align:middle}
+
+/* CALLS PAGE */
+.call-hero{margin:0 16px 16px;
+  background:linear-gradient(135deg,rgba(108,92,231,.18),rgba(162,155,254,.06));
+  border:1px solid rgba(108,92,231,.25);border-radius:20px;padding:20px 16px;
+  text-align:center;position:relative;overflow:hidden}
+.call-hero-badge{position:absolute;top:12px;right:12px;background:rgba(0,233,106,.15);color:#00e96a;
+  font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;border:1px solid rgba(0,233,106,.25)}
+.call-hero-label{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--accent2);margin-bottom:5px}
+.call-hero-title{font-family:'Syne',system-ui,sans-serif;font-weight:800;font-size:20px;margin-bottom:4px}
+.call-hero-sub{font-size:12px;color:var(--muted);margin-bottom:16px}
+.call-hero-btn{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#fff;
+  font-family:'Syne',system-ui,sans-serif;font-weight:700;font-size:15px;
+  padding:12px 24px;border-radius:99px;border:none;cursor:pointer;box-shadow:0 6px 20px var(--glow);
+  user-select:none;-webkit-user-select:none}
+.call-hero-btn:active{opacity:.85;transform:scale(.97)}
+.call-services-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 16px 12px}
+.call-svc{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:14px 12px;display:flex;align-items:center;gap:10px;cursor:pointer}
+.call-svc:active{background:var(--surface2)}
+.call-svc-icon{width:38px;height:38px;border-radius:12px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.call-svc-name{font-size:13px;font-weight:600;margin-bottom:2px}
+.call-svc-status{font-size:10px}
+.call-svc.on .call-svc-status{color:#00e96a}
+.call-svc.off .call-svc-status{color:var(--muted)}
+.call-list{padding:0 16px 16px}
+.call-item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer}
+.call-item:last-child{border-bottom:none}
+.call-item:active{opacity:.7}
+.call-av{width:44px;height:44px;border-radius:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  font-family:'Syne',system-ui,sans-serif;font-weight:700;font-size:15px}
+.call-info{flex:1;min-width:0}
+.call-name{font-size:14px;font-weight:500;margin-bottom:3px}
+.call-detail{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px}
+.call-detail.out{color:var(--accent2)}
+.call-detail.miss{color:#ff5555}
+.call-detail.inc{color:#25d366}
+.call-back{width:36px;height:36px;border-radius:12px;background:rgba(37,211,102,.12);border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.call-back:active{background:rgba(37,211,102,.3)}
+
+/* SETTINGS */
+.settings-body{padding:0 16px 16px}
+.settings-sec{margin-bottom:20px}
+.settings-sec-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:8px}
+.settings-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.settings-row{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--border);cursor:pointer}
+.settings-row:last-child{border-bottom:none}
+.settings-row:active{background:var(--surface2)}
+.s-icon{width:34px;height:34px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.s-label{flex:1;min-width:0}
+.s-name{font-size:14px;font-weight:500}
+.s-desc{font-size:11px;color:var(--muted);margin-top:1px}
+.s-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.pill-on{font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:rgba(0,233,106,.12);color:#00e96a;border:1px solid rgba(0,233,106,.2)}
+.pill-off{font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:var(--surface3);color:var(--muted);border:1px solid var(--border)}
+.pill-grant{font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:rgba(108,92,231,.15);color:var(--accent2);border:1px solid rgba(108,92,231,.3);cursor:pointer}
+.pill-grant:active{background:rgba(108,92,231,.3)}
+.toggle{width:42px;height:24px;border-radius:12px;background:var(--surface3);cursor:pointer;
+  position:relative;transition:background .2s;border:none;outline:none;flex-shrink:0}
+.toggle.on{background:var(--accent)}
+.toggle::after{content:'';position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:9px;
+  background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.toggle.on::after{transform:translateX(18px)}
+
+/* BOTTOM NAV */
+.bottom-nav{display:flex;padding:8px 4px 16px;gap:2px;background:var(--bg);border-top:1px solid var(--border);flex-shrink:0}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 2px 4px;
+  border-radius:var(--r-sm);cursor:pointer;border:none;background:none;color:inherit;position:relative;
+  user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.nav-item:active,.nav-item.active{background:var(--surface2)}
+.nav-ic{position:relative;width:24px;height:24px;display:flex;align-items:center;justify-content:center}
+.nav-lbl{font-size:9px;font-weight:500;color:var(--muted);letter-spacing:.01em}
+.nav-item.active .nav-lbl{color:var(--accent2)}
+.nav-badge{position:absolute;top:-4px;right:-6px;background:var(--accent);color:#fff;
+  font-size:9px;font-weight:700;min-width:15px;height:15px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;padding:0 3px;border:2px solid var(--bg)}
+.nav-dot{position:absolute;top:-2px;right:-2px;width:7px;height:7px;border-radius:50%;background:var(--accent);border:2px solid var(--bg)}
+
+/* FAB */
+.fab{position:fixed;bottom:90px;right:16px;width:50px;height:50px;border-radius:16px;
+  background:linear-gradient(135deg,var(--accent),#8c7cf0);border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px var(--glow);z-index:15}
+.fab:active{transform:scale(.93)}
+
+/* TOAST */
+.toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--surface3);color:var(--text);font-size:13px;font-weight:500;
+  padding:10px 20px;border-radius:99px;border:1px solid var(--border2);
+  opacity:0;transition:all .3s;z-index:100;white-space:nowrap;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ═══ DIALER OVERLAY ═══ */
+.overlay{position:fixed;inset:0;z-index:200;display:none;flex-direction:column;
+  background:var(--bg);animation:slideUp .25s ease}
+.overlay.open{display:flex}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+
+.dialer-header{display:flex;align-items:center;justify-content:space-between;padding:20px 20px 10px}
+.dialer-title{font-family:'Syne',system-ui,sans-serif;font-weight:800;font-size:20px}
+.dialer-close{width:36px;height:36px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;cursor:pointer}
+.dialer-close:active{background:var(--surface3)}
+
+.dialer-display{padding:10px 24px 20px;text-align:center}
+.dialer-number{font-family:'Syne',system-ui,sans-serif;font-size:34px;font-weight:700;
+  letter-spacing:4px;min-height:50px;color:var(--text);word-break:break-all}
+.dialer-hint{font-size:12px;color:var(--muted);margin-top:4px}
+
+.dialer-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:0 24px}
+.dial-key{background:var(--surface2);border:1px solid var(--border);border-radius:16px;
+  padding:16px 0;display:flex;flex-direction:column;align-items:center;gap:2px;
+  cursor:pointer;user-select:none;-webkit-user-select:none;transition:background .1s}
+.dial-key:active{background:var(--surface3)}
+.dk-num{font-family:'Syne',system-ui,sans-serif;font-size:22px;font-weight:700;color:var(--text)}
+.dk-sub{font-size:9px;color:var(--muted);letter-spacing:.1em;height:11px}
+
+.dialer-actions{display:flex;align-items:center;justify-content:center;gap:20px;padding:20px 24px 30px}
+.dial-del{width:56px;height:56px;border-radius:16px;background:var(--surface2);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;cursor:pointer}
+.dial-del:active{background:var(--surface3)}
+.dial-call-btn{width:72px;height:72px;border-radius:22px;background:#00c853;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 6px 24px rgba(0,200,83,.35)}
+.dial-call-btn:active{transform:scale(.93);background:#00b048}
+.dial-placeholder{width:56px;height:56px}
+
+/* ═══ CALL SCREEN ═══ */
+.call-screen{position:fixed;inset:0;z-index:300;display:none;flex-direction:column;
+  align-items:center;justify-content:space-between;
+  background:linear-gradient(180deg,#0d0d1a 0%,#0a0a0f 100%);padding:60px 24px 50px}
+.call-screen.open{display:flex;animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.cs-status{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
+.cs-name{font-family:'Syne',system-ui,sans-serif;font-size:28px;font-weight:800;color:var(--text);margin-bottom:6px}
+.cs-sub{font-size:13px;color:var(--muted);margin-bottom:0}
+
+.cs-av-wrap{position:relative;margin:0 auto}
+.cs-avatar{width:120px;height:120px;border-radius:36px;display:flex;align-items:center;justify-content:center;
+  font-family:'Syne',system-ui,sans-serif;font-size:42px;font-weight:800;position:relative;z-index:2}
+.cs-pulse{position:absolute;inset:-16px;border-radius:52px;background:currentColor;opacity:.08;
+  animation:pulse 1.8s ease-in-out infinite}
+.cs-pulse2{position:absolute;inset:-32px;border-radius:68px;background:currentColor;opacity:.04;
+  animation:pulse 1.8s ease-in-out infinite .4s}
+@keyframes pulse{0%,100%{transform:scale(.95);opacity:.08}50%{transform:scale(1.05);opacity:.14}}
+
+.cs-platform-badge{display:inline-flex;align-items:center;gap:6px;margin-top:12px;
+  padding:5px 14px;border-radius:99px;border:1px solid var(--border2);background:var(--surface);font-size:12px;font-weight:600}
+
+.cs-timer{font-family:'Syne',system-ui,sans-serif;font-size:22px;font-weight:700;color:var(--text);margin-top:4px}
+
+.cs-actions{display:flex;gap:20px;align-items:center}
+.cs-action-btn{display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;user-select:none}
+.cs-action-icon{width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center}
+.cs-action-lbl{font-size:10px;color:var(--muted);font-weight:500}
+.cs-end{width:68px;height:68px;border-radius:20px;background:#ff3b30;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 6px 24px rgba(255,59,48,.35)}
+.cs-end:active{transform:scale(.93);background:#e0352b}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="pages">
+
+    <!-- ══════════════════════════
+         PAGE 1: SMS
+    ══════════════════════════ -->
+    <div class="page" id="page-sms">
+      <div class="page-header">
+        <div>
+          <div class="page-title">SMS</div>
+          <div class="page-sub">4 unread messages</div>
+        </div>
+        <div class="hdr-actions">
+          <div class="icon-btn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#00cec9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          </div>
+          <div class="icon-btn" onclick="showToast('New SMS...')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="sms-header-card">
+        <div class="sms-hc-top">
+          <div class="sms-icon-big">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#00cec9" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <div class="sms-hc-info">
+            <div class="sms-hc-title">SMS Messages</div>
+            <div class="sms-hc-sub">Native SMS &amp; MMS</div>
+          </div>
+          <div class="sms-hc-badge">4 New</div>
+        </div>
+        <div class="sms-stats">
+          <div class="sms-stat"><div class="sms-stat-n">28</div><div class="sms-stat-l">Threads</div></div>
+          <div class="sms-stat"><div class="sms-stat-n">4</div><div class="sms-stat-l">Unread</div></div>
+          <div class="sms-stat"><div class="sms-stat-n">3</div><div class="sms-stat-l">Groups</div></div>
+        </div>
+      </div>
+      <div class="glow-line" style="background:linear-gradient(90deg,transparent,var(--sms),transparent)"></div>
+      <div class="conv-list">
+        <div class="conv-item unread" onclick="showToast('Opening Friday Group...')">
+          <div class="av-wrap">
+            <div class="avatar" style="background:linear-gradient(135deg,#1a0040,#6c5ce7)">FG</div>
+            <div class="pbadge" style="background:var(--sms)"><svg viewBox="0 0 24 24" fill="white"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg></div>
+          </div>
+          <div class="conv-info">
+            <div class="conv-top"><span class="conv-name">Friday Group 🎉</span><span class="conv-time">5m</span></div>
+            <div class="conv-prev">Alex: Who's bringing drinks?</div>
+          </div>
+          <div class="ubadge">1</div>
+        </div>
+        <div class="conv-item unread" onclick="showToast('Opening Mom...')">
+          <div class="av-wrap">
+            <div class="avatar" style="background:linear-gradient(135deg,#004d4d,#00cec9)">MO</div>
+            <div class="pbadge" style="background:var(--sms)"><svg viewBox="0 0 24 24" fill="white"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg></div>
+            <div class="online-dot"></div>
+          </div>
+          <div class="conv-info">
+            <div class="conv-top"><span class="conv-name">Mom</span><span class="conv-time">1h</span></div>
+            <div class="conv-prev">Call me when you get home ok?</div>
+          </div>
+          <div class="ubadge">2</div>
+        </div>
+        <div class="conv-item unread" onclick="showToast('Opening Bank Alert...')">
+          <div class="av-wrap">
+            <div class="avatar" style="background:linear-gradient(135deg,#2a1a00,#f39c12)">BK</div>
+            <div class="pbadge" style="background:var(--sms)"><svg viewBox="0 0 24 24" fill="white"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg></div>
+          </div>
+          <div class="conv-info">
+            <div class="conv-top"><span class="conv-name">Bank Alert</span><span class="conv-time">2h</span></div>
+            <div class="conv-prev">Your statement is ready to view</div>
+          </div>
+          <div class="ubadge">1</div>
+        </div>
+        <div class="conv-item" onclick="showToast('Opening Laura T...')">
+          <div class="av-wrap">
+            <div class="avatar" style="background:linear-gradient(135deg,#2d0020,#e84393)">LT</div>
+            <div class="pbadge" style="background:var(--sms)"><svg viewBox="0 0 24 24" fill="white"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg></div>
+          </div>
+          <div class="conv-info">
+            <div class="conv-top"><span class="conv-name">Laura T.</span><span class="conv-time">Yesterday</span></div>
+            <div class="conv-prev">Thanks! Speak soon 😊</div>
+          </div>
+        </div>
+        <div class="conv-item" onclick="showToast('Opening Doctor Office...')">
+          <div class="av-wrap">
+            <div class="avatar" style="background:linear-gradient(135deg,#001a33,#2980b9)">DR</div>
+            <div class="pbadge" style="background:var(--sms)"><svg viewBox="0 0 24 24" fill="white"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg></div>
+          </div>
+          <div class="conv-info">
+            <div class="conv-top"><span class="conv-name">Doctor's Office</span><span class="conv-time">Mon</span></div>
+            <div class="conv-prev">Reminder: Appointment Thu 10:30am</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════
+         PAGE 2: INBOX (merged social)
+    ══════════════════════════ -->
+    <div class="page active" id="page-inbox">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Inbox</div>
+          <div class="page-sub">All platforms · 12 unread</div>
+        </div>
+        <div class="hdr-actions">
+          <div class="icon-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></div>
+          <div class="icon-btn" onclick="showToast('Refreshing...')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a29bfe" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.5 16a9 9 0 1 1-.5-4"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- App cards grid -->
+      <div class="social-grid">
+        <div class="social-card" onclick="filterInbox(null,'signal')">
+          <div class="sc-unread" style="background:rgba(58,155,213,.85)">2</div>
+          <div class="sc-icon" style="background:rgba(58,155,213,.14)"><svg width="22" height="22" viewBox="0 0 24 24" fill="#3a9bd5"><path d="M12 0C5.374 0 0 5.373 0 12c0 6.628 5.374 12 12 12 6.628 0 12-5.372 12-12 0-6.627-5.372-12-12-12zm.295 5.27c.363-.006.733.023 1.102.09l.527-1.006a.545.545 0 0 1 .973.489l-.484.927c1.522.686 2.744 1.91 3.424 3.437l.926-.484a.547.547 0 0 1 .49.974l-1.005.525c.37 1.2.37 2.49 0 3.691l1.005.526a.545.545 0 0 1-.49.973l-.926-.484a6.968 6.968 0 0 1-3.424 3.437l.484.927a.546.546 0 0 1-.973.488l-.527-1.005a6.982 6.982 0 0 1-3.505 0l-.527 1.005a.546.546 0 0 1-.973-.488l.484-.927a6.968 6.968 0 0 1-3.424-3.437l-.927.484a.546.546 0 0 1-.489-.973l1.005-.526a6.97 6.97 0 0 1 0-3.691l-1.005-.525a.546.546 0 0 1 .489-.974l.927.484A6.968 6.968 0 0 1 8.69 5.286l-.484-.927a.545.545 0 0 1 .973-.489l.527 1.006a6.985 6.985 0 0 1 2.59-.606z"/></svg></div>
+          <div class="sc-name linked">Signal</div>
+          <div class="sc-stats">3 chats · E2E</div>
+        </div>
+        <div class="social-card" onclick="filterInbox(null,'telegram')">
+          <div class="sc-unread" style="background:rgba(34,158,217,.85)">7</div>
+          <div class="sc-icon" style="background:rgba(34,158,217,.14)"><svg width="22" height="22" viewBox="0 0 24 24" fill="#229ed9"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg></div>
+          <div class="sc-name linked">Telegram</div>
+          <div class="sc-stats">12 chats · 2 groups</div>
+        </div>
+        <div class="social-card" onclick="filterInbox(null,'whatsapp')">
+          <div class="sc-unread" style="background:rgba(37,211,102,.85)">3</div>
+          <div class="sc-icon" style="background:rgba(37,211,102,.14)"><svg width="22" height="22" viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.139.565 4.143 1.545 5.878L0 24l6.335-1.508A11.94 11.94 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818c-1.91 0-3.71-.518-5.256-1.422l-.377-.224-3.76.895.953-3.665-.246-.387A9.818 9.818 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg></div>
+          <div class="sc-name linked">WhatsApp</div>
+          <div class="sc-stats">8 chats · 3 groups</div>
+        </div>
+        <div class="social-card" onclick="filterInbox(null,'messenger')">
+          <div class="sc-unread" style="background:rgba(0,153,255,.85)">0</div>
+          <div class="sc-icon" style="background:rgba(0,153,255,.14)"><svg width="22" height="22" viewBox="0 0 24 24" fill="#0099ff"><path d="M12 0C5.4 0 0 5.1 0 11.4c0 3.4 1.6 6.4 4.1 8.4v4.1l3.8-2.1c1 .3 2.1.4 3.2.4 6.6 0 12-5.1 12-11.4C24 5.1 18.6 0 12 0zm1.2 15.4l-3-3.3-5.9 3.3 6.5-6.9 3.1 3.3 5.8-3.3-6.5 6.9z"/></svg></div>
+          <div class="sc-name linked">Messenger</div>
+          <div class="sc-stats">5 chats · All read</div>
+        </div>
+      </div>
+
+      <div class="glow-line"></div>
+
+      <!-- Filter chips -->
+      <div class="chips" id="inbox-chips">
+        <div class="chip active" onclick="filterInbox(this,'all')">All</div>
+        <div class="chip" id="chip-signal" onclick="filterInbox(this,'signal')"><span class="cdot" style="background:var(--signal)"></span>Signal</div>
+        <div class="chip" id="chip-telegram" onclick="filterInbox(this,'telegram')"><span class="cdot" style="background:var(--telegram)"></span>Telegram</div>
+        <div class="chip" id="chip-whatsapp" onclick="filterInbox(this,'whatsapp')"><span class="cdot" style="background:var(--whatsapp)"></span>WhatsApp</div>
+        <div class="chip" id="chip-messenger" onclick="filterInbox(this,'messenger')"><span class="cdot" style="background:var(--messenger)"></span>Messenger</div>
+      </div>
+
+      <!-- All conversations -->
+      <div class="conv-list" id="inbox-list">
+        <div class="conv-item unread" data-platform="whatsapp" onclick="showToast('Opening Jamie Rodriguez...')">
+          <div class="av-wrap">
+            <div class="avatar" style="background:linear-gradient(135deg,#1e4d2b,#25d366)">JR</div>
+            <div class="pbadge" style="background:#25d366"><svg viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.139.565 4.143 1.545 5.878L0 24l6.335-1.508A11.94 11.94 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818c-1.91 0-3.71-.518-5.256-1.422l-.377-.224-3.76.895.953-3.665-.246-.387A9.818 9.818 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg></div>
+            <div class="online-dot"></div>
+          </div>
+          <div class="conv-info">
+            <div class="conv-top"><span class="conv-name">Jamie Rodriguez</span><span class="conv-time">2m</span></div>
+            <div class="conv-prev">Can you send me the file before the meeting?</div>
+          </div>
+          <div class="ubadge">3</div>
+        </div>
+        <div class="conv-item unread" data-platform="signal" onclick="showToast('Opening Sarah Kim...')">
+          <div class="av-wrap">
+            <div class="avatar" style="background:linear-gradient(135deg,#1a3d5c,#3a9bd5)">SK</div>
+            <div class="pbadge" style="background:#3a9bd5"><svg viewBox="0 0 24 24" fill="white"><path d="M12 0C5.374 0 0 5.373 0 12c0 6.628 5.374 12 12 12 6.628 0 12-5.372 12-12 0-6.627-5.372-12-12-12zm.295 5.27c.363-.006.733.023 1.102.09l.527-1.006a.545.545 0 0 1 .973.489l-.484.927c1.522.686 2.744 1.91 3.424 3.437l.926-.484a.547.547 0 0 1 .49.974l-1.005.525c.37 1.2.37 2.49 0 3.691l1.005.526a.545.545 0 0 1-.49.973l-.926-.484a6.968 6.968 0 0 1-3.424 3.437l.484.927a.546.546 0 0 1-.973.488l-.527-1.005a6.982 6.982 0 0 1-3.505 0l-.527 1.005a.546.546 0 0 1-.973-.488l.484-.927a6.968 6.968 0 0 1-3.424-3.437l-.927.484a.546.546 0 0 1-.489-.973l1.005-.526a6.97 6.97 0 0 1 0-3.691l-1.005-.525a.546.546 0 0 1 .489-.974l.927.484A6.968 6.968 0 0 1 8.69 5.286l-.484-.927a.545.545 0 0 1 .973-.489l.527 1.006a6.985 6.985 0 0 1 2.59-.606z"/></svg></div>
+          </div>
+          <div class="conv-info">
+            <div class="conv-top"><span class="conv-name">Sarah Kim</span><span class="conv-time">15m</span></div>
+            <div class="conv-prev">🔒 Hey are you free tonight?</div>
+          </div>
+          <div class="ubadge">1</div>
+        </div>
+        <div class="conv-item unread" data-platform="telegram" onclick="showToast('Opening Tech Channel...')">
+          <div class="av-wrap">
+            <div class="avatar" style="background:linear-gradient(135deg,#0d3a52,#229ed9)">TC</div>
+            <div class="pbadge" style="background:#229ed9"><svg viewBox="0 0 24 24" fill="white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg></div>
+          </div>
+          <div class="conv-info">
+            <div class="conv-top"><span class="conv-name">Tech Channel</span><span class="conv-time">2h</span></div>
+            <div class="conv-prev">New post: iOS 20 features leaked...</div>
+          </div>
+          <div class="ubadge">7</div>
+        </div>
+        <div class="conv-item unread" data-platform="whatsapp" onclick="showToast('Opening WA Work Group...')">
+          <div class="av-wrap">
+            <div class="avatar" style="background:linear-gradient(135deg,#1e3a1e,#25d366)">WG</div>
+            <div class="pbadge" style="background:#25d366"><svg viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.139.565 4.143 1.545 5.878L0 24l6.335-1.508A11.94 11.94 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818c-1.91 0-3.71-.518-5.256-1.422l-.377-.224-3.76.895.953-3.665-.246-.387A9.818 9.818 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg></div>
+          </div>
+          <div class="conv-info">
+            <div class="conv-top"><span class="conv-name">WA Work Group</span><span class="conv-time">4h</span></div>
+            <div class="conv-prev">Mike: Stand-up moved to 10am</div>
+          </div>
+          <div class="ubadge">1</div>
+        </div>
+        <div class="conv-item" data-platform="messenger" onclick="showToast('Opening David Wilson...')">
+          <div class="av-wrap">
+            <div class="avatar" style="background:linear-gradient(135deg,#003366,#0099ff)">DW</div>
+            <div class="pbadge" style="background:linear-gradient(135deg,#0099ff,#a033ff)"><svg viewBox="0 0 24 24" fill="white"><path d="M12 0C5.4 0 0 5.1 0 11.4c0 3.4 1.6 6.4 4.1 8.4v4.1l3.8-2.1c1 .3 2.1.4 3.2.4 6.6 0 12-5.1 12-11.4C24 5.1 18.6 0 12 0zm1.2 15.4l-3-3.3-5.9 3.3 6.5-6.9 3.1 3.3 5.8-3.3-6.5 6.9z"/></svg></div>
+          </div>
+          <div class="conv-info">
+            <div class="conv-top"><span class="conv-name">David Wilson</span><span class="conv-time">3h</span></div>
+            <div class="conv-prev">Seen · Sounds good, see you Saturday!</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════
+         PAGE 3: CALLS
+    ══════════════════════════ -->
+    <div class="page" id="page-calls">
+      <div class="page-header">
+        <div><div class="page-title">Calls</div><div class="page-sub">Phone &amp; VoIP</div></div>
+      </div>
+      <div class="call-hero">
+        <div class="call-hero-badge">● SIM Active</div>
+        <div class="call-hero-label">Primary · Cell Network</div>
+        <div class="call-hero-title">Phone Call</div>
+        <div class="call-hero-sub">Tap to open the in-app dialpad</div>
+        <button class="call-hero-btn" onclick="openDialer()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.37 2 2 0 0 1 3.61 1.19h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.93a16 16 0 0 0 6.29 6.29l.91-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          Open Dialpad
+        </button>
+      </div>
+      <div class="sec-label">Also Call via</div>
+      <div class="call-services-grid">
+        <div class="call-svc on" onclick="startCall('Signal Call','SG','#3a9bd5','#1a3d5c')">
+          <div class="call-svc-icon" style="background:rgba(58,155,213,.12)"><svg width="20" height="20" viewBox="0 0 24 24" fill="#3a9bd5"><path d="M12 0C5.374 0 0 5.373 0 12c0 6.628 5.374 12 12 12 6.628 0 12-5.372 12-12 0-6.627-5.372-12-12-12zm.295 5.27c.363-.006.733.023 1.102.09l.527-1.006a.545.545 0 0 1 .973.489l-.484.927c1.522.686 2.744 1.91 3.424 3.437l.926-.484a.547.547 0 0 1 .49.974l-1.005.525c.37 1.2.37 2.49 0 3.691l1.005.526a.545.545 0 0 1-.49.973l-.926-.484a6.968 6.968 0 0 1-3.424 3.437l.484.927a.546.546 0 0 1-.973.488l-.527-1.005a6.982 6.982 0 0 1-3.505 0l-.527 1.005a.546.546 0 0 1-.973-.488l.484-.927a6.968 6.968 0 0 1-3.424-3.437l-.927.484a.546.546 0 0 1-.489-.973l1.005-.526a6.97 6.97 0 0 1 0-3.691l-1.005-.525a.546.546 0 0 1 .489-.974l.927.484A6.968 6.968 0 0 1 8.69 5.286l-.484-.927a.545.545 0 0 1 .973-.489l.527 1.006a6.985 6.985 0 0 1 2.59-.606z"/></svg></div>
+          <div class="call-svc-info"><div class="call-svc-name">Signal</div><div class="call-svc-status">● Connected</div></div>
+        </div>
+        <div class="call-svc on" onclick="startCall('Telegram Call','TG','#229ed9','#0d3a52')">
+          <div class="call-svc-icon" style="background:rgba(34,158,217,.12)"><svg width="20" height="20" viewBox="0 0 24 24" fill="#229ed9"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg></div>
+          <div class="call-svc-info"><div class="call-svc-name">Telegram</div><div class="call-svc-status">● Connected</div></div>
+        </div>
+        <div class="call-svc on" onclick="startCall('WhatsApp Call','WA','#25d366','#1e4d2b')">
+          <div class="call-svc-icon" style="background:rgba(37,211,102,.12)"><svg width="20" height="20" viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.139.565 4.143 1.545 5.878L0 24l6.335-1.508A11.94 11.94 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818c-1.91 0-3.71-.518-5.256-1.422l-.377-.224-3.76.895.953-3.665-.246-.387A9.818 9.818 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg></div>
+          <div class="call-svc-info"><div class="call-svc-name">WhatsApp</div><div class="call-svc-status">● Connected</div></div>
+        </div>
+        <div class="call-svc off">
+          <div class="call-svc-icon" style="background:rgba(0,153,255,.12)"><svg width="20" height="20" viewBox="0 0 24 24" fill="#0099ff"><path d="M12 0C5.4 0 0 5.1 0 11.4c0 3.4 1.6 6.4 4.1 8.4v4.1l3.8-2.1c1 .3 2.1.4 3.2.4 6.6 0 12-5.1 12-11.4C24 5.1 18.6 0 12 0zm1.2 15.4l-3-3.3-5.9 3.3 6.5-6.9 3.1 3.3 5.8-3.3-6.5 6.9z"/></svg></div>
+          <div class="call-svc-info"><div class="call-svc-name">Messenger</div><div class="call-svc-status">No call support</div></div>
+        </div>
+      </div>
+      <div class="sec-label">Recent Calls</div>
+      <div class="call-list">
+        <div class="call-item" onclick="startCallContact('Jamie Rodriguez','JR','#25d366','#1e4d2b','WhatsApp')">
+          <div class="call-av" style="background:linear-gradient(135deg,#1e4d2b,#25d366)">JR</div>
+          <div class="call-info"><div class="call-name">Jamie Rodriguez</div>
+            <div class="call-detail out"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>WhatsApp · Outgoing · 4m 32s</div>
+          </div>
+          <button class="call-back" onclick="event.stopPropagation();startCallContact('Jamie Rodriguez','JR','#25d366','#1e4d2b','WhatsApp')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#25d366" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.37 2 2 0 0 1 3.61 1.19h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.93a16 16 0 0 0 6.29 6.29l.91-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </button>
+        </div>
+        <div class="call-item" onclick="startCallContact('Sarah Kim','SK','#3a9bd5','#1a3d5c','Signal')">
+          <div class="call-av" style="background:linear-gradient(135deg,#1a3d5c,#3a9bd5)">SK</div>
+          <div class="call-info"><div class="call-name">Sarah Kim</div>
+            <div class="call-detail miss"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="17 17 7 17 7 7"/></svg>Signal · Missed · 9:14 AM</div>
+          </div>
+          <button class="call-back" onclick="event.stopPropagation();startCallContact('Sarah Kim','SK','#3a9bd5','#1a3d5c','Signal')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#25d366" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.37 2 2 0 0 1 3.61 1.19h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.93a16 16 0 0 0 6.29 6.29l.91-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </button>
+        </div>
+        <div class="call-item" onclick="startCallContact('Mom','Mo','#6c5ce7','#1a0040','Phone')">
+          <div class="call-av" style="background:linear-gradient(135deg,#1a0040,#6c5ce7)">Mo</div>
+          <div class="call-info"><div class="call-name">Mom</div>
+            <div class="call-detail inc"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="17" y1="17" x2="7" y2="7"/><polyline points="7 17 7 7 17 7"/></svg>Phone · Incoming · Yesterday</div>
+          </div>
+          <button class="call-back" onclick="event.stopPropagation();startCallContact('Mom','Mo','#6c5ce7','#1a0040','Phone')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#25d366" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.37 2 2 0 0 1 3.61 1.19h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.93a16 16 0 0 0 6.29 6.29l.91-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════
+         PAGE 4: SETTINGS
+    ══════════════════════════ -->
+    <div class="page" id="page-settings">
+      <div class="page-header">
+        <div><div class="page-title">Settings</div><div class="page-sub">Apps, permissions &amp; display</div></div>
+      </div>
+      <div class="settings-body">
+        <div class="settings-sec">
+          <div class="settings-sec-title">Default Apps</div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <div class="s-icon" style="background:rgba(0,206,201,.12)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#00cec9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+              <div class="s-label"><div class="s-name">Default SMS App</div><div class="s-desc">Handles all SMS &amp; MMS natively</div></div>
+              <div class="s-right"><span class="pill-on">Active</span></div>
+            </div>
+            <div class="settings-row">
+              <div class="s-icon" style="background:rgba(108,92,231,.12)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#a29bfe" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.37 2 2 0 0 1 3.61 1.19h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.93a16 16 0 0 0 6.29 6.29l.91-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div>
+              <div class="s-label"><div class="s-name">Default Phone App</div><div class="s-desc">Handles incoming &amp; outgoing calls</div></div>
+              <div class="s-right"><span class="pill-on">Active</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="settings-sec">
+          <div class="settings-sec-title">Linked Accounts</div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <div class="s-icon" style="background:rgba(58,155,213,.12)"><svg width="19" height="19" viewBox="0 0 24 24" fill="#3a9bd5"><path d="M12 0C5.374 0 0 5.373 0 12c0 6.628 5.374 12 12 12 6.628 0 12-5.372 12-12 0-6.627-5.372-12-12-12zm.295 5.27c.363-.006.733.023 1.102.09l.527-1.006a.545.545 0 0 1 .973.489l-.484.927c1.522.686 2.744 1.91 3.424 3.437l.926-.484a.547.547 0 0 1 .49.974l-1.005.525c.37 1.2.37 2.49 0 3.691l1.005.526a.545.545 0 0 1-.49.973l-.926-.484a6.968 6.968 0 0 1-3.424 3.437l.484.927a.546.546 0 0 1-.973.488l-.527-1.005a6.982 6.982 0 0 1-3.505 0l-.527 1.005a.546.546 0 0 1-.973-.488l.484-.927a6.968 6.968 0 0 1-3.424-3.437l-.927.484a.546.546 0 0 1-.489-.973l1.005-.526a6.97 6.97 0 0 1 0-3.691l-1.005-.525a.546.546 0 0 1 .489-.974l.927.484A6.968 6.968 0 0 1 8.69 5.286l-.484-.927a.545.545 0 0 1 .973-.489l.527 1.006a6.985 6.985 0 0 1 2.59-.606z"/></svg></div>
+              <div class="s-label"><div class="s-name">Signal</div><div class="s-desc">Notification listener</div></div>
+              <div class="s-right"><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
+            </div>
+            <div class="settings-row">
+              <div class="s-icon" style="background:rgba(34,158,217,.12)"><svg width="19" height="19" viewBox="0 0 24 24" fill="#229ed9"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg></div>
+              <div class="s-label"><div class="s-name">Telegram</div><div class="s-desc">Notification listener</div></div>
+              <div class="s-right"><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
+            </div>
+            <div class="settings-row">
+              <div class="s-icon" style="background:rgba(37,211,102,.12)"><svg width="19" height="19" viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.139.565 4.143 1.545 5.878L0 24l6.335-1.508A11.94 11.94 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818c-1.91 0-3.71-.518-5.256-1.422l-.377-.224-3.76.895.953-3.665-.246-.387A9.818 9.818 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg></div>
+              <div class="s-label"><div class="s-name">WhatsApp</div><div class="s-desc">Notification listener</div></div>
+              <div class="s-right"><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
+            </div>
+            <div class="settings-row">
+              <div class="s-icon" style="background:rgba(0,153,255,.12)"><svg width="19" height="19" viewBox="0 0 24 24" fill="#0099ff"><path d="M12 0C5.4 0 0 5.1 0 11.4c0 3.4 1.6 6.4 4.1 8.4v4.1l3.8-2.1c1 .3 2.1.4 3.2.4 6.6 0 12-5.1 12-11.4C24 5.1 18.6 0 12 0zm1.2 15.4l-3-3.3-5.9 3.3 6.5-6.9 3.1 3.3 5.8-3.3-6.5 6.9z"/></svg></div>
+              <div class="s-label"><div class="s-name">Messenger</div><div class="s-desc">Notification listener</div></div>
+              <div class="s-right"><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
+            </div>
+          </div>
+        </div>
+        <div class="settings-sec">
+          <div class="settings-sec-title">Permissions</div>
+          <div class="settings-card">
+            <div class="settings-row" id="perm-notif">
+              <div class="s-icon" style="background:rgba(255,180,0,.1)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ffb400" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+              <div class="s-label"><div class="s-name">Notification Access</div><div class="s-desc">Read all app notifications</div></div>
+              <div class="s-right"><span class="pill-grant" onclick="grantPerm('perm-notif',this)">Grant</span></div>
+            </div>
+            <div class="settings-row" id="perm-sms">
+              <div class="s-icon" style="background:rgba(255,100,100,.1)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ff6464" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+              <div class="s-label"><div class="s-name">SMS Read / Write</div><div class="s-desc">Access device SMS</div></div>
+              <div class="s-right"><span class="pill-grant" onclick="grantPerm('perm-sms',this)">Grant</span></div>
+            </div>
+            <div class="settings-row" id="perm-contacts">
+              <div class="s-icon" style="background:rgba(108,92,231,.12)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#a29bfe" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+              <div class="s-label"><div class="s-name">Contacts Access</div><div class="s-desc">Match numbers to names</div></div>
+              <div class="s-right"><span class="pill-grant" onclick="grantPerm('perm-contacts',this)">Grant</span></div>
+            </div>
+            <div class="settings-row" id="perm-calls">
+              <div class="s-icon" style="background:rgba(0,206,201,.1)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#00cec9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.37 2 2 0 0 1 3.61 1.19h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.93a16 16 0 0 0 6.29 6.29l.91-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div>
+              <div class="s-label"><div class="s-name">Phone / Call Logs</div><div class="s-desc">Read &amp; manage call history</div></div>
+              <div class="s-right"><span class="pill-grant" onclick="grantPerm('perm-calls',this)">Grant</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="settings-sec">
+          <div class="settings-sec-title">Appearance</div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <div class="s-icon" style="background:rgba(108,92,231,.12)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#a29bfe" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></div>
+              <div class="s-label"><div class="s-name">Dark Mode</div><div class="s-desc">AMOLED optimized</div></div>
+              <button class="toggle on" onclick="this.classList.toggle('on')"></button>
+            </div>
+            <div class="settings-row">
+              <div class="s-icon" style="background:rgba(0,206,201,.1)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#00cec9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+              <div class="s-label"><div class="s-name">Platform Color Badges</div><div class="s-desc">Color-code by app</div></div>
+              <button class="toggle on" onclick="this.classList.toggle('on')"></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAB -->
+  <button class="fab" onclick="showToast('New message...')">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+
+  <!-- BOTTOM NAV — 4 tabs -->
+  <nav class="bottom-nav">
+    <button class="nav-item" id="nav-sms" onclick="switchPage('sms','nav-sms')">
+      <div class="nav-ic">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6e6e90" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="nsv"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span class="nav-badge">4</span>
+      </div>
+      <span class="nav-lbl">SMS</span>
+    </button>
+    <button class="nav-item active" id="nav-inbox" onclick="switchPage('inbox','nav-inbox')">
+      <div class="nav-ic">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a29bfe" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="nsv"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        <span class="nav-badge">12</span>
+      </div>
+      <span class="nav-lbl" style="color:var(--accent2)">Inbox</span>
+    </button>
+    <button class="nav-item" id="nav-calls" onclick="switchPage('calls','nav-calls')">
+      <div class="nav-ic">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6e6e90" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="nsv"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.37 2 2 0 0 1 3.61 1.19h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.93a16 16 0 0 0 6.29 6.29l.91-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+      </div>
+      <span class="nav-lbl">Calls</span>
+    </button>
+    <button class="nav-item" id="nav-settings" onclick="switchPage('settings','nav-settings')">
+      <div class="nav-ic">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6e6e90" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="nsv"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </div>
+      <span class="nav-lbl">Settings</span>
+    </button>
+  </nav>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- ═══════════════════════════════
+     DIALER OVERLAY
+═══════════════════════════════ -->
+<div class="overlay" id="dialer">
+  <div class="dialer-header">
+    <div class="dialer-title">Dialpad</div>
+    <div class="dialer-close" onclick="closeDialer()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </div>
+  </div>
+  <div class="dialer-display">
+    <div class="dialer-number" id="dial-number">&#8203;</div>
+    <div class="dialer-hint">Enter a number to call</div>
+  </div>
+  <div class="dialer-grid">
+    <div class="dial-key" onclick="dialKey('1')"><span class="dk-num">1</span><span class="dk-sub"></span></div>
+    <div class="dial-key" onclick="dialKey('2')"><span class="dk-num">2</span><span class="dk-sub">ABC</span></div>
+    <div class="dial-key" onclick="dialKey('3')"><span class="dk-num">3</span><span class="dk-sub">DEF</span></div>
+    <div class="dial-key" onclick="dialKey('4')"><span class="dk-num">4</span><span class="dk-sub">GHI</span></div>
+    <div class="dial-key" onclick="dialKey('5')"><span class="dk-num">5</span><span class="dk-sub">JKL</span></div>
+    <div class="dial-key" onclick="dialKey('6')"><span class="dk-num">6</span><span class="dk-sub">MNO</span></div>
+    <div class="dial-key" onclick="dialKey('7')"><span class="dk-num">7</span><span class="dk-sub">PQRS</span></div>
+    <div class="dial-key" onclick="dialKey('8')"><span class="dk-num">8</span><span class="dk-sub">TUV</span></div>
+    <div class="dial-key" onclick="dialKey('9')"><span class="dk-num">9</span><span class="dk-sub">WXYZ</span></div>
+    <div class="dial-key" onclick="dialKey('*')"><span class="dk-num">*</span><span class="dk-sub"></span></div>
+    <div class="dial-key" onclick="dialKey('0')"><span class="dk-num">0</span><span class="dk-sub">+</span></div>
+    <div class="dial-key" onclick="dialKey('#')"><span class="dk-num">#</span><span class="dk-sub"></span></div>
+  </div>
+  <div class="dialer-actions">
+    <div class="dial-del" onclick="dialBackspace()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/></svg>
+    </div>
+    <button class="dial-call-btn" onclick="dialCall()">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.37 2 2 0 0 1 3.61 1.19h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.93a16 16 0 0 0 6.29 6.29l.91-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+    </button>
+    <div class="dial-placeholder"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════
+     CALL SCREEN OVERLAY
+═══════════════════════════════ -->
+<div class="call-screen" id="call-screen">
+  <div style="text-align:center">
+    <div class="cs-status" id="cs-status">Calling...</div>
+    <div class="cs-name" id="cs-name">–</div>
+    <div class="cs-sub" id="cs-sub"></div>
+  </div>
+  <div class="cs-av-wrap">
+    <div class="cs-pulse" id="cs-pulse" style="color:#6c5ce7"></div>
+    <div class="cs-pulse2" id="cs-pulse2" style="color:#6c5ce7"></div>
+    <div class="cs-avatar" id="cs-avatar" style="background:linear-gradient(135deg,#1a0040,#6c5ce7)">–</div>
+    <div class="cs-platform-badge" id="cs-platform-badge">
+      <span id="cs-platform-text">Phone</span>
+    </div>
+  </div>
+  <div style="text-align:center">
+    <div class="cs-timer" id="cs-timer">Connecting...</div>
+    <div class="cs-actions" style="margin-top:20px">
+      <div class="cs-action-btn" onclick="showToast('Muted')">
+        <div class="cs-action-icon" style="background:var(--surface2)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </div>
+        <span class="cs-action-lbl">Mute</span>
+      </div>
+      <button class="cs-end" onclick="endCall()">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2C14.39 21.36 8.64 19 5 15.61c-3.66-3.66-5.98-9.41-6.27-14.61A2 2 0 0 1 .91 1.19h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11l-1.27 1.27"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+      </button>
+      <div class="cs-action-btn" onclick="showToast('Speaker on')">
+        <div class="cs-action-icon" style="background:var(--surface2)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        </div>
+        <span class="cs-action-lbl">Speaker</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var toastTimer = null;
+var callTimer = null;
+var callSeconds = 0;
+
+// ── Navigation ──
+function switchPage(name, navId) {
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active')});
+  document.querySelectorAll('.nav-item').forEach(function(n){
+    n.classList.remove('active');
+    n.querySelector('.nav-lbl').style.color='';
+    var s=n.querySelector('.nsv');if(s)s.setAttribute('stroke','#6e6e90');
+  });
+  var page=document.getElementById('page-'+name);if(page)page.classList.add('active');
+  var nav=document.getElementById(navId);
+  if(nav){
+    nav.classList.add('active');
+    nav.querySelector('.nav-lbl').style.color='var(--accent2)';
+    var s=nav.querySelector('.nsv');if(s)s.setAttribute('stroke','#a29bfe');
+  }
+}
+
+// ── Inbox filter ──
+function filterInbox(chip, platform) {
+  if(chip){
+    document.querySelectorAll('#inbox-chips .chip').forEach(function(c){c.classList.remove('active')});
+    chip.classList.add('active');
+  } else {
+    // called from card tap — activate matching chip
+    document.querySelectorAll('#inbox-chips .chip').forEach(function(c){c.classList.remove('active')});
+    var ch=document.getElementById('chip-'+platform);
+    if(ch)ch.classList.add('active');
+    // scroll inbox page to conversation list
+    var page=document.getElementById('page-inbox');
+    if(page)setTimeout(function(){page.scrollBy({top:300,behavior:'smooth'})},50);
+  }
+  document.querySelectorAll('#inbox-list .conv-item').forEach(function(item){
+    item.style.display=(platform==='all'||item.dataset.platform===platform)?'flex':'none';
+  });
+}
+
+// ── Settings ──
+function grantPerm(rowId,btn){btn.textContent='Granted';btn.className='pill-on'}
+
+// ── Toast ──
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  if(toastTimer)clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){t.classList.remove('show')},1800);
+}
+
+// ── Dialer ──
+var dialNum='';
+function openDialer(){dialNum='';document.getElementById('dial-number').textContent='​';document.getElementById('dialer').classList.add('open')}
+function closeDialer(){document.getElementById('dialer').classList.remove('open')}
+function dialKey(k){
+  dialNum+=k;
+  var el=document.getElementById('dial-number');
+  el.textContent=formatDialNum(dialNum);
+}
+function formatDialNum(n){
+  if(!n)return'​';
+  if(n.length<=4)return n;
+  if(n.length<=7)return n.slice(0,4)+' '+n.slice(4);
+  return n.slice(0,4)+' '+n.slice(4,7)+' '+n.slice(7);
+}
+function dialBackspace(){
+  if(!dialNum)return;
+  dialNum=dialNum.slice(0,-1);
+  document.getElementById('dial-number').textContent=formatDialNum(dialNum);
+}
+function dialCall(){
+  if(!dialNum){showToast('Enter a number first');return}
+  closeDialer();
+  startCallContact(dialNum,dialNum.slice(-2),'#6c5ce7','#1a0040','Phone');
+}
+
+// ── Call screen ──
+function startCall(platformLabel, initials, color, bgFrom) {
+  openCallScreen(platformLabel, initials, color, bgFrom, platformLabel);
+}
+function startCallContact(name, initials, color, bgFrom, platform) {
+  openCallScreen(name, initials, color, bgFrom, platform);
+}
+function openCallScreen(name, initials, color, bgFrom, platform) {
+  document.getElementById('cs-name').textContent=name;
+  document.getElementById('cs-sub').textContent='via '+platform;
+  document.getElementById('cs-status').textContent='Calling...';
+  document.getElementById('cs-timer').textContent='Connecting...';
+  document.getElementById('cs-avatar').textContent=initials;
+  document.getElementById('cs-avatar').style.background='linear-gradient(135deg,'+bgFrom+','+color+')';
+  document.getElementById('cs-pulse').style.color=color;
+  document.getElementById('cs-pulse2').style.color=color;
+  document.getElementById('cs-platform-text').textContent=platform;
+  document.getElementById('call-screen').classList.add('open');
+  callSeconds=0;
+  if(callTimer)clearInterval(callTimer);
+  // simulate connect after 2s
+  setTimeout(function(){
+    document.getElementById('cs-status').textContent='Connected';
+    callTimer=setInterval(function(){
+      callSeconds++;
+      var m=Math.floor(callSeconds/60),s=callSeconds%60;
+      document.getElementById('cs-timer').textContent=(m<10?'0'+m:m)+':'+(s<10?'0'+s:s);
+    },1000);
+  },2000);
+}
+function endCall(){
+  if(callTimer){clearInterval(callTimer);callTimer=null}
+  document.getElementById('call-screen').classList.remove('open');
+  showToast('Call ended');
+}
+</script>
+</body>
+</html>
