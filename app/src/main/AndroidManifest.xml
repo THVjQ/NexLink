@@ -4,7 +4,10 @@
     <uses-permission android:name="android.permission.READ_SMS"/>
     <uses-permission android:name="android.permission.SEND_SMS"/>
     <uses-permission android:name="android.permission.RECEIVE_SMS"/>
+    <uses-permission android:name="android.permission.WRITE_SMS"/>
+    <uses-permission android:name="android.permission.RECEIVE_MMS"/>
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
+    <uses-permission android:name="android.permission.WRITE_CONTACTS"/>
     <uses-permission android:name="android.permission.READ_CALL_LOG"/>
     <uses-permission android:name="android.permission.CALL_PHONE"/>
     <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
@@ -22,6 +25,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.NexLink">
 
+        <!-- ── Main entry ── -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -37,6 +41,51 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize"/>
 
+        <!-- Required to qualify as default SMS app -->
+        <activity
+            android:name=".ui.sms.SendActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SENDTO"/>
+                <data android:scheme="sms"/>
+                <data android:scheme="smsto"/>
+                <data android:scheme="mms"/>
+                <data android:scheme="mmsto"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+        </activity>
+
+        <!-- SMS receiver — fires when NexLink IS the default SMS app -->
+        <receiver
+            android:name=".receivers.SmsReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter android:priority="999">
+                <action android:name="android.provider.Telephony.SMS_DELIVER"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- Fallback — fires when NexLink is NOT the default SMS app -->
+        <receiver
+            android:name=".receivers.SmsReceiverFallback"
+            android:exported="true">
+            <intent-filter android:priority="100">
+                <action android:name="android.provider.Telephony.SMS_RECEIVED"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- MMS stub — required to qualify as default SMS app -->
+        <receiver
+            android:name=".receivers.MmsReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_WAP_PUSH">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.WAP_PUSH_DELIVER"/>
+                <data android:mimeType="application/vnd.wap.mms-message"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- Notification listener for social apps -->
         <service
             android:name=".services.NexLinkNotificationListener"
             android:exported="true"
