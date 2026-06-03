@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Telephony
+import android.telecom.TelecomManager
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -45,6 +46,7 @@ class MainActivity : AppCompatActivity() {
 
         requestMissingPermissions()
         promptDefaultSmsApp()
+        promptDefaultDialer()
 
         loadFragment(inboxFragment)
 
@@ -72,6 +74,15 @@ class MainActivity : AppCompatActivity() {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
         if (missing.isNotEmpty()) ActivityCompat.requestPermissions(this, missing.toTypedArray(), 0)
+    }
+
+    private fun promptDefaultDialer() {
+        val tm = getSystemService(TelecomManager::class.java)
+        if (tm.defaultDialerPackage == packageName) return
+        startActivity(
+            Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER)
+                .putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName)
+        )
     }
 
     private fun promptDefaultSmsApp() {

@@ -32,7 +32,9 @@ class CallsFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        b.btnDialpad.setOnClickListener { showDialer() }
+        b.btnDialpad.setOnClickListener {
+            startActivity(Intent(requireContext(), DialerActivity::class.java))
+        }
         loadCallLog()
     }
 
@@ -117,7 +119,9 @@ class CallsFragment : Fragment() {
     private fun placeCall(number: String) {
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CALL_PHONE)
             != PackageManager.PERMISSION_GRANTED) return
-        startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:$number")))
+        startActivity(Intent(requireContext(), DialerActivity::class.java).apply {
+            data = Uri.parse("tel:$number")
+        })
     }
 
     private fun formatNumber(n: String) = when {

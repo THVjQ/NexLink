@@ -1,21 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- SMS -->
     <uses-permission android:name="android.permission.READ_SMS"/>
     <uses-permission android:name="android.permission.SEND_SMS"/>
     <uses-permission android:name="android.permission.RECEIVE_SMS"/>
     <uses-permission android:name="android.permission.WRITE_SMS"/>
     <uses-permission android:name="android.permission.RECEIVE_MMS"/>
     <uses-permission android:name="android.permission.SEND_RESPOND_VIA_MESSAGE"/>
+
+    <!-- Contacts -->
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
     <uses-permission android:name="android.permission.WRITE_CONTACTS"/>
+
+    <!-- Phone / calls -->
     <uses-permission android:name="android.permission.READ_CALL_LOG"/>
     <uses-permission android:name="android.permission.CALL_PHONE"/>
     <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS"/>
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS"/>
+
+    <!-- System -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
     <application
         android:name=".App"
@@ -37,12 +49,13 @@
             </intent-filter>
         </activity>
 
+        <!-- ── SMS conversation ── -->
         <activity
             android:name=".ui.sms.ConversationActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize"/>
 
-        <!-- Required: handle sms: URIs from other apps -->
+        <!-- ── Required: handle sms: URIs (default SMS app) ── -->
         <activity
             android:name=".ui.sms.SendActivity"
             android:exported="true">
@@ -56,9 +69,57 @@
             </intent-filter>
         </activity>
 
-        <!-- Required: fires when NexLink IS the default SMS app -->
-        <receiver
-            android:name=".receivers.SmsReceiver"
+        <!-- ── Dialer (default phone app) ── -->
+        <activity
+            android:name=".ui.calls.DialerActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:scheme="tel"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="tel"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.CALL_PRIVILEGED"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+        </activity>
+
+        <!-- ── Full-screen in-call UI ── -->
+        <activity
+            android:name=".ui.calls.InCallActivity"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.NexLink"/>
+
+        <!-- ── InCallService — system calls this for call UI ── -->
+        <service
+            android:name=".services.NexLinkInCallService"
+            android:exported="true"
+            android:permission="android.permission.BIND_IN_CALL_SERVICE">
+            <meta-data android:name="android.telecom.IN_CALL_SERVICE_UI"      android:value="true"/>
+            <meta-data android:name="android.telecom.IN_CALL_SERVICE_RINGING" android:value="true"/>
+            <intent-filter>
+                <action android:name="android.telecom.InCallService"/>
+            </intent-filter>
+        </service>
+
+        <!-- ── SMS receiver (default SMS app) ── -->
+        <receiver android:name=".receivers.SmsReceiver"
             android:exported="true"
             android:permission="android.permission.BROADCAST_SMS">
             <intent-filter android:priority="999">
@@ -66,18 +127,15 @@
             </intent-filter>
         </receiver>
 
-        <!-- Fallback: fires when NexLink is NOT the default SMS app -->
-        <receiver
-            android:name=".receivers.SmsReceiverFallback"
-            android:exported="true">
+        <!-- ── SMS fallback (not default app) ── -->
+        <receiver android:name=".receivers.SmsReceiverFallback" android:exported="true">
             <intent-filter android:priority="100">
                 <action android:name="android.provider.Telephony.SMS_RECEIVED"/>
             </intent-filter>
         </receiver>
 
-        <!-- Required for default SMS app: MMS -->
-        <receiver
-            android:name=".receivers.MmsReceiver"
+        <!-- ── MMS stub (required for default SMS app) ── -->
+        <receiver android:name=".receivers.MmsReceiver"
             android:exported="true"
             android:permission="android.permission.BROADCAST_WAP_PUSH">
             <intent-filter>
@@ -86,9 +144,8 @@
             </intent-filter>
         </receiver>
 
-        <!-- Required for default SMS app: quick reply from notifications -->
-        <service
-            android:name=".services.RespondViaMessageService"
+        <!-- ── Quick-reply service (required for default SMS app) ── -->
+        <service android:name=".services.RespondViaMessageService"
             android:exported="true"
             android:permission="android.permission.SEND_RESPOND_VIA_MESSAGE">
             <intent-filter>
@@ -101,9 +158,8 @@
             </intent-filter>
         </service>
 
-        <!-- Notification listener for social apps -->
-        <service
-            android:name=".services.NexLinkNotificationListener"
+        <!-- ── Social notification listener ── -->
+        <service android:name=".services.NexLinkNotificationListener"
             android:exported="true"
             android:label="NexLink Notifications"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
