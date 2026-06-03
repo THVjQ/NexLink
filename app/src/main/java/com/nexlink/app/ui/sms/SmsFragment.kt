@@ -8,8 +8,11 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Telephony
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.*
 import androidx.core.content.ContextCompat
+import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexlink.app.R
@@ -22,6 +25,7 @@ class SmsFragment : Fragment() {
     private var _b: FragmentSmsBinding? = null
     private val b get() = _b!!
     private lateinit var adapter: ConversationAdapter
+    private var allConversations = listOf<Conversation>()
 
     private val smsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) { loadConversations() }
@@ -33,11 +37,30 @@ class SmsFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
         adapter = ConversationAdapter { conv -> openConversation(conv) }
         b.recycler.layoutManager = LinearLayoutManager(requireContext())
         b.recycler.adapter = adapter
+
         b.swipe.setOnRefreshListener { loadConversations() }
         b.swipe.setColorSchemeResources(R.color.accent)
+
+        // Search
+        b.etSearch.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+            override fun onTextChanged(s: CharSequence?, st: Int, b2: Int, c: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                val q = s?.toString() ?: ""
+                b.btnClear.isVisible = q.isNotEmpty()
+                filterConversations(q)
+            }
+        })
+
+        b.btnClear.setOnClickListener {
+            b.etSearch.text?.clear()
+            b.etSearch.clearFocus()
+        }
+
         loadConversations()
     }
 
@@ -61,13 +84,26 @@ class SmsFragment : Fragment() {
             val convs = SmsHelper.getConversations(ctx)
             if (!isAdded) return@Thread
             activity?.runOnUiThread {
-                adapter.setData(convs)
+                allConversations = convs
+                filterConversations(b.etSearch.text?.toString() ?: "")
                 b.swipe.isRefreshing = false
-                b.tvUnread.text = convs.sumOf { it.unreadCount }.let {
-                    if (it > 0) "$it unread" else "${convs.size} threads"
-                }
+                val unread = convs.sumOf { it.unreadCount }
+                b.tvUnread.text = if (unread > 0) "$unread unread" else "${convs.size} threads"
             }
         }.start()
+    }
+
+    private fun filterConversations(query: String) {
+        if (query.isBlank()) {
+            adapter.setData(allConversations)
+        } else {
+            val q = query.trim().lowercase()
+            adapter.setData(allConversations.filter {
+                it.contactName.lowercase().contains(q) ||
+                it.address.contains(q) ||
+                it.lastMessage.lowercase().contains(q)
+            })
+        }
     }
 
     private fun openConversation(conv: Conversation) {
