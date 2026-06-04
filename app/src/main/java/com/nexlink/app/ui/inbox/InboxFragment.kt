@@ -2,6 +2,7 @@ package com.nexlink.app.ui.inbox
 
 import android.os.Bundle
 import android.view.*
+import android.view.HapticFeedbackConstants
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexlink.app.R
@@ -14,7 +15,19 @@ class InboxFragment : Fragment() {
     private var _b: FragmentInboxBinding? = null
     private val b get() = _b!!
     private lateinit var adapter: NotificationAdapter
-    private var currentFilter = "all"
+
+    // Set of currently active filter platforms (empty = show all)
+    private val selectedPlatforms = mutableSetOf<String>()
+
+    // Map platform name → its card view and platform colour
+    private val cardInfo by lazy {
+        mapOf(
+            "Signal"    to Pair(b.cardSignal,    0xFF3a9bd5.toInt()),
+            "Telegram"  to Pair(b.cardTelegram,  0xFF229ed9.toInt()),
+            "WhatsApp"  to Pair(b.cardWhatsapp,  0xFF25d366.toInt()),
+            "Messenger" to Pair(b.cardMessenger, 0xFF0099ff.toInt())
+        )
+    }
 
     override fun onCreateView(i: LayoutInflater, c: ViewGroup?, s: Bundle?): View {
         _b = FragmentInboxBinding.inflate(i, c, false); return b.root
@@ -27,18 +40,19 @@ class InboxFragment : Fragment() {
         b.recycler.layoutManager = LinearLayoutManager(requireContext())
         b.recycler.adapter = adapter
 
-        // Filter chips
-        b.chipAll.setOnClickListener       { setFilter("all") }
-        b.chipSignal.setOnClickListener    { setFilter("Signal") }
-        b.chipTelegram.setOnClickListener  { setFilter("Telegram") }
-        b.chipWhatsapp.setOnClickListener  { setFilter("WhatsApp") }
-        b.chipMessenger.setOnClickListener { setFilter("Messenger") }
-
-        // App card taps
-        b.cardSignal.setOnClickListener    { setFilter("Signal") }
-        b.cardTelegram.setOnClickListener  { setFilter("Telegram") }
-        b.cardWhatsapp.setOnClickListener  { setFilter("WhatsApp") }
-        b.cardMessenger.setOnClickListener { setFilter("Messenger") }
+        // Wire up card taps — toggle filter on each tap
+        cardInfo.forEach { (platform, pair) ->
+            pair.first.setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                if (platform in selectedPlatforms) {
+                    selectedPlatforms.remove(platform)
+                } else {
+                    selectedPlatforms.add(platform)
+                }
+                updateCardVisuals()
+                applyFilter(NotificationStore.notifications.value.orEmpty())
+            }
+        }
 
         NotificationStore.notifications.observe(viewLifecycleOwner) { applyFilter(it) }
 
@@ -49,28 +63,36 @@ class InboxFragment : Fragment() {
         b.swipe.setColorSchemeResources(R.color.accent)
     }
 
-    private fun setFilter(platform: String) {
-        currentFilter = platform
-        listOf(b.chipAll, b.chipSignal, b.chipTelegram, b.chipWhatsapp, b.chipMessenger).forEach {
-            it.isSelected = false
+    private fun updateCardVisuals() {
+        cardInfo.forEach { (platform, pair) ->
+            val (card, _) = pair
+            val isSelected = platform in selectedPlatforms
+            card.setBackgroundResource(
+                if (isSelected) R.drawable.bg_card_selected
+                else R.drawable.bg_card_unselected
+            )
+            card.alpha = if (selectedPlatforms.isEmpty() || isSelected) 1f else 0.55f
         }
-        when (platform) {
-            "all"       -> b.chipAll.isSelected = true
-            "Signal"    -> b.chipSignal.isSelected = true
-            "Telegram"  -> b.chipTelegram.isSelected = true
-            "WhatsApp"  -> b.chipWhatsapp.isSelected = true
-            "Messenger" -> b.chipMessenger.isSelected = true
-        }
-        applyFilter(NotificationStore.notifications.value.orEmpty())
     }
 
     private fun applyFilter(all: List<SocialNotification>) {
-        val filtered = if (currentFilter == "all") all
-                       else all.filter { it.platform == currentFilter }
+        val filtered = when {
+            selectedPlatforms.isEmpty() -> all
+            else -> all.filter { it.platform in selectedPlatforms }
+        }
         adapter.setData(filtered)
         updateBadges(all)
-        b.tvSub.text = if (filtered.isEmpty()) "No messages yet — grant Notification Access in Settings"
-                       else "${all.size} unread · all platforms"
+
+        val filterLabel = when {
+            selectedPlatforms.isEmpty() -> "all platforms"
+            selectedPlatforms.size == 1 -> selectedPlatforms.first()
+            else -> selectedPlatforms.joinToString(" + ")
+        }
+        b.tvSub.text = when {
+            all.isEmpty() -> "No messages yet — grant Notification Access in Settings"
+            filtered.isEmpty() -> "No messages from $filterLabel"
+            else -> "${filtered.size} message${if (filtered.size != 1) "s" else ""} · $filterLabel"
+        }
     }
 
     private fun updateBadges(all: List<SocialNotification>) {

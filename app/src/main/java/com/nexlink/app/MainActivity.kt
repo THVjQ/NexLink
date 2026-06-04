@@ -7,7 +7,6 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Settings
 import android.provider.Telephony
-import android.telecom.TelecomManager
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -49,7 +48,6 @@ class MainActivity : AppCompatActivity() {
 
         requestMissingPermissions()
         promptDefaultSmsApp()
-        promptDefaultDialer()
         promptNotificationAccess()
 
         loadFragment(inboxFragment)
@@ -98,17 +96,14 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun promptDefaultDialer() {
-        val tm = getSystemService(TelecomManager::class.java)
-        if (tm.defaultDialerPackage == packageName) return
-        startActivity(
-            Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER)
-                .putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName)
-        )
-    }
-
     private fun promptDefaultSmsApp() {
+        // Already default — never prompt
         if (Telephony.Sms.getDefaultSmsPackage(this) == packageName) return
+        // Only show once — if dismissed or set, don't keep nagging
+        val prefs = getSharedPreferences("nexlink_prefs", MODE_PRIVATE)
+        if (prefs.getBoolean("sms_prompt_shown", false)) return
+        prefs.edit().putBoolean("sms_prompt_shown", true).apply()
+
         AlertDialog.Builder(this)
             .setTitle("Set NexLink as Default SMS App")
             .setMessage("To receive SMS notifications and see new messages here, set NexLink as your default SMS app.")

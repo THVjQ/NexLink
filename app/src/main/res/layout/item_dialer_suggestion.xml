@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="horizontal" android:gravity="center_vertical"
+    android:paddingHorizontal="8dp" android:paddingVertical="8dp">
+
+    <TextView android:id="@+id/tvAvatar"
+        android:layout_width="38dp" android:layout_height="38dp"
+        android:background="@drawable/bg_avatar" android:gravity="center"
+        android:textColor="#fff" android:textSize="13sp" android:textStyle="bold"
+        android:layout_marginEnd="12dp"/>
+
+    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+        android:layout_weight="1" android:orientation="vertical">
+        <TextView android:id="@+id/tvName"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:textColor="@color/text" android:textSize="14sp" android:textStyle="bold"/>
+        <TextView android:id="@+id/tvNumber"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:textColor="@color/muted" android:textSize="12sp"/>
+    </LinearLayout>
+
+    <ImageButton android:id="@+id/btnSuggestSms"
+        android:layout_width="36dp" android:layout_height="36dp"
+        android:background="@drawable/bg_action_btn"
+        android:src="@drawable/ic_sms" android:tint="@color/accent"
+        android:padding="8dp" android:layout_marginEnd="8dp"/>
+
+    <ImageButton android:id="@+id/btnSuggestCall"
+        android:layout_width="36dp" android:layout_height="36dp"
+        android:background="@drawable/bg_call_green"
+        android:src="@drawable/ic_call" android:tint="#fff"
+        android:padding="8dp"/>
+</LinearLayout>

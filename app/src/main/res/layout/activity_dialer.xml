@@ -21,11 +21,20 @@
         android:layout_width="match_parent" android:layout_height="wrap_content"
         android:textSize="36sp" android:textStyle="bold" android:textColor="@color/text"
         android:gravity="center" android:letterSpacing="0.05"
-        android:minHeight="64dp" android:padding="8dp"/>
+        android:minHeight="56dp" android:paddingHorizontal="8dp"/>
+
+    <!-- Contact suggestions (up to 3, hidden when empty) -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvSuggestions"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:paddingHorizontal="8dp"/>
+
+    <!-- Spacer to push pad down -->
+    <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1"/>
 
     <!-- Keypad -->
     <GridLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:columnCount="3" android:padding="20dp" android:layout_weight="1">
+        android:columnCount="3" android:paddingHorizontal="16dp" android:paddingTop="4dp">
 
         <Button android:id="@+id/k1" style="@style/DialKey" android:text="1"/>
         <Button android:id="@+id/k2" style="@style/DialKey" android:text="2"/>
@@ -44,7 +53,7 @@
     <!-- Call + delete -->
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="horizontal" android:gravity="center"
-        android:paddingBottom="36dp" android:paddingHorizontal="32dp">
+        android:paddingTop="12dp" android:paddingBottom="40dp" android:paddingHorizontal="32dp">
 
         <View android:layout_width="64dp" android:layout_height="64dp"/>
 

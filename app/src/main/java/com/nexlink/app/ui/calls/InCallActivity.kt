@@ -5,6 +5,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.telecom.Call
+import android.view.HapticFeedbackConstants
+import android.view.View
 import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
 import com.nexlink.app.databinding.ActivityInCallBinding
@@ -82,14 +84,14 @@ class InCallActivity : AppCompatActivity() {
     }
 
     private fun bindButtons() {
-        // Ringing actions
-        b.btnAnswer.setOnClickListener { CallManager.answer() }
-        b.btnDecline.setOnClickListener { CallManager.reject() }
+        fun haptic(v: View) = v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
 
-        // Active call actions
-        b.btnEndCall.setOnClickListener { CallManager.hangUp() }
+        b.btnAnswer.setOnClickListener  { haptic(it); CallManager.answer() }
+        b.btnDecline.setOnClickListener { haptic(it); CallManager.reject() }
+        b.btnEndCall.setOnClickListener { haptic(it); CallManager.hangUp() }
 
         b.btnMute.setOnClickListener {
+            haptic(it)
             isMuted = !isMuted
             val am = getSystemService(AudioManager::class.java)
             am.isMicrophoneMute = isMuted
@@ -98,17 +100,16 @@ class InCallActivity : AppCompatActivity() {
         }
 
         b.btnSpeaker.setOnClickListener {
+            haptic(it)
             isSpeaker = !isSpeaker
             val am = getSystemService(AudioManager::class.java)
-            am.mode            = AudioManager.MODE_IN_CALL
+            am.mode             = AudioManager.MODE_IN_CALL
             am.isSpeakerphoneOn = isSpeaker
-            b.btnSpeaker.alpha = if (isSpeaker) 1f else 0.5f
-            b.tvSpeaker.text   = if (isSpeaker) "Earpiece" else "Speaker"
+            b.btnSpeaker.alpha  = if (isSpeaker) 1f else 0.5f
+            b.tvSpeaker.text    = if (isSpeaker) "Earpiece" else "Speaker"
         }
 
-        b.btnHold.setOnClickListener {
-            CallManager.hold()
-        }
+        b.btnHold.setOnClickListener { haptic(it); CallManager.hold() }
     }
 
     override fun onDestroy() {
