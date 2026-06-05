@@ -45,7 +45,19 @@ class NexLinkNotificationListener : NotificationListenerService() {
     private fun isMediaMessage(extras: android.os.Bundle): Boolean {
         val text = extras.getCharSequence("android.text")?.toString()?.lowercase() ?: return false
         return text.contains("voice message") || text.contains("audio message") ||
-               text.contains("voice note") || text.contains("🎵") || text.contains("🍤")
+               text.contains("voice note") || text.contains("🎵") || text.contains("🎤")
+    }
+
+    private fun isReactionNotification(text: String): Boolean {
+        val lower = text.lowercase()
+        return lower.contains("reacted") || lower.contains("liked") ||
+               lower.contains("loved") || lower.contains("laughed") ||
+               lower.contains("emphasized") ||
+               text.trimStart().let { t ->
+                   t.startsWith("❤") || t.startsWith("👍") || t.startsWith("😂") ||
+                   t.startsWith("😮") || t.startsWith("😢") || t.startsWith("🔥") ||
+                   t.startsWith("🎉") || t.startsWith("👏")
+               }
     }
 
     private fun isCallNotification(notification: android.app.Notification, extras: android.os.Bundle): Boolean {
@@ -95,7 +107,8 @@ class NexLinkNotificationListener : NotificationListenerService() {
             packageName = pkg,
             sender      = title,
             text        = text,
-            timestamp   = sbn.postTime
+            timestamp   = sbn.postTime,
+            isReaction  = isReactionNotification(text)
         )
 
         // Skip notifications from disabled platforms

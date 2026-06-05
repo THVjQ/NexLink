@@ -8,7 +8,8 @@ data class SocialNotification(
     val packageName: String,
     val sender: String,
     val text: String,
-    val timestamp: Long
+    val timestamp: Long,
+    val isReaction: Boolean = false
 )
 
 object NotificationStore {

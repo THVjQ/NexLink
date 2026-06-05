@@ -1,13 +1,17 @@
 package com.nexlink.app.ui.calls
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.CallLog
+import android.telecom.TelecomManager
+import android.telephony.SubscriptionManager
 import android.view.*
 import android.widget.*
+import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -56,9 +60,9 @@ class CallsFragment : Fragment() {
         b.recyclerCalls.layoutManager = LinearLayoutManager(requireContext())
         b.recyclerCalls.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             inner class VH(v: View) : RecyclerView.ViewHolder(v) {
-                val avatar: TextView = v.findViewById(R.id.tvAvatar)
-                val name:   TextView = v.findViewById(R.id.tvName)
-                val detail: TextView = v.findViewById(R.id.tvDetail)
+                val avatar:  TextView    = v.findViewById(R.id.tvAvatar)
+                val name:    TextView    = v.findViewById(R.id.tvName)
+                val detail:  TextView    = v.findViewById(R.id.tvDetail)
                 val btnCall: ImageButton = v.findViewById(R.id.btnCall)
             }
             override fun onCreateViewHolder(p: ViewGroup, t: Int) =
@@ -84,38 +88,59 @@ class CallsFragment : Fragment() {
                 }
                 h.detail.text = "$typeStr · ${formatDate(c.timestamp)}"
                 h.detail.setTextColor(color)
+
+                // Short tap → call with default SIM
                 h.btnCall.setOnClickListener { placeCall(c.number) }
                 h.itemView.setOnClickListener { placeCall(c.number) }
+                // Long-press → SIM picker
+                h.btnCall.setOnLongClickListener { showSimCallPicker(c.number); true }
+                h.itemView.setOnLongClickListener { showSimCallPicker(c.number); true }
             }
         }
     }
 
-    private fun showDialer() {
-        val sheet = BottomSheetDialog(requireContext(), R.style.DialerSheet)
-        val v = LayoutInflater.from(requireContext()).inflate(R.layout.bottom_sheet_dialer, null)
-        sheet.setContentView(v)
+    // ── SIM-aware call ────────────────────────────────────────────────────────
 
-        val display = v.findViewById<TextView>(R.id.tvDialNumber)
-        var num = ""
+    @SuppressLint("MissingPermission")
+    private fun showSimCallPicker(number: String) {
+        val ctx = requireContext()
+        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.CALL_PHONE)
+            != PackageManager.PERMISSION_GRANTED) return
+        try {
+            val tm = ctx.getSystemService(TelecomManager::class.java)
+            val sm = ctx.getSystemService(SubscriptionManager::class.java)
+            val accounts = tm.callCapablePhoneAccounts ?: emptyList()
 
-        fun updateDisplay() { display.text = if (num.isEmpty()) "" else formatNumber(num) }
+            if (accounts.size <= 1) { placeCall(number); return }
 
-        val keys = mapOf(
-            R.id.k0 to "0", R.id.k1 to "1", R.id.k2 to "2", R.id.k3 to "3",
-            R.id.k4 to "4", R.id.k5 to "5", R.id.k6 to "6", R.id.k7 to "7",
-            R.id.k8 to "8", R.id.k9 to "9", R.id.kStar to "*", R.id.kHash to "#"
-        )
-        keys.forEach { (id, digit) ->
-            v.findViewById<View>(id).setOnClickListener { num += digit; updateDisplay() }
+            val hasPhoneState = ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_PHONE_STATE) ==
+                PackageManager.PERMISSION_GRANTED
+
+            val labels = accounts.mapIndexed { idx, handle ->
+                try {
+                    // getPhoneAccount gives us the human-readable label (SIM carrier name)
+                    val acct = tm.getPhoneAccount(handle)
+                    val name = acct?.label?.toString() ?: "SIM ${idx + 1}"
+                    if (!hasPhoneState) return@mapIndexed name
+                    // Try to also show the SIM number
+                    val subs = sm.activeSubscriptionInfoList ?: emptyList()
+                    val num  = subs.getOrNull(idx)?.number?.takeIf { it.isNotBlank() }?.let { "\n$it" } ?: ""
+                    "$name$num"
+                } catch (_: Exception) { "SIM ${idx + 1}" }
+            }.toTypedArray()
+
+            AlertDialog.Builder(ctx)
+                .setTitle("Call $number via…")
+                .setItems(labels) { _, i ->
+                    val bundle = android.os.Bundle()
+                    bundle.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, accounts[i])
+                    try { tm.placeCall(Uri.parse("tel:$number"), bundle) }
+                    catch (_: Exception) { placeCall(number) }
+                }
+                .show()
+        } catch (_: Exception) {
+            placeCall(number)
         }
-        v.findViewById<View>(R.id.kDel).setOnClickListener {
-            if (num.isNotEmpty()) { num = num.dropLast(1); updateDisplay() }
-        }
-        v.findViewById<View>(R.id.kCall).setOnClickListener {
-            if (num.isNotEmpty()) { sheet.dismiss(); placeCall(num) }
-            else Toast.makeText(requireContext(), "Enter a number", Toast.LENGTH_SHORT).show()
-        }
-        sheet.show()
     }
 
     private fun placeCall(number: String) {
@@ -126,18 +151,12 @@ class CallsFragment : Fragment() {
         })
     }
 
-    private fun formatNumber(n: String) = when {
-        n.length <= 4  -> n
-        n.length <= 7  -> "${n.take(4)} ${n.drop(4)}"
-        else           -> "${n.take(4)} ${n.drop(4).take(3)} ${n.drop(7)}"
-    }
-
     private fun formatDate(ms: Long): String {
         val diff = System.currentTimeMillis() - ms
         return when {
-            diff < 86_400_000 -> SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ms))
-            diff < 7 * 86_400_000L -> SimpleDateFormat("EEE HH:mm", Locale.getDefault()).format(Date(ms))
-            else -> SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(ms))
+            diff < 86_400_000      -> SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ms))
+            diff < 7*86_400_000L   -> SimpleDateFormat("EEE HH:mm", Locale.getDefault()).format(Date(ms))
+            else                   -> SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(ms))
         }
     }
 

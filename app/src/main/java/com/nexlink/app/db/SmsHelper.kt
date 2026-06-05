@@ -21,10 +21,12 @@ data class SmsMessage(
     val address: String,
     val body: String,
     val timestamp: Long,
-    val isIncoming: Boolean
+    val isIncoming: Boolean,
+    val isVoice: Boolean = false,
+    val mediaUri: String? = null
 )
 
-data class SimInfo(val subscriptionId: Int, val displayName: String, val slotIndex: Int)
+data class SimInfo(val subscriptionId: Int, val displayName: String, val slotIndex: Int, val number: String? = null)
 
 object SmsHelper {
 
@@ -79,6 +81,12 @@ object SmsHelper {
     }
 
     fun getMessages(ctx: Context, address: String, limit: Int = 300): List<SmsMessage> {
+        val sms = getSmsMessages(ctx, address, limit)
+        val mms = getMmsVoiceMessages(ctx, address)
+        return (sms + mms).sortedBy { it.timestamp }
+    }
+
+    private fun getSmsMessages(ctx: Context, address: String, limit: Int): List<SmsMessage> {
         val list = mutableListOf<SmsMessage>()
         val proj = arrayOf(Telephony.Sms._ID, Telephony.Sms.ADDRESS, Telephony.Sms.BODY,
                            Telephony.Sms.DATE, Telephony.Sms.TYPE)
@@ -101,6 +109,90 @@ object SmsHelper {
             }
         } catch (_: Exception) {}
         return list
+    }
+
+    private fun getMmsVoiceMessages(ctx: Context, address: String): List<SmsMessage> {
+        val result = mutableListOf<SmsMessage>()
+        try {
+            val proj = arrayOf(Telephony.Mms._ID, Telephony.Mms.DATE, Telephony.Mms.MESSAGE_BOX)
+            ctx.contentResolver.query(Telephony.Mms.CONTENT_URI, proj, null, null, "${Telephony.Mms.DATE} ASC")?.use { c ->
+                while (c.moveToNext()) {
+                    val mmsId  = c.getLong(0)
+                    val date   = c.getLong(1) * 1000L
+                    val box    = c.getInt(2)
+                    val isIn   = box == Telephony.Mms.MESSAGE_BOX_INBOX
+                    val addrType = if (isIn) "137" else "151" // FROM=137, TO=151
+                    val mmsAddr = getMmsAddress(ctx, mmsId, addrType)
+                    if (!numberMatches(mmsAddr, address)) continue
+                    val audioUri = getMmsAudioPart(ctx, mmsId) ?: continue
+                    result += SmsMessage(mmsId, address, "🎤 Voice message", date, isIn, isVoice = true, mediaUri = audioUri)
+                }
+            }
+        } catch (_: Exception) {}
+        return result
+    }
+
+    private fun getMmsAddress(ctx: Context, mmsId: Long, type: String): String {
+        ctx.contentResolver.query(
+            android.net.Uri.parse("content://mms/$mmsId/addr"),
+            arrayOf("address"), "type = ?", arrayOf(type), null
+        )?.use { c -> if (c.moveToFirst()) return c.getString(0) ?: "" }
+        return ""
+    }
+
+    private fun getMmsAudioPart(ctx: Context, mmsId: Long): String? {
+        ctx.contentResolver.query(
+            android.net.Uri.parse("content://mms/part"),
+            arrayOf(Telephony.Mms.Part._ID, Telephony.Mms.Part.CONTENT_TYPE),
+            "mid = ?", arrayOf(mmsId.toString()), null
+        )?.use { c ->
+            while (c.moveToNext()) {
+                val ct = c.getString(1) ?: continue
+                if (ct.startsWith("audio/")) return "content://mms/part/${c.getLong(0)}"
+            }
+        }
+        return null
+    }
+
+    private fun numberMatches(a: String, b: String): Boolean {
+        fun clean(n: String) = n.replace("[^\\d]".toRegex(), "").takeLast(9)
+        return clean(a) == clean(b) && clean(a).isNotEmpty()
+    }
+
+    fun sendVoiceMms(ctx: Context, to: String, audioFile: java.io.File, subId: Int = -1) {
+        val threadId = try { Telephony.Threads.getOrCreateThreadId(ctx, to) } catch (_: Exception) { 0L }
+        val msgValues = android.content.ContentValues().apply {
+            put("thread_id", threadId)
+            put("date", System.currentTimeMillis() / 1000)
+            put("msg_box", 4)
+            put("m_type", 128)
+            put("v", 18)
+            put("ct", "application/vnd.wap.multipart.related")
+            put("read", 1); put("seen", 1)
+            if (subId >= 0) put("sub_id", subId)
+        }
+        val mmsUri = ctx.contentResolver.insert(android.net.Uri.parse("content://mms"), msgValues) ?: return
+        val mmsId  = mmsUri.lastPathSegment ?: return
+
+        ctx.contentResolver.insert(android.net.Uri.parse("content://mms/$mmsId/addr"), android.content.ContentValues().apply {
+            put("address", to); put("type", 151); put("charset", 106)
+        })
+
+        val smil = "<smil><head><layout><root-layout/></layout></head><body><par dur=\"10000ms\"><audio src=\"audio.amr\"/></par></body></smil>"
+        ctx.contentResolver.insert(android.net.Uri.parse("content://mms/$mmsId/part"), android.content.ContentValues().apply {
+            put("mid", mmsId); put("ct", "application/smil"); put("cid", "<smil>")
+            put("_data", smil.toByteArray())
+        })
+
+        val partUri = ctx.contentResolver.insert(android.net.Uri.parse("content://mms/$mmsId/part"), android.content.ContentValues().apply {
+            put("mid", mmsId); put("ct", "audio/amr"); put("name", "audio.amr"); put("cid", "<audio>")
+        }) ?: return
+        ctx.contentResolver.openOutputStream(partUri)?.use { out -> audioFile.inputStream().copyTo(out) }
+
+        @Suppress("DEPRECATION")
+        val sm = if (subId >= 0) android.telephony.SmsManager.getSmsManagerForSubscriptionId(subId)
+                 else android.telephony.SmsManager.getDefault()
+        sm.sendMultimediaMessage(ctx, mmsUri, null, null, null)
     }
 
     fun getContactName(ctx: Context, address: String): String {
@@ -128,7 +220,12 @@ object SmsHelper {
             val sm = ctx.getSystemService(android.telephony.SubscriptionManager::class.java) ?: return emptyList()
             if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) return emptyList()
             (sm.activeSubscriptionInfoList ?: emptyList()).map { sub ->
-                SimInfo(sub.subscriptionId, sub.displayName?.toString() ?: "SIM ${sub.simSlotIndex + 1}", sub.simSlotIndex)
+                SimInfo(
+                    sub.subscriptionId,
+                    sub.displayName?.toString() ?: "SIM ${sub.simSlotIndex + 1}",
+                    sub.simSlotIndex,
+                    sub.number?.takeIf { it.isNotBlank() }
+                )
             }
         } catch (e: Exception) { emptyList() }
     }

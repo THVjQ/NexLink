@@ -60,11 +60,20 @@
             android:textSize="15sp" android:maxLines="5"
             android:inputType="textMultiLine|textCapSentences"/>
 
+        <!-- Hold to record voice message -->
+        <ImageButton android:id="@+id/btnVoice"
+            android:layout_width="44dp" android:layout_height="44dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/bg_call_btn"
+            android:src="@drawable/ic_mic"
+            android:padding="10dp"
+            android:contentDescription="Hold to record voice"/>
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSend"
             style="@style/Widget.Material3.Button.Icon"
             android:layout_width="44dp" android:layout_height="44dp"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="6dp"
             android:insetTop="0dp" android:insetBottom="0dp"
             android:backgroundTint="@color/accent"
             app:cornerRadius="22dp"

@@ -64,17 +64,28 @@ class NotificationAdapter : RecyclerView.Adapter<NotificationAdapter.VH>() {
     override fun onBindViewHolder(h: VH, pos: Int) {
         val thread = items[pos]
         val n = thread.latest
-        val initials = n.sender.split(" ").take(2)
-            .joinToString("") { it.take(1).uppercase() }.ifBlank { "?" }
-        h.avatar.text   = initials
-        h.name.text     = n.sender
-        h.platform.text = n.platform
-        h.text.text     = if (thread.count > 1) "(${thread.count}) ${n.text}" else n.text
-        h.time.text     = formatTime(n.timestamp)
 
         val color = platformColor(n.platform)
         h.platform.setTextColor(color)
-        h.avatar.background.mutate().setTint(color and 0x00FFFFFF or 0x33000000)
+        h.time.text = formatTime(n.timestamp)
+
+        if (n.isReaction) {
+            // Show the reaction emoji in the avatar circle and label sender clearly
+            val emoji = n.text.trim().take(2).ifBlank { "❤️" }
+            h.avatar.text = emoji
+            h.avatar.background.mutate().setTint(color and 0x00FFFFFF or 0x44000000)
+            h.name.text     = n.sender
+            h.platform.text = n.platform
+            h.text.text     = n.text
+        } else {
+            val initials = n.sender.split(" ").take(2)
+                .joinToString("") { it.take(1).uppercase() }.ifBlank { "?" }
+            h.avatar.text = initials
+            h.avatar.background.mutate().setTint(color and 0x00FFFFFF or 0x33000000)
+            h.name.text     = n.sender
+            h.platform.text = n.platform
+            h.text.text     = if (thread.count > 1) "(${thread.count}) ${n.text}" else n.text
+        }
 
         // Count badge — only when there are unread messages from this sender
         if (thread.unreadCount > 0) {

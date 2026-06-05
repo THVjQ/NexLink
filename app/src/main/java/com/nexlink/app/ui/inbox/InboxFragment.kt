@@ -89,9 +89,17 @@ class InboxFragment : Fragment() {
 
     private fun applyPlatformVisibility() {
         val ctx = context ?: return
-        cardMap.forEach { (platform, entry) ->
-            entry.card.visibility =
-                if (NotificationPrefs.isPlatformEnabled(ctx, platform)) View.VISIBLE else View.GONE
+        // Remove all cards from grid so there are no empty holes
+        b.cardGrid.removeAllViews()
+        // Re-add only enabled cards in a fixed order — GridLayout packs them gaplessly
+        val order = listOf("Signal","Telegram","WhatsApp","Messenger","Discord","Instagram","Steam")
+        order.forEach { platform ->
+            val entry = cardMap[platform] ?: return@forEach
+            if (NotificationPrefs.isPlatformEnabled(ctx, platform)) {
+                (entry.card.parent as? android.view.ViewGroup)?.removeView(entry.card)
+                entry.card.visibility = View.VISIBLE
+                b.cardGrid.addView(entry.card)
+            }
         }
     }
 

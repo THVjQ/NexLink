@@ -20,7 +20,8 @@
     </LinearLayout>
 
     <!-- App cards — tap card body to filter, tap bell to mute that platform -->
-    <GridLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+    <GridLayout android:id="@+id/cardGrid"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
         android:columnCount="2" android:padding="10dp" android:useDefaultMargins="true">
 
         <!-- Signal -->
