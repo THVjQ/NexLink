@@ -15,14 +15,13 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.core.view.isVisible
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.nexlink.app.R
 import com.nexlink.app.databinding.ActivityConversationBinding
 import com.nexlink.app.db.ReadTracker
 import com.nexlink.app.db.SimInfo
 import com.nexlink.app.db.SmsHelper
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 class ConversationActivity : AppCompatActivity() {
 
@@ -30,14 +29,15 @@ class ConversationActivity : AppCompatActivity() {
     private lateinit var adapter: BubbleAdapter
     private lateinit var address: String
 
-    private var currentLimit = 300
-    private var allLoaded = false
     private var sims = listOf<SimInfo>()
     private var selectedSimId = -1
 
     private var mediaRecorder: MediaRecorder? = null
     private var audioFile: File? = null
     private var isRecording = false
+
+    // Guard against concurrent loads (e.g. observer fires while first load still running)
+    private val loading = AtomicBoolean(false)
 
     private val smsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) { loadMessages() }
@@ -61,14 +61,12 @@ class ConversationActivity : AppCompatActivity() {
         b.recycler.layoutManager = LinearLayoutManager(this).apply { stackFromEnd = true }
         b.recycler.adapter = adapter
 
-        b.btnLoadEarlier.setOnClickListener {
-            allLoaded = true
-            loadMessages(limit = 0)
-            b.btnLoadEarlier.isVisible = false
-            b.dividerLoadEarlier.isVisible = false
-        }
+        // Load-full-history banner — now only shown to load without the MMS query
+        // (hide it since we always load everything)
+        b.btnLoadEarlier.visibility = View.GONE
+        b.dividerLoadEarlier.visibility = View.GONE
 
-        // SIM card detection — runs in background
+        // SIM detection
         Thread {
             val s = SmsHelper.getSims(this)
             runOnUiThread {
@@ -81,28 +79,24 @@ class ConversationActivity : AppCompatActivity() {
             }
         }.start()
 
-        // Tap SIM indicator → switch SIM
         b.tvSimIndicator.setOnClickListener { showSimPicker(sendAfter = false) }
-
-        // Short tap send → send with current SIM
         b.btnSend.setOnClickListener { sendMessage() }
-        // Long-press send → pick SIM then send immediately
         b.btnSend.setOnLongClickListener {
             if (sims.size > 1) showSimPicker(sendAfter = true) else sendMessage()
             true
         }
 
-        // Single tap: request RECORD_AUDIO permission if not yet granted
+        // Single tap mic: request permission or remind user to hold
         b.btnVoice.setOnClickListener {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 101)
-                Toast.makeText(this, "Grant microphone permission, then hold to record", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Microphone permission granted — now hold to record", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(this, "Hold to record a voice message", Toast.LENGTH_SHORT).show()
             }
         }
-        // Hold voice button to record; release to send
+        // Hold mic: record while pressed, send on release
         b.btnVoice.setOnTouchListener { _, event ->
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) return@setOnTouchListener false
@@ -131,37 +125,16 @@ class ConversationActivity : AppCompatActivity() {
         cancelRecording()
     }
 
-    // ── SIM picker ──────────────────────────────────────────────────────────
+    // ── Messages ──────────────────────────────────────────────────────────────
 
-    private fun showSimPicker(sendAfter: Boolean) {
-        val items = sims.map { simLabel(it) }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("Choose SIM")
-            .setItems(items) { _, i ->
-                selectedSimId = sims[i].subscriptionId
-                b.tvSimIndicator.text = simLabel(sims[i])
-                b.tvSimIndicator.visibility = View.VISIBLE
-                if (sendAfter) sendMessage()
-            }
-            .show()
-    }
-
-    private fun simLabel(sim: SimInfo): String {
-        val num = sim.number?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""
-        return "SIM ${sim.slotIndex + 1}: ${sim.displayName}$num"
-    }
-
-    // ── Messages ─────────────────────────────────────────────────────────────
-
-    private fun loadMessages(limit: Int = currentLimit) {
+    private fun loadMessages() {
+        if (!loading.compareAndSet(false, true)) return // skip if already loading
         Thread {
-            val msgs = SmsHelper.getMessages(this, address, limit)
+            val msgs = SmsHelper.getMessages(this, address)
             runOnUiThread {
+                loading.set(false)
                 adapter.setData(msgs)
-                if (msgs.isNotEmpty()) b.recycler.scrollToPosition(msgs.size - 1)
-                val hitLimit = !allLoaded && limit > 0 && msgs.size >= limit
-                b.btnLoadEarlier.isVisible = hitLimit
-                b.dividerLoadEarlier.isVisible = hitLimit
+                if (msgs.isNotEmpty()) b.recycler.scrollToPosition(adapter.itemCount - 1)
             }
         }.start()
     }
@@ -185,14 +158,29 @@ class ConversationActivity : AppCompatActivity() {
         }.start()
     }
 
+    // ── SIM picker ────────────────────────────────────────────────────────────
+
+    private fun showSimPicker(sendAfter: Boolean) {
+        val items = sims.map { simLabel(it) }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Choose SIM")
+            .setItems(items) { _, i ->
+                selectedSimId = sims[i].subscriptionId
+                b.tvSimIndicator.text = simLabel(sims[i])
+                b.tvSimIndicator.visibility = View.VISIBLE
+                if (sendAfter) sendMessage()
+            }
+            .show()
+    }
+
+    private fun simLabel(sim: SimInfo): String {
+        val num = sim.number?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""
+        return "SIM ${sim.slotIndex + 1}: ${sim.displayName}$num"
+    }
+
     // ── Voice recording ───────────────────────────────────────────────────────
 
     private fun startRecording() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 101)
-            return
-        }
         try {
             audioFile = File(cacheDir, "voice_${System.currentTimeMillis()}.amr")
             @Suppress("DEPRECATION")
@@ -205,7 +193,7 @@ class ConversationActivity : AppCompatActivity() {
                 start()
             }
             isRecording = true
-            b.btnVoice.setColorFilter(0xFFFF4444.toInt()) // red tint = recording
+            b.btnVoice.setColorFilter(0xFFFF4444.toInt())
         } catch (e: Exception) {
             Toast.makeText(this, "Cannot record: ${e.message}", Toast.LENGTH_SHORT).show()
             cancelRecording()
@@ -214,30 +202,29 @@ class ConversationActivity : AppCompatActivity() {
 
     private fun stopAndSendRecording() {
         if (!isRecording) return
-        try {
-            mediaRecorder?.stop()
-            mediaRecorder?.release()
-        } catch (_: Exception) {}
+        try { mediaRecorder?.stop(); mediaRecorder?.release() } catch (_: Exception) {}
         mediaRecorder = null
         isRecording = false
         b.btnVoice.clearColorFilter()
 
         val file = audioFile ?: return
-        if (!file.exists() || file.length() < 500) { file.delete(); return } // discard < 0.5 s
-
-        // MMS requires being the default SMS app
-        if (!SmsHelper.isDefaultSmsApp(this)) {
-            Toast.makeText(this, "Voice messages require NexLink to be your default SMS app. Set it in Settings → Apps → Default apps.", Toast.LENGTH_LONG).show()
-            file.delete()
-            return
-        }
+        audioFile = null
+        if (!file.exists() || file.length() < 500) { file.delete(); return }
 
         Thread {
             try {
                 SmsHelper.sendVoiceMms(this, address, file, selectedSimId)
                 file.delete()
                 runOnUiThread { loadMessages() }
+            } catch (e: SecurityException) {
+                file.delete()
+                runOnUiThread {
+                    Toast.makeText(this,
+                        "Voice messages require NexLink as the default SMS app. Go to Settings → Apps → Default apps.",
+                        Toast.LENGTH_LONG).show()
+                }
             } catch (e: Exception) {
+                file.delete()
                 runOnUiThread { Toast.makeText(this, "Voice send failed: ${e.message}", Toast.LENGTH_LONG).show() }
             }
         }.start()
@@ -248,12 +235,8 @@ class ConversationActivity : AppCompatActivity() {
         mediaRecorder = null
         isRecording = false
         b.btnVoice.clearColorFilter()
-        audioFile?.delete()
-        audioFile = null
+        audioFile?.delete(); audioFile = null
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        cancelRecording()
-    }
+    override fun onDestroy() { super.onDestroy(); cancelRecording() }
 }

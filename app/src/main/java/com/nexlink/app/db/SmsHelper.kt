@@ -80,23 +80,22 @@ object SmsHelper {
         return map
     }
 
-    fun getMessages(ctx: Context, address: String, limit: Int = 300): List<SmsMessage> {
-        val sms = getSmsMessages(ctx, address, limit)
+    // No limit — always return full conversation history sorted oldest→newest
+    fun getMessages(ctx: Context, address: String): List<SmsMessage> {
+        val sms = getSmsMessages(ctx, address)
         val mms = getMmsVoiceMessages(ctx, address)
         return (sms + mms).sortedBy { it.timestamp }
     }
 
-    private fun getSmsMessages(ctx: Context, address: String, limit: Int): List<SmsMessage> {
+    private fun getSmsMessages(ctx: Context, address: String): List<SmsMessage> {
         val list = mutableListOf<SmsMessage>()
         val proj = arrayOf(Telephony.Sms._ID, Telephony.Sms.ADDRESS, Telephony.Sms.BODY,
                            Telephony.Sms.DATE, Telephony.Sms.TYPE)
-        // DESC LIMIT gets the NEWEST $limit messages; reverse so display is oldest→newest
-        val orderBy = if (limit > 0) "${Telephony.Sms.DATE} DESC LIMIT $limit" else "${Telephony.Sms.DATE} ASC"
         try {
             ctx.contentResolver.query(
                 Telephony.Sms.CONTENT_URI, proj,
                 "${Telephony.Sms.ADDRESS} = ?", arrayOf(address),
-                orderBy
+                "${Telephony.Sms.DATE} ASC"
             )?.use { c ->
                 while (c.moveToNext()) {
                     list += SmsMessage(
@@ -109,41 +108,66 @@ object SmsHelper {
                 }
             }
         } catch (_: Exception) {}
-        // DESC query gives newest-first; reverse to chronological for display
-        return if (limit > 0) list.reversed() else list
+        return list
     }
 
-    fun isDefaultSmsApp(ctx: Context): Boolean = try {
-        ctx.packageName == android.provider.Telephony.Sms.getDefaultSmsPackage(ctx)
-    } catch (_: Exception) { false }
-
+    // Fast MMS voice-message query: first get relevant MMS IDs from addr table (1 query),
+    // then fetch only those rows (1 query) — avoids scanning all MMS on the device.
     private fun getMmsVoiceMessages(ctx: Context, address: String): List<SmsMessage> {
         val result = mutableListOf<SmsMessage>()
         try {
+            // Step 1: collect MMS IDs that include this address
+            val mmsIds = mutableSetOf<Long>()
+            val addrVariants = buildAddressVariants(address)
+            val placeholders = addrVariants.joinToString(",") { "?" }
+            ctx.contentResolver.query(
+                android.net.Uri.parse("content://mms/addr"),
+                arrayOf("mid"),
+                "address IN ($placeholders)",
+                addrVariants.toTypedArray(),
+                null
+            )?.use { c -> while (c.moveToNext()) mmsIds.add(c.getLong(0)) }
+
+            if (mmsIds.isEmpty()) return result
+
+            // Step 2: fetch only those MMS entries
+            val idPlaceholders = mmsIds.joinToString(",") { "?" }
             val proj = arrayOf(Telephony.Mms._ID, Telephony.Mms.DATE, Telephony.Mms.MESSAGE_BOX)
-            ctx.contentResolver.query(Telephony.Mms.CONTENT_URI, proj, null, null, "${Telephony.Mms.DATE} ASC")?.use { c ->
+            ctx.contentResolver.query(
+                Telephony.Mms.CONTENT_URI, proj,
+                "_id IN ($idPlaceholders)",
+                mmsIds.map { it.toString() }.toTypedArray(),
+                "${Telephony.Mms.DATE} ASC"
+            )?.use { c ->
                 while (c.moveToNext()) {
-                    val mmsId  = c.getLong(0)
-                    val date   = c.getLong(1) * 1000L
-                    val box    = c.getInt(2)
-                    val isIn   = box == Telephony.Mms.MESSAGE_BOX_INBOX
-                    val addrType = if (isIn) "137" else "151" // FROM=137, TO=151
-                    val mmsAddr = getMmsAddress(ctx, mmsId, addrType)
-                    if (!numberMatches(mmsAddr, address)) continue
+                    val mmsId = c.getLong(0)
+                    val date  = c.getLong(1) * 1000L
+                    val isIn  = c.getInt(2) == Telephony.Mms.MESSAGE_BOX_INBOX
                     val audioUri = getMmsAudioPart(ctx, mmsId) ?: continue
-                    result += SmsMessage(mmsId, address, "🎤 Voice message", date, isIn, isVoice = true, mediaUri = audioUri)
+                    result += SmsMessage(mmsId, address, "🎤 Voice message", date, isIn,
+                        isVoice = true, mediaUri = audioUri)
                 }
             }
         } catch (_: Exception) {}
         return result
     }
 
-    private fun getMmsAddress(ctx: Context, mmsId: Long, type: String): String {
-        ctx.contentResolver.query(
-            android.net.Uri.parse("content://mms/$mmsId/addr"),
-            arrayOf("address"), "type = ?", arrayOf(type), null
-        )?.use { c -> if (c.moveToFirst()) return c.getString(0) ?: "" }
-        return ""
+    // Build a small set of address variants to match in the addr table
+    private fun buildAddressVariants(address: String): List<String> {
+        val digits = address.replace("[^\\d]".toRegex(), "")
+        val variants = mutableSetOf(address)
+        if (digits.length >= 9) {
+            variants += digits                           // raw digits
+            variants += digits.takeLast(9)               // last 9 digits (local)
+            if (digits.startsWith("61") && digits.length > 9) {
+                variants += "0${digits.drop(2)}"         // 0412…
+                variants += "+${digits}"                 // +61412…
+            } else if (digits.startsWith("0") && digits.length == 10) {
+                variants += "61${digits.drop(1)}"        // 61412…
+                variants += "+61${digits.drop(1)}"       // +61412…
+            }
+        }
+        return variants.toList()
     }
 
     private fun getMmsAudioPart(ctx: Context, mmsId: Long): String? {
@@ -158,11 +182,6 @@ object SmsHelper {
             }
         }
         return null
-    }
-
-    private fun numberMatches(a: String, b: String): Boolean {
-        fun clean(n: String) = n.replace("[^\\d]".toRegex(), "").takeLast(9)
-        return clean(a) == clean(b) && clean(a).isNotEmpty()
     }
 
     fun sendVoiceMms(ctx: Context, to: String, audioFile: java.io.File, subId: Int = -1) {
