@@ -18,8 +18,44 @@ import com.nexlink.app.db.SocialNotification
 
 class NexLinkNotificationListener : NotificationListenerService() {
 
+    companion object {
+        // Common system SMS/MMS apps — suppressed when "Only notify via NexLink" is on.
+        // NexLink itself is the SMS handler and re-posts its own notification, so these
+        // are duplicates.
+        private val SMS_PACKAGES = setOf(
+            "com.samsung.android.messaging",
+            "com.google.android.apps.messaging",
+            "com.android.mms",
+            "com.android.messaging",
+            "com.hihonor.message",
+            "com.sonyericsson.conversations",
+            "com.htc.sense.mms"
+        )
+
+        // Call-related packages — NEVER suppressed regardless of any setting.
+        private val CALL_PACKAGES = setOf(
+            "com.android.server.telecom",
+            "com.google.android.dialer",
+            "com.samsung.android.incallui",
+            "com.android.incallui",
+            "com.android.phone"
+        )
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val pkg = sbn.packageName ?: return
+        val ctx = applicationContext
+
+        // Never touch call notifications
+        if (pkg in CALL_PACKAGES) return
+
+        // Suppress raw SMS app notifications when "Only notify via NexLink" is enabled —
+        // NexLink's SmsReceiver already posts its own notification for the same message.
+        if (pkg in SMS_PACKAGES) {
+            if (NotificationPrefs.isSuppressSourceEnabled(ctx)) cancelNotification(sbn.key)
+            return
+        }
+
         if (pkg !in NotificationStore.watchedPackages) return
 
         val extras = sbn.notification?.extras ?: return
@@ -27,7 +63,6 @@ class NexLinkNotificationListener : NotificationListenerService() {
         val text   = extras.getCharSequence("android.text")?.toString()  ?: return
         if (title.isBlank() || text.isBlank()) return
 
-        val ctx = applicationContext
         val n = SocialNotification(
             id          = "${sbn.key}",
             platform    = NotificationStore.platform(pkg),

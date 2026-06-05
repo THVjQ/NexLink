@@ -114,7 +114,12 @@ class SmsFragment : Fragment() {
     private fun filterConversations(query: String) {
         var result = allConversations
         if (filterUnreadOnly) {
-            result = result.filter { it.unreadCount > 0 }
+            val ctx = requireContext()
+            // Match the same "effectively read" logic used by ConversationAdapter
+            result = result.filter { conv ->
+                conv.unreadCount > 0 &&
+                    !com.nexlink.app.db.ReadTracker.isLocallyRead(ctx, conv.address, conv.timestamp)
+            }
         }
         if (query.isNotBlank()) {
             val q = query.trim().lowercase()

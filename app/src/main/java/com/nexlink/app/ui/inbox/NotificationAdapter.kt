@@ -80,7 +80,11 @@ class NotificationAdapter : RecyclerView.Adapter<NotificationAdapter.VH>() {
             h.count.visibility = View.GONE
         }
 
-        h.itemView.setOnClickListener { DeepLinkHelper.openPlatform(it.context, n.platform) }
+        h.itemView.setOnClickListener {
+            DeepLinkHelper.openPlatform(it.context, n.platform)
+            // Clear this thread so the badge disappears after opening
+            com.nexlink.app.db.NotificationStore.removeThread(n.platform, n.sender)
+        }
 
         h.btnCall.visibility = View.VISIBLE
         h.btnCall.setImageResource(
@@ -99,6 +103,7 @@ class NotificationAdapter : RecyclerView.Adapter<NotificationAdapter.VH>() {
                 "Messenger" -> DeepLinkHelper.messenger(ctx)
                 else        -> DeepLinkHelper.openPlatform(ctx, n.platform)
             }
+            com.nexlink.app.db.NotificationStore.removeThread(n.platform, n.sender)
         }
     }
 

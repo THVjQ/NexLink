@@ -40,4 +40,10 @@ object NotificationStore {
         val current = notifications.value.orEmpty().filter { it.id != key }
         notifications.postValue(current)
     }
+
+    fun removeThread(platform: String, sender: String) {
+        val current = notifications.value.orEmpty()
+            .filter { !(it.platform == platform && it.sender == sender) }
+        notifications.postValue(current)
+    }
 }
