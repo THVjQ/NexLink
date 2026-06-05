@@ -1,8 +1,12 @@
 package com.nexlink.app.db
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.PackageManager
 import android.provider.ContactsContract
 import android.provider.Telephony
+import androidx.core.content.ContextCompat
 
 data class Conversation(
     val address: String,
@@ -19,6 +23,8 @@ data class SmsMessage(
     val timestamp: Long,
     val isIncoming: Boolean
 )
+
+data class SimInfo(val subscriptionId: Int, val displayName: String, val slotIndex: Int)
 
 object SmsHelper {
 
@@ -116,8 +122,24 @@ object SmsHelper {
         return address
     }
 
-    fun sendSms(ctx: Context, address: String, body: String) {
-        android.telephony.SmsManager.getDefault().sendTextMessage(address, null, body, null, null)
+    @SuppressLint("MissingPermission")
+    fun getSims(ctx: Context): List<SimInfo> {
+        return try {
+            val sm = ctx.getSystemService(android.telephony.SubscriptionManager::class.java) ?: return emptyList()
+            if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) return emptyList()
+            (sm.activeSubscriptionInfoList ?: emptyList()).map { sub ->
+                SimInfo(sub.subscriptionId, sub.displayName?.toString() ?: "SIM ${sub.simSlotIndex + 1}", sub.simSlotIndex)
+            }
+        } catch (e: Exception) { emptyList() }
+    }
+
+    fun sendSms(ctx: Context, address: String, body: String, subscriptionId: Int = -1) {
+        @Suppress("DEPRECATION")
+        val smsManager = if (subscriptionId >= 0 && android.os.Build.VERSION.SDK_INT >= 22)
+            android.telephony.SmsManager.getSmsManagerForSubscriptionId(subscriptionId)
+        else android.telephony.SmsManager.getDefault()
+
+        smsManager.sendTextMessage(address, null, body, null, null)
         val values = android.content.ContentValues().apply {
             put(Telephony.Sms.ADDRESS, address)
             put(Telephony.Sms.BODY, body)

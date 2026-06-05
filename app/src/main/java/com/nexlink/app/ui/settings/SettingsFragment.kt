@@ -34,17 +34,66 @@ class SettingsFragment : Fragment() {
             })
         }
 
-        // Suppress-source toggle (issue #8)
         val ctx = requireContext()
+
+        // Suppress-source toggle
         b.switchSuppressSource.isChecked = NotificationPrefs.isSuppressSourceEnabled(ctx)
         b.switchSuppressSource.setOnCheckedChangeListener { _, isChecked ->
             NotificationPrefs.setSuppressSource(ctx, isChecked)
+        }
+
+        // Suppress call notifications toggle
+        b.switchSuppressCallNotifs.isChecked = NotificationPrefs.isSuppressCallNotifs(ctx)
+        b.switchSuppressCallNotifs.setOnCheckedChangeListener { _, isChecked ->
+            NotificationPrefs.setSuppressCallNotifs(ctx, isChecked)
+        }
+
+        // Pass-through media toggle
+        b.switchPassThroughMedia.isChecked = NotificationPrefs.isPassThroughMedia(ctx)
+        b.switchPassThroughMedia.setOnCheckedChangeListener { _, isChecked ->
+            NotificationPrefs.setPassThroughMedia(ctx, isChecked)
+        }
+
+        // Platform toggles
+        val platformSwitches = mapOf(
+            "Signal"    to b.switchPlatformSignal,
+            "Telegram"  to b.switchPlatformTelegram,
+            "WhatsApp"  to b.switchPlatformWhatsapp,
+            "Messenger" to b.switchPlatformMessenger,
+            "Discord"   to b.switchPlatformDiscord,
+            "Instagram" to b.switchPlatformInstagram,
+            "Steam"     to b.switchPlatformSteam
+        )
+        platformSwitches.forEach { (platform, switch) ->
+            switch.isChecked = NotificationPrefs.isPlatformEnabled(ctx, platform)
+            switch.setOnCheckedChangeListener { _, isChecked ->
+                NotificationPrefs.setPlatformEnabled(ctx, platform, isChecked)
+            }
         }
     }
 
     override fun onResume() {
         super.onResume()
         updatePermissionStatus()
+
+        // Refresh all switch states in case they were changed externally
+        val ctx = context ?: return
+        b.switchSuppressSource.isChecked = NotificationPrefs.isSuppressSourceEnabled(ctx)
+        b.switchSuppressCallNotifs.isChecked = NotificationPrefs.isSuppressCallNotifs(ctx)
+        b.switchPassThroughMedia.isChecked = NotificationPrefs.isPassThroughMedia(ctx)
+
+        val platformSwitches = mapOf(
+            "Signal"    to b.switchPlatformSignal,
+            "Telegram"  to b.switchPlatformTelegram,
+            "WhatsApp"  to b.switchPlatformWhatsapp,
+            "Messenger" to b.switchPlatformMessenger,
+            "Discord"   to b.switchPlatformDiscord,
+            "Instagram" to b.switchPlatformInstagram,
+            "Steam"     to b.switchPlatformSteam
+        )
+        platformSwitches.forEach { (platform, switch) ->
+            switch.isChecked = NotificationPrefs.isPlatformEnabled(ctx, platform)
+        }
     }
 
     private fun updatePermissionStatus() {

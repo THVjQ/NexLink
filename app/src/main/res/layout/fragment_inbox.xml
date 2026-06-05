@@ -151,6 +151,105 @@
                 android:visibility="gone"/>
         </LinearLayout>
 
+        <!-- Discord -->
+        <LinearLayout android:id="@+id/cardDiscord" android:layout_width="0dp"
+            android:layout_height="wrap_content" android:layout_columnWeight="1"
+            android:orientation="vertical" android:padding="10dp"
+            android:background="@drawable/bg_card_unselected" android:layout_margin="5dp"
+            android:clickable="true" android:focusable="true"
+            android:visibility="gone">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical">
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical">
+                    <TextView android:text="Discord" android:textColor="#5865F2"
+                        android:textStyle="bold" android:textSize="15sp"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                    <TextView android:text="Voice &amp; chat" android:textColor="@color/muted"
+                        android:textSize="11sp"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                </LinearLayout>
+                <ImageButton android:id="@+id/btnMuteDiscord"
+                    android:layout_width="28dp" android:layout_height="28dp"
+                    android:src="@drawable/ic_bell"
+                    android:background="@null"
+                    android:padding="4dp"
+                    android:contentDescription="Mute Discord"/>
+            </LinearLayout>
+            <TextView android:id="@+id/badgeDiscord"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textColor="#fff" android:textSize="10sp" android:textStyle="bold"
+                android:background="@drawable/bg_badge" android:paddingHorizontal="6dp"
+                android:paddingVertical="2dp" android:layout_marginTop="6dp"
+                android:visibility="gone"/>
+        </LinearLayout>
+
+        <!-- Instagram -->
+        <LinearLayout android:id="@+id/cardInstagram" android:layout_width="0dp"
+            android:layout_height="wrap_content" android:layout_columnWeight="1"
+            android:orientation="vertical" android:padding="10dp"
+            android:background="@drawable/bg_card_unselected" android:layout_margin="5dp"
+            android:clickable="true" android:focusable="true"
+            android:visibility="gone">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical">
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical">
+                    <TextView android:text="Instagram" android:textColor="#E1306C"
+                        android:textStyle="bold" android:textSize="15sp"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                    <TextView android:text="Social DMs" android:textColor="@color/muted"
+                        android:textSize="11sp"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                </LinearLayout>
+                <ImageButton android:id="@+id/btnMuteInstagram"
+                    android:layout_width="28dp" android:layout_height="28dp"
+                    android:src="@drawable/ic_bell"
+                    android:background="@null"
+                    android:padding="4dp"
+                    android:contentDescription="Mute Instagram"/>
+            </LinearLayout>
+            <TextView android:id="@+id/badgeInstagram"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textColor="#fff" android:textSize="10sp" android:textStyle="bold"
+                android:background="@drawable/bg_badge" android:paddingHorizontal="6dp"
+                android:paddingVertical="2dp" android:layout_marginTop="6dp"
+                android:visibility="gone"/>
+        </LinearLayout>
+
+        <!-- Steam -->
+        <LinearLayout android:id="@+id/cardSteam" android:layout_width="0dp"
+            android:layout_height="wrap_content" android:layout_columnWeight="1"
+            android:orientation="vertical" android:padding="10dp"
+            android:background="@drawable/bg_card_unselected" android:layout_margin="5dp"
+            android:clickable="true" android:focusable="true"
+            android:visibility="gone">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical">
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical">
+                    <TextView android:text="Steam" android:textColor="#1A9FFF"
+                        android:textStyle="bold" android:textSize="15sp"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                    <TextView android:text="Gaming chat" android:textColor="@color/muted"
+                        android:textSize="11sp"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                </LinearLayout>
+                <ImageButton android:id="@+id/btnMuteSteam"
+                    android:layout_width="28dp" android:layout_height="28dp"
+                    android:src="@drawable/ic_bell"
+                    android:background="@null"
+                    android:padding="4dp"
+                    android:contentDescription="Mute Steam"/>
+            </LinearLayout>
+            <TextView android:id="@+id/badgeSteam"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textColor="#fff" android:textSize="10sp" android:textStyle="bold"
+                android:background="@drawable/bg_badge" android:paddingHorizontal="6dp"
+                android:paddingVertical="2dp" android:layout_marginTop="6dp"
+                android:visibility="gone"/>
+        </LinearLayout>
+
     </GridLayout>
 
     <View android:layout_width="match_parent" android:layout_height="1dp"

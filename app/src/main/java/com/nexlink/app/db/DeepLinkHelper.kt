@@ -36,6 +36,15 @@ object DeepLinkHelper {
         else Toast.makeText(ctx, "App not installed", Toast.LENGTH_SHORT).show()
     }
 
+    // ── Discord: open app ──
+    fun discord(ctx: Context) = openApp(ctx, "com.discord")
+
+    // ── Instagram: open app ──
+    fun instagram(ctx: Context) = openApp(ctx, "com.instagram.android")
+
+    // ── Steam: open app ──
+    fun steam(ctx: Context) = openApp(ctx, "com.valvesoftware.android.steam.communityapp")
+
     // ── Open the right app for a given platform string ──
     fun openPlatform(ctx: Context, platform: String) {
         val pkg = when (platform) {
@@ -43,6 +52,9 @@ object DeepLinkHelper {
             "Telegram"  -> "org.telegram.messenger"
             "WhatsApp"  -> "com.whatsapp"
             "Messenger" -> "com.facebook.orca"
+            "Discord"   -> "com.discord"
+            "Instagram" -> "com.instagram.android"
+            "Steam"     -> "com.valvesoftware.android.steam.communityapp"
             else        -> return
         }
         openApp(ctx, pkg)

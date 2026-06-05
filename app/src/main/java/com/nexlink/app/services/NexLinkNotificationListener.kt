@@ -42,6 +42,22 @@ class NexLinkNotificationListener : NotificationListenerService() {
         )
     }
 
+    private fun isMediaMessage(extras: android.os.Bundle): Boolean {
+        val text = extras.getCharSequence("android.text")?.toString()?.lowercase() ?: return false
+        return text.contains("voice message") || text.contains("audio message") ||
+               text.contains("voice note") || text.contains("🎵") || text.contains("🍤")
+    }
+
+    private fun isCallNotification(notification: android.app.Notification, extras: android.os.Bundle): Boolean {
+        val cat = notification.category
+        if (cat == android.app.Notification.CATEGORY_CALL ||
+            cat == android.app.Notification.CATEGORY_MISSED_CALL) return true
+        val text = extras.getCharSequence("android.text")?.toString()?.lowercase() ?: return false
+        val title = extras.getCharSequence("android.title")?.toString()?.lowercase() ?: ""
+        return text.contains("missed call") || text.contains("incoming call") ||
+               title.contains("missed call") || text.contains("calling")
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val pkg = sbn.packageName ?: return
         val ctx = applicationContext
@@ -63,6 +79,16 @@ class NexLinkNotificationListener : NotificationListenerService() {
         val text   = extras.getCharSequence("android.text")?.toString()  ?: return
         if (title.isBlank() || text.isBlank()) return
 
+        // Check if this is a call notification from a social app
+        if (isCallNotification(sbn.notification, extras)) {
+            if (NotificationPrefs.isSuppressCallNotifs(ctx)) {
+                if (NotificationPrefs.isSuppressSourceEnabled(ctx)) {
+                    cancelNotification(sbn.key)
+                }
+                return // Don't store or re-post call notifications when suppressed
+            }
+        }
+
         val n = SocialNotification(
             id          = "${sbn.key}",
             platform    = NotificationStore.platform(pkg),
@@ -71,14 +97,22 @@ class NexLinkNotificationListener : NotificationListenerService() {
             text        = text,
             timestamp   = sbn.postTime
         )
+
+        // Skip notifications from disabled platforms
+        if (!NotificationPrefs.isPlatformEnabled(ctx, n.platform)) return
+
         NotificationStore.add(n)
 
-        // Suppress source app notification when setting is enabled (issue #8)
-        if (NotificationPrefs.isSuppressSourceEnabled(ctx)) {
+        // Suppress source app notification when setting is enabled
+        // But if pass-through-media is on and this is a media message, don't cancel the source
+        val isMedia = isMediaMessage(extras)
+        val shouldSuppressSource = NotificationPrefs.isSuppressSourceEnabled(ctx) &&
+            !(NotificationPrefs.isPassThroughMedia(ctx) && isMedia)
+        if (shouldSuppressSource) {
             cancelNotification(sbn.key)
         }
 
-        // Only re-post as NexLink notification if this platform is not muted (issue #7)
+        // Only re-post as NexLink notification if this platform is not muted
         if (!NotificationPrefs.isMuted(ctx, n.platform)) {
             postNexLinkNotification(n)
         }
@@ -161,6 +195,9 @@ class NexLinkNotificationListener : NotificationListenerService() {
         "Telegram"  -> 0xFF229ed9.toInt()
         "WhatsApp"  -> 0xFF25d366.toInt()
         "Messenger" -> 0xFF0099ff.toInt()
+        "Discord"   -> 0xFF5865F2.toInt()
+        "Instagram" -> 0xFFE1306C.toInt()
+        "Steam"     -> 0xFF1A9FFF.toInt()
         else        -> 0xFF6c5ce7.toInt()
     }
 }

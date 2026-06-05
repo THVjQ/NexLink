@@ -7,6 +7,7 @@ import android.widget.ImageButton
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.nexlink.app.R
+import com.nexlink.app.util.AvatarColors
 
 sealed class ContactListItem {
     data class Header(val letter: String) : ContactListItem()
@@ -66,6 +67,21 @@ class ContactsAdapter(
             ContactVH(inf.inflate(R.layout.item_contact, parent, false))
     }
 
+    private fun formatPhone(raw: String): String {
+        // Strip non-digit/plus chars except leading +
+        var clean = raw.replace("[^\\d+]".toRegex(), "")
+        // +61 → 0
+        if (clean.startsWith("+61")) clean = "0" + clean.drop(3)
+        // Leading 61 (12+ digit number) → 0
+        else if (clean.startsWith("61") && clean.length >= 12) clean = "0" + clean.drop(2)
+        // Format 10-digit numbers as 0412 345 678
+        return if (clean.length == 10 && clean.startsWith("0")) {
+            "${clean.take(4)} ${clean.drop(4).take(3)} ${clean.drop(7)}"
+        } else {
+            clean
+        }
+    }
+
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         when (val item = items[position]) {
             is ContactListItem.Header -> (holder as HeaderVH).letter.text = item.letter
@@ -74,9 +90,10 @@ class ContactsAdapter(
                 val c = item.contact
                 val initials = c.name.split(" ").take(2)
                     .joinToString("") { it.take(1).uppercase() }.ifBlank { "?" }
+                h.avatar.background.mutate().setTint(AvatarColors.colorFor(initials))
                 h.avatar.text  = initials
                 h.name.text    = c.name
-                h.number.text  = c.number
+                h.number.text  = formatPhone(c.number)
                 h.btnSms.setOnClickListener  { onSms(c) }
                 h.btnCall.setOnClickListener { onCall(c) }
                 h.itemView.setOnClickListener { onSms(c) }

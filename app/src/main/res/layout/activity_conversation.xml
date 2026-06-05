@@ -13,6 +13,16 @@
     <View android:layout_width="match_parent" android:layout_height="1dp"
         android:background="@color/divider"/>
 
+    <TextView android:id="@+id/tvSimIndicator"
+        android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:paddingHorizontal="10dp" android:paddingVertical="4dp"
+        android:layout_marginEnd="14dp" android:layout_marginTop="4dp" android:layout_marginBottom="2dp"
+        android:textSize="11sp" android:textColor="@color/accent"
+        android:background="@drawable/bg_card_selected"
+        android:clickable="true" android:focusable="true"
+        android:visibility="gone"/>
+
     <!-- Shown when there are more messages above the loaded window -->
     <TextView android:id="@+id/btnLoadEarlier"
         android:layout_width="match_parent" android:layout_height="wrap_content"

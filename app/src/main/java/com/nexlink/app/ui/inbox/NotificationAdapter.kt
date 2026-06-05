@@ -8,6 +8,7 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.nexlink.app.R
 import com.nexlink.app.db.DeepLinkHelper
+import com.nexlink.app.db.NotificationStore
 import com.nexlink.app.db.SocialNotification
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -17,7 +18,8 @@ data class NotificationThread(
     val platform: String,
     val sender: String,
     val latest: SocialNotification,
-    val count: Int
+    val count: Int,
+    val unreadCount: Int
 )
 
 class NotificationAdapter : RecyclerView.Adapter<NotificationAdapter.VH>() {
@@ -30,11 +32,14 @@ class NotificationAdapter : RecyclerView.Adapter<NotificationAdapter.VH>() {
             .groupBy { it.platform to it.sender }
             .map { (key, msgs) ->
                 val sorted = msgs.sortedByDescending { it.timestamp }
+                val platform = key.first
+                val sender   = key.second
                 NotificationThread(
-                    platform = key.first,
-                    sender   = key.second,
-                    latest   = sorted.first(),
-                    count    = sorted.size
+                    platform    = platform,
+                    sender      = sender,
+                    latest      = sorted.first(),
+                    count       = sorted.size,
+                    unreadCount = NotificationStore.unreadCountFor(platform, sender)
                 )
             }
             .sortedByDescending { it.latest.timestamp }
@@ -71,10 +76,10 @@ class NotificationAdapter : RecyclerView.Adapter<NotificationAdapter.VH>() {
         h.platform.setTextColor(color)
         h.avatar.background.mutate().setTint(color and 0x00FFFFFF or 0x33000000)
 
-        // Count badge — only when more than one message from this sender
-        if (thread.count > 1) {
+        // Count badge — only when there are unread messages from this sender
+        if (thread.unreadCount > 0) {
             h.count.visibility = View.VISIBLE
-            h.count.text = thread.count.toString()
+            h.count.text = thread.unreadCount.toString()
             h.count.background.mutate().setTint(color)
         } else {
             h.count.visibility = View.GONE
@@ -82,8 +87,8 @@ class NotificationAdapter : RecyclerView.Adapter<NotificationAdapter.VH>() {
 
         h.itemView.setOnClickListener {
             DeepLinkHelper.openPlatform(it.context, n.platform)
-            // Clear this thread so the badge disappears after opening
-            com.nexlink.app.db.NotificationStore.removeThread(n.platform, n.sender)
+            // Mark as read so badge disappears after opening
+            NotificationStore.markRead(n.platform, n.sender)
         }
 
         h.btnCall.visibility = View.VISIBLE
@@ -103,7 +108,7 @@ class NotificationAdapter : RecyclerView.Adapter<NotificationAdapter.VH>() {
                 "Messenger" -> DeepLinkHelper.messenger(ctx)
                 else        -> DeepLinkHelper.openPlatform(ctx, n.platform)
             }
-            com.nexlink.app.db.NotificationStore.removeThread(n.platform, n.sender)
+            NotificationStore.markRead(n.platform, n.sender)
         }
     }
 
@@ -112,6 +117,9 @@ class NotificationAdapter : RecyclerView.Adapter<NotificationAdapter.VH>() {
         "Telegram"  -> 0xFF229ed9.toInt()
         "WhatsApp"  -> 0xFF25d366.toInt()
         "Messenger" -> 0xFF0099ff.toInt()
+        "Discord"   -> 0xFF5865F2.toInt()
+        "Instagram" -> 0xFFE1306C.toInt()
+        "Steam"     -> 0xFF1A9FFF.toInt()
         else        -> 0xFF6c5ce7.toInt()
     }
 

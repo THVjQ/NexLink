@@ -40,8 +40,14 @@ class InboxFragment : Fragment() {
             "Signal"    to CardEntry(b.cardSignal,    b.btnMuteSignal,    0xFF3a9bd5.toInt()),
             "Telegram"  to CardEntry(b.cardTelegram,  b.btnMuteTelegram,  0xFF229ed9.toInt()),
             "WhatsApp"  to CardEntry(b.cardWhatsapp,  b.btnMuteWhatsapp,  0xFF25d366.toInt()),
-            "Messenger" to CardEntry(b.cardMessenger, b.btnMuteMessenger, 0xFF0099ff.toInt())
+            "Messenger" to CardEntry(b.cardMessenger, b.btnMuteMessenger, 0xFF0099ff.toInt()),
+            "Discord"   to CardEntry(b.cardDiscord,   b.btnMuteDiscord,   0xFF5865F2.toInt()),
+            "Instagram" to CardEntry(b.cardInstagram, b.btnMuteInstagram, 0xFFE1306C.toInt()),
+            "Steam"     to CardEntry(b.cardSteam,     b.btnMuteSteam,     0xFF1A9FFF.toInt())
         )
+
+        // Apply platform visibility based on prefs
+        applyPlatformVisibility()
 
         cardMap.forEach { (platform, entry) ->
             // Tap card body → toggle filter
@@ -73,6 +79,20 @@ class InboxFragment : Fragment() {
             b.swipe.isRefreshing = false
         }
         b.swipe.setColorSchemeResources(R.color.accent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        applyPlatformVisibility()
+        updateMuteVisuals()
+    }
+
+    private fun applyPlatformVisibility() {
+        val ctx = context ?: return
+        cardMap.forEach { (platform, entry) ->
+            entry.card.visibility =
+                if (NotificationPrefs.isPlatformEnabled(ctx, platform)) View.VISIBLE else View.GONE
+        }
     }
 
     private fun updateCardVisuals() {
@@ -117,13 +137,29 @@ class InboxFragment : Fragment() {
     }
 
     private fun updateBadges(all: List<SocialNotification>) {
-        fun count(p: String) = all.count { it.platform == p }
-        b.badgeSignal.text    = count("Signal").takeIf { it > 0 }?.toString() ?: ""
-        b.badgeTelegram.text  = count("Telegram").takeIf { it > 0 }?.toString() ?: ""
-        b.badgeWhatsapp.text  = count("WhatsApp").takeIf { it > 0 }?.toString() ?: ""
-        b.badgeMessenger.text = count("Messenger").takeIf { it > 0 }?.toString() ?: ""
-        listOf(b.badgeSignal, b.badgeTelegram, b.badgeWhatsapp, b.badgeMessenger).forEach {
-            it.visibility = if (it.text.isEmpty()) View.GONE else View.VISIBLE
+        // Use unread counts from NotificationStore read-state
+        val platformBadges = mapOf(
+            "Signal"    to b.badgeSignal,
+            "Telegram"  to b.badgeTelegram,
+            "WhatsApp"  to b.badgeWhatsapp,
+            "Messenger" to b.badgeMessenger,
+            "Discord"   to b.badgeDiscord,
+            "Instagram" to b.badgeInstagram,
+            "Steam"     to b.badgeSteam
+        )
+        platformBadges.forEach { (platform, badge) ->
+            // Sum unread across all senders for this platform
+            val senders = all.filter { it.platform == platform }.map { it.sender }.toSet()
+            val unread = senders.sumOf { sender ->
+                NotificationStore.unreadCountFor(platform, sender)
+            }
+            if (unread > 0) {
+                badge.text = unread.toString()
+                badge.visibility = View.VISIBLE
+            } else {
+                badge.text = ""
+                badge.visibility = View.GONE
+            }
         }
     }
 

@@ -7,7 +7,9 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Telephony
+import android.view.View
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
@@ -15,6 +17,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexlink.app.R
 import com.nexlink.app.databinding.ActivityConversationBinding
 import com.nexlink.app.db.ReadTracker
+import com.nexlink.app.db.SimInfo
 import com.nexlink.app.db.SmsHelper
 
 class ConversationActivity : AppCompatActivity() {
@@ -25,6 +28,9 @@ class ConversationActivity : AppCompatActivity() {
 
     private var currentLimit = 300
     private var allLoaded = false
+
+    private var sims = listOf<SimInfo>()
+    private var selectedSimId = -1
 
     private val smsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) { loadMessages() }
@@ -53,6 +59,30 @@ class ConversationActivity : AppCompatActivity() {
             loadMessages(limit = 0)
             b.btnLoadEarlier.isVisible = false
             b.dividerLoadEarlier.isVisible = false
+        }
+
+        // SIM card detection
+        Thread {
+            val s = SmsHelper.getSims(this)
+            runOnUiThread {
+                sims = s
+                if (s.size > 1) {
+                    selectedSimId = s[0].subscriptionId
+                    b.tvSimIndicator.text = "SIM: ${s[0].displayName}"
+                    b.tvSimIndicator.visibility = View.VISIBLE
+                }
+            }
+        }.start()
+
+        b.tvSimIndicator.setOnClickListener {
+            val names = sims.map { it.displayName }.toTypedArray()
+            AlertDialog.Builder(this)
+                .setTitle("Choose SIM")
+                .setItems(names) { _, i ->
+                    selectedSimId = sims[i].subscriptionId
+                    b.tvSimIndicator.text = "SIM: ${sims[i].displayName}"
+                }
+                .show()
         }
 
         loadMessages()
@@ -98,7 +128,7 @@ class ConversationActivity : AppCompatActivity() {
         b.etInput.text?.clear()
         Thread {
             try {
-                SmsHelper.sendSms(this, address, text)
+                SmsHelper.sendSms(this, address, text, selectedSimId)
                 runOnUiThread { loadMessages() }
             } catch (e: Exception) {
                 runOnUiThread { Toast.makeText(this, "Send failed: ${e.message}", Toast.LENGTH_LONG).show() }

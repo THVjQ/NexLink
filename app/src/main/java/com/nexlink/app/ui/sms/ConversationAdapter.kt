@@ -8,6 +8,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.nexlink.app.R
 import com.nexlink.app.db.Conversation
 import com.nexlink.app.db.ReadTracker
+import com.nexlink.app.util.AvatarColors
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -38,6 +39,7 @@ class ConversationAdapter(private val onClick: (Conversation) -> Unit) :
         val initials = c.contactName.split(" ").take(2)
             .joinToString("") { it.take(1).uppercase() }.ifBlank { c.address.take(2) }
 
+        h.avatar.background.mutate().setTint(AvatarColors.colorFor(initials))
         h.avatar.text  = initials
         h.name.text    = c.contactName.ifBlank { c.address }
         h.preview.text = c.lastMessage

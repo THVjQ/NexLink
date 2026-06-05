@@ -17,6 +17,7 @@ import com.nexlink.app.R
 import com.nexlink.app.databinding.FragmentCallsBinding
 import com.nexlink.app.db.CallEntry
 import com.nexlink.app.db.CallLogHelper
+import com.nexlink.app.util.AvatarColors
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -67,6 +68,7 @@ class CallsFragment : Fragment() {
                 h as VH
                 val c = calls[pos]
                 val initials = c.name.split(" ").take(2).joinToString("") { it.take(1).uppercase() }.ifBlank { "?" }
+                h.avatar.background.mutate().setTint(AvatarColors.colorFor(initials))
                 h.avatar.text = initials
                 h.name.text   = c.name
                 val typeStr = when (c.type) {
