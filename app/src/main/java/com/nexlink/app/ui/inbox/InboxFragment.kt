@@ -3,10 +3,12 @@ package com.nexlink.app.ui.inbox
 import android.os.Bundle
 import android.view.*
 import android.view.HapticFeedbackConstants
+import android.widget.ImageButton
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexlink.app.R
 import com.nexlink.app.databinding.FragmentInboxBinding
+import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.NotificationStore
 import com.nexlink.app.db.SocialNotification
 
@@ -16,18 +18,11 @@ class InboxFragment : Fragment() {
     private val b get() = _b!!
     private lateinit var adapter: NotificationAdapter
 
-    // Set of currently active filter platforms (empty = show all)
     private val selectedPlatforms = mutableSetOf<String>()
 
-    // Map platform name → its card view and platform colour
-    private val cardInfo by lazy {
-        mapOf(
-            "Signal"    to Pair(b.cardSignal,    0xFF3a9bd5.toInt()),
-            "Telegram"  to Pair(b.cardTelegram,  0xFF229ed9.toInt()),
-            "WhatsApp"  to Pair(b.cardWhatsapp,  0xFF25d366.toInt()),
-            "Messenger" to Pair(b.cardMessenger, 0xFF0099ff.toInt())
-        )
-    }
+    // Initialized in onViewCreated — NOT lazy, so view refs are always current
+    private data class CardEntry(val card: View, val muteBtn: ImageButton, val color: Int)
+    private var cardMap = emptyMap<String, CardEntry>()
 
     override fun onCreateView(i: LayoutInflater, c: ViewGroup?, s: Bundle?): View {
         _b = FragmentInboxBinding.inflate(i, c, false); return b.root
@@ -40,19 +35,36 @@ class InboxFragment : Fragment() {
         b.recycler.layoutManager = LinearLayoutManager(requireContext())
         b.recycler.adapter = adapter
 
-        // Wire up card taps — toggle filter on each tap
-        cardInfo.forEach { (platform, pair) ->
-            pair.first.setOnClickListener {
+        // Build card map fresh every time the view is created — fixes stale view reference bug
+        cardMap = mapOf(
+            "Signal"    to CardEntry(b.cardSignal,    b.btnMuteSignal,    0xFF3a9bd5.toInt()),
+            "Telegram"  to CardEntry(b.cardTelegram,  b.btnMuteTelegram,  0xFF229ed9.toInt()),
+            "WhatsApp"  to CardEntry(b.cardWhatsapp,  b.btnMuteWhatsapp,  0xFF25d366.toInt()),
+            "Messenger" to CardEntry(b.cardMessenger, b.btnMuteMessenger, 0xFF0099ff.toInt())
+        )
+
+        cardMap.forEach { (platform, entry) ->
+            // Tap card body → toggle filter
+            entry.card.setOnClickListener {
                 it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                if (platform in selectedPlatforms) {
-                    selectedPlatforms.remove(platform)
-                } else {
-                    selectedPlatforms.add(platform)
-                }
+                if (platform in selectedPlatforms) selectedPlatforms.remove(platform)
+                else selectedPlatforms.add(platform)
                 updateCardVisuals()
                 applyFilter(NotificationStore.notifications.value.orEmpty())
             }
+
+            // Tap mute bell → toggle mute for this platform
+            entry.muteBtn.setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                val ctx = requireContext()
+                val nowMuted = !NotificationPrefs.isMuted(ctx, platform)
+                NotificationPrefs.setMuted(ctx, platform, nowMuted)
+                updateMuteVisuals()
+            }
         }
+
+        // Load saved mute state visuals
+        updateMuteVisuals()
 
         NotificationStore.notifications.observe(viewLifecycleOwner) { applyFilter(it) }
 
@@ -64,14 +76,23 @@ class InboxFragment : Fragment() {
     }
 
     private fun updateCardVisuals() {
-        cardInfo.forEach { (platform, pair) ->
-            val (card, _) = pair
+        cardMap.forEach { (platform, entry) ->
             val isSelected = platform in selectedPlatforms
-            card.setBackgroundResource(
-                if (isSelected) R.drawable.bg_card_selected
-                else R.drawable.bg_card_unselected
+            entry.card.setBackgroundResource(
+                if (isSelected) R.drawable.bg_card_selected else R.drawable.bg_card_unselected
             )
-            card.alpha = if (selectedPlatforms.isEmpty() || isSelected) 1f else 0.55f
+            entry.card.alpha = if (selectedPlatforms.isEmpty() || isSelected) 1f else 0.55f
+        }
+    }
+
+    private fun updateMuteVisuals() {
+        val ctx = context ?: return
+        cardMap.forEach { (platform, entry) ->
+            val isMuted = NotificationPrefs.isMuted(ctx, platform)
+            entry.muteBtn.setImageResource(
+                if (isMuted) R.drawable.ic_bell_off else R.drawable.ic_bell
+            )
+            entry.muteBtn.alpha = if (isMuted) 0.55f else 1f
         }
     }
 
@@ -89,9 +110,9 @@ class InboxFragment : Fragment() {
             else -> selectedPlatforms.joinToString(" + ")
         }
         b.tvSub.text = when {
-            all.isEmpty() -> "No messages yet — grant Notification Access in Settings"
+            all.isEmpty()      -> "No messages yet — grant Notification Access in Settings"
             filtered.isEmpty() -> "No messages from $filterLabel"
-            else -> "${filtered.size} message${if (filtered.size != 1) "s" else ""} · $filterLabel"
+            else               -> "${filtered.size} message${if (filtered.size != 1) "s" else ""} · $filterLabel"
         }
     }
 
@@ -106,5 +127,9 @@ class InboxFragment : Fragment() {
         }
     }
 
-    override fun onDestroyView() { super.onDestroyView(); _b = null }
+    override fun onDestroyView() {
+        super.onDestroyView()
+        cardMap = emptyMap()
+        _b = null
+    }
 }

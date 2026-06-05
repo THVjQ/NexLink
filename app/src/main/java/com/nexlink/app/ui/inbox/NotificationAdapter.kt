@@ -13,10 +13,33 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+data class NotificationThread(
+    val platform: String,
+    val sender: String,
+    val latest: SocialNotification,
+    val count: Int
+)
+
 class NotificationAdapter : RecyclerView.Adapter<NotificationAdapter.VH>() {
 
-    private var items = listOf<SocialNotification>()
-    fun setData(data: List<SocialNotification>) { items = data; notifyDataSetChanged() }
+    private var items = listOf<NotificationThread>()
+
+    fun setData(notifications: List<SocialNotification>) {
+        // Group by platform + sender, pick latest message, keep count
+        items = notifications
+            .groupBy { it.platform to it.sender }
+            .map { (key, msgs) ->
+                val sorted = msgs.sortedByDescending { it.timestamp }
+                NotificationThread(
+                    platform = key.first,
+                    sender   = key.second,
+                    latest   = sorted.first(),
+                    count    = sorted.size
+                )
+            }
+            .sortedByDescending { it.latest.timestamp }
+        notifyDataSetChanged()
+    }
 
     inner class VH(v: View) : RecyclerView.ViewHolder(v) {
         val avatar:   TextView    = v.findViewById(R.id.tvAvatar)
@@ -24,6 +47,7 @@ class NotificationAdapter : RecyclerView.Adapter<NotificationAdapter.VH>() {
         val platform: TextView    = v.findViewById(R.id.tvPlatform)
         val text:     TextView    = v.findViewById(R.id.tvText)
         val time:     TextView    = v.findViewById(R.id.tvTime)
+        val count:    TextView    = v.findViewById(R.id.tvCount)
         val btnCall:  ImageButton = v.findViewById(R.id.btnOpenCall)
     }
 
@@ -33,28 +57,36 @@ class NotificationAdapter : RecyclerView.Adapter<NotificationAdapter.VH>() {
     override fun getItemCount() = items.size
 
     override fun onBindViewHolder(h: VH, pos: Int) {
-        val n = items[pos]
+        val thread = items[pos]
+        val n = thread.latest
         val initials = n.sender.split(" ").take(2)
             .joinToString("") { it.take(1).uppercase() }.ifBlank { "?" }
         h.avatar.text   = initials
         h.name.text     = n.sender
         h.platform.text = n.platform
-        h.text.text     = n.text
+        h.text.text     = if (thread.count > 1) "(${thread.count}) ${n.text}" else n.text
         h.time.text     = formatTime(n.timestamp)
 
         val color = platformColor(n.platform)
         h.platform.setTextColor(color)
         h.avatar.background.mutate().setTint(color and 0x00FFFFFF or 0x33000000)
 
-        // Tap row → open the source app
+        // Count badge — only when more than one message from this sender
+        if (thread.count > 1) {
+            h.count.visibility = View.VISIBLE
+            h.count.text = thread.count.toString()
+            h.count.background.mutate().setTint(color)
+        } else {
+            h.count.visibility = View.GONE
+        }
+
         h.itemView.setOnClickListener { DeepLinkHelper.openPlatform(it.context, n.platform) }
 
-        // Call/open button — visible for all; icon matches capability
         h.btnCall.visibility = View.VISIBLE
         h.btnCall.setImageResource(
             when (n.platform) {
-                "WhatsApp", "Telegram" -> R.drawable.ic_call    // can deep-link to contact
-                else                   -> R.drawable.ic_open_in_app  // open app only
+                "WhatsApp", "Telegram" -> R.drawable.ic_call
+                else                   -> R.drawable.ic_open_in_app
             }
         )
         h.btnCall.setColorFilter(color)
@@ -81,10 +113,10 @@ class NotificationAdapter : RecyclerView.Adapter<NotificationAdapter.VH>() {
     private fun formatTime(ms: Long): String {
         val diff = System.currentTimeMillis() - ms
         return when {
-            diff < 60_000    -> "now"
-            diff < 3_600_000 -> "${diff / 60_000}m ago"
-            diff < 86_400_000-> "${diff / 3_600_000}h ago"
-            else             -> SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(ms))
+            diff < 60_000     -> "now"
+            diff < 3_600_000  -> "${diff / 60_000}m ago"
+            diff < 86_400_000 -> "${diff / 3_600_000}h ago"
+            else              -> SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(ms))
         }
     }
 }

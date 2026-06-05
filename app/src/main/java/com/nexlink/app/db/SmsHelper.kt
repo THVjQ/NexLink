@@ -24,7 +24,7 @@ object SmsHelper {
 
     private val contactCache = HashMap<String, String>()
 
-    fun getConversations(ctx: Context): List<Conversation> {
+    fun getConversations(ctx: Context, limit: Int = 250): List<Conversation> {
         val list = mutableListOf<Conversation>()
         val uri = Telephony.Sms.CONTENT_URI
         val proj = arrayOf(Telephony.Sms.ADDRESS, Telephony.Sms.BODY, Telephony.Sms.DATE)
@@ -36,7 +36,7 @@ object SmsHelper {
         try {
             ctx.contentResolver.query(uri, proj, null, null, "${Telephony.Sms.DATE} DESC")?.use { c ->
                 while (c.moveToNext()) {
-                    if (seen.size >= 60) break          // cap — don't scan thousands of rows
+                    if (limit > 0 && seen.size >= limit) break
                     val addr = c.getString(0) ?: continue
                     if (addr in seen) continue
                     seen += addr
@@ -72,15 +72,16 @@ object SmsHelper {
         return map
     }
 
-    fun getMessages(ctx: Context, address: String): List<SmsMessage> {
+    fun getMessages(ctx: Context, address: String, limit: Int = 300): List<SmsMessage> {
         val list = mutableListOf<SmsMessage>()
         val proj = arrayOf(Telephony.Sms._ID, Telephony.Sms.ADDRESS, Telephony.Sms.BODY,
                            Telephony.Sms.DATE, Telephony.Sms.TYPE)
+        val orderBy = if (limit > 0) "${Telephony.Sms.DATE} ASC LIMIT $limit" else "${Telephony.Sms.DATE} ASC"
         try {
             ctx.contentResolver.query(
                 Telephony.Sms.CONTENT_URI, proj,
                 "${Telephony.Sms.ADDRESS} = ?", arrayOf(address),
-                "${Telephony.Sms.DATE} ASC LIMIT 300"
+                orderBy
             )?.use { c ->
                 while (c.moveToNext()) {
                     list += SmsMessage(

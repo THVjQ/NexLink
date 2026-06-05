@@ -10,6 +10,7 @@ import android.provider.Telephony
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexlink.app.R
 import com.nexlink.app.databinding.ActivityConversationBinding
@@ -21,6 +22,9 @@ class ConversationActivity : AppCompatActivity() {
     private lateinit var b: ActivityConversationBinding
     private lateinit var adapter: BubbleAdapter
     private lateinit var address: String
+
+    private var currentLimit = 300
+    private var allLoaded = false
 
     private val smsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) { loadMessages() }
@@ -44,8 +48,14 @@ class ConversationActivity : AppCompatActivity() {
         b.recycler.layoutManager = LinearLayoutManager(this).apply { stackFromEnd = true }
         b.recycler.adapter = adapter
 
+        b.btnLoadEarlier.setOnClickListener {
+            allLoaded = true
+            loadMessages(limit = 0)
+            b.btnLoadEarlier.isVisible = false
+            b.dividerLoadEarlier.isVisible = false
+        }
+
         loadMessages()
-        // Mark read in system store (works if default SMS app) AND locally (always works)
         SmsHelper.markRead(this, address)
         ReadTracker.markRead(this, address)
 
@@ -63,12 +73,16 @@ class ConversationActivity : AppCompatActivity() {
         contentResolver.unregisterContentObserver(smsObserver)
     }
 
-    private fun loadMessages() {
+    private fun loadMessages(limit: Int = currentLimit) {
         Thread {
-            val msgs = SmsHelper.getMessages(this, address)
+            val msgs = SmsHelper.getMessages(this, address, limit)
             runOnUiThread {
                 adapter.setData(msgs)
                 if (msgs.isNotEmpty()) b.recycler.scrollToPosition(msgs.size - 1)
+                // Show "load earlier" banner if we hit the limit and haven't loaded all yet
+                val hitLimit = !allLoaded && limit > 0 && msgs.size >= limit
+                b.btnLoadEarlier.isVisible = hitLimit
+                b.dividerLoadEarlier.isVisible = hitLimit
             }
         }.start()
     }

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- White N on transparent — used as notification small icon in status bar -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#ffffff"
+        android:pathData="M30,28 L46,28 L62,72 L62,28 L78,28 L78,80 L62,80 L46,36 L46,80 L30,80 Z"/>
+</vector>

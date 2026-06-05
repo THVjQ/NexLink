@@ -26,6 +26,7 @@ class SmsFragment : Fragment() {
     private val b get() = _b!!
     private lateinit var adapter: ConversationAdapter
     private var allConversations = listOf<Conversation>()
+    private var filterUnreadOnly = false
 
     private val smsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) { loadConversations() }
@@ -44,6 +45,13 @@ class SmsFragment : Fragment() {
 
         b.swipe.setOnRefreshListener { loadConversations() }
         b.swipe.setColorSchemeResources(R.color.accent)
+
+        // Unread filter toggle
+        b.btnFilterUnread.setOnClickListener {
+            filterUnreadOnly = !filterUnreadOnly
+            updateFilterButton()
+            filterConversations(b.etSearch.text?.toString() ?: "")
+        }
 
         // Search
         b.etSearch.addTextChangedListener(object : TextWatcher {
@@ -75,6 +83,16 @@ class SmsFragment : Fragment() {
         requireContext().contentResolver.unregisterContentObserver(smsObserver)
     }
 
+    private fun updateFilterButton() {
+        if (filterUnreadOnly) {
+            b.btnFilterUnread.setBackgroundResource(R.drawable.bg_card_selected)
+            b.btnFilterUnread.setTextColor(resources.getColor(R.color.accent, null))
+        } else {
+            b.btnFilterUnread.setBackgroundResource(R.drawable.bg_card_unselected)
+            b.btnFilterUnread.setTextColor(resources.getColor(R.color.muted, null))
+        }
+    }
+
     private fun loadConversations() {
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_SMS)
             != PackageManager.PERMISSION_GRANTED) return
@@ -94,16 +112,19 @@ class SmsFragment : Fragment() {
     }
 
     private fun filterConversations(query: String) {
-        if (query.isBlank()) {
-            adapter.setData(allConversations)
-        } else {
+        var result = allConversations
+        if (filterUnreadOnly) {
+            result = result.filter { it.unreadCount > 0 }
+        }
+        if (query.isNotBlank()) {
             val q = query.trim().lowercase()
-            adapter.setData(allConversations.filter {
+            result = result.filter {
                 it.contactName.lowercase().contains(q) ||
                 it.address.contains(q) ||
                 it.lastMessage.lowercase().contains(q)
-            })
+            }
         }
+        adapter.setData(result)
     }
 
     private fun openConversation(conv: Conversation) {

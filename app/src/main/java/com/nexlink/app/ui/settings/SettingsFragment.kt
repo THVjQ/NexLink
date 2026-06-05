@@ -11,6 +11,7 @@ import android.view.*
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.nexlink.app.databinding.FragmentSettingsBinding
+import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.services.NexLinkNotificationListener
 
 class SettingsFragment : Fragment() {
@@ -31,6 +32,13 @@ class SettingsFragment : Fragment() {
             startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                 data = Uri.fromParts("package", requireContext().packageName, null)
             })
+        }
+
+        // Suppress-source toggle (issue #8)
+        val ctx = requireContext()
+        b.switchSuppressSource.isChecked = NotificationPrefs.isSuppressSourceEnabled(ctx)
+        b.switchSuppressSource.setOnCheckedChangeListener { _, isChecked ->
+            NotificationPrefs.setSuppressSource(ctx, isChecked)
         }
     }
 

@@ -13,6 +13,22 @@
     <View android:layout_width="match_parent" android:layout_height="1dp"
         android:background="@color/divider"/>
 
+    <!-- Shown when there are more messages above the loaded window -->
+    <TextView android:id="@+id/btnLoadEarlier"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="⬆  Load all earlier messages"
+        android:textColor="@color/accent"
+        android:textSize="13sp"
+        android:gravity="center"
+        android:paddingVertical="12dp"
+        android:background="?attr/selectableItemBackground"
+        android:visibility="gone"/>
+
+    <View android:id="@+id/dividerLoadEarlier"
+        android:layout_width="match_parent" android:layout_height="1dp"
+        android:background="@color/divider"
+        android:visibility="gone"/>
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recycler"
         android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"

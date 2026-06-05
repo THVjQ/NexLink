@@ -9,9 +9,24 @@
         android:paddingTop="16dp" android:paddingBottom="10dp" android:gravity="center_vertical">
         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
             android:layout_weight="1" android:orientation="vertical">
-            <TextView android:text="Messages" android:textSize="22sp" android:textStyle="bold"
-                android:textColor="@color/text"
-                android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+            <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical">
+                <TextView android:text="Messages" android:textSize="22sp" android:textStyle="bold"
+                    android:textColor="@color/text"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                <!-- Unread filter toggle — right of "Messages" -->
+                <TextView android:id="@+id/btnFilterUnread"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="Unread"
+                    android:textSize="11sp"
+                    android:textColor="@color/muted"
+                    android:background="@drawable/bg_card_unselected"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="4dp"
+                    android:layout_marginStart="10dp"
+                    android:clickable="true"
+                    android:focusable="true"/>
+            </LinearLayout>
             <TextView android:id="@+id/tvUnread" android:textSize="12sp" android:textColor="@color/muted"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"/>
         </LinearLayout>
