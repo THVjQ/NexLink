@@ -90,7 +90,8 @@ object SmsHelper {
         val list = mutableListOf<SmsMessage>()
         val proj = arrayOf(Telephony.Sms._ID, Telephony.Sms.ADDRESS, Telephony.Sms.BODY,
                            Telephony.Sms.DATE, Telephony.Sms.TYPE)
-        val orderBy = if (limit > 0) "${Telephony.Sms.DATE} ASC LIMIT $limit" else "${Telephony.Sms.DATE} ASC"
+        // DESC LIMIT gets the NEWEST $limit messages; reverse so display is oldest→newest
+        val orderBy = if (limit > 0) "${Telephony.Sms.DATE} DESC LIMIT $limit" else "${Telephony.Sms.DATE} ASC"
         try {
             ctx.contentResolver.query(
                 Telephony.Sms.CONTENT_URI, proj,
@@ -108,8 +109,13 @@ object SmsHelper {
                 }
             }
         } catch (_: Exception) {}
-        return list
+        // DESC query gives newest-first; reverse to chronological for display
+        return if (limit > 0) list.reversed() else list
     }
+
+    fun isDefaultSmsApp(ctx: Context): Boolean = try {
+        ctx.packageName == android.provider.Telephony.Sms.getDefaultSmsPackage(ctx)
+    } catch (_: Exception) { false }
 
     private fun getMmsVoiceMessages(ctx: Context, address: String): List<SmsMessage> {
         val result = mutableListOf<SmsMessage>()

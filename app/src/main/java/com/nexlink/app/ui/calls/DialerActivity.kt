@@ -1,23 +1,27 @@
 package com.nexlink.app.ui.calls
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.ContactsContract
 import android.telecom.TelecomManager
+import android.telephony.SubscriptionManager
 import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.nexlink.app.R
 import com.nexlink.app.databinding.ActivityDialerBinding
+import com.nexlink.app.db.SimInfo
 import com.nexlink.app.db.SmsHelper
 import com.nexlink.app.ui.sms.ConversationActivity
 
@@ -26,6 +30,10 @@ class DialerActivity : AppCompatActivity() {
     private lateinit var b: ActivityDialerBinding
     private var number = ""
     private lateinit var suggestAdapter: SuggestionAdapter
+
+    private var sims = listOf<SimInfo>()
+    private var selectedAccount: android.telecom.PhoneAccountHandle? = null
+    private var selectedSimLabel = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,11 +57,90 @@ class DialerActivity : AppCompatActivity() {
 
         bindKeys()
         b.btnClose.setOnClickListener { it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY); finish() }
-        b.btnCall.setOnClickListener  { it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY); placeCall() }
-        b.btnDel.setOnClickListener   {
+
+        // Short tap → call with selected SIM (or single SIM)
+        b.btnCall.setOnClickListener { it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY); placeCall() }
+        // Long-press → SIM picker then call
+        b.btnCall.setOnLongClickListener { showSimPickerAndCall(); true }
+
+        b.btnDel.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             if (number.isNotEmpty()) { number = number.dropLast(1); updateDisplay() }
         }
+
+        // Tap SIM chip to switch without calling
+        b.tvSimChip.setOnClickListener { showSimPickerAndCall(callAfter = false) }
+
+        // Load SIMs in background
+        Thread {
+            val s = SmsHelper.getSims(this)
+            runOnUiThread {
+                sims = s
+                if (s.size > 1) {
+                    loadPhoneAccounts()
+                }
+            }
+        }.start()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun loadPhoneAccounts() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
+            != PackageManager.PERMISSION_GRANTED) return
+        try {
+            val tm = getSystemService(TelecomManager::class.java)
+            val accounts = tm.callCapablePhoneAccounts ?: emptyList()
+            if (accounts.size > 1) {
+                selectedAccount = accounts[0]
+                selectedSimLabel = simAccountLabel(0, accounts[0])
+                b.tvSimChip.text = selectedSimLabel
+                b.tvSimChip.visibility = View.VISIBLE
+            }
+        } catch (_: Exception) {}
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun showSimPickerAndCall(callAfter: Boolean = true) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
+            != PackageManager.PERMISSION_GRANTED) return
+        try {
+            val tm = getSystemService(TelecomManager::class.java)
+            val sm = getSystemService(SubscriptionManager::class.java)
+            val accounts = tm.callCapablePhoneAccounts ?: emptyList()
+            if (accounts.size <= 1) { if (callAfter) placeCall(); return }
+
+            val hasPhoneState = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) ==
+                PackageManager.PERMISSION_GRANTED
+            val labels = accounts.mapIndexed { idx, handle ->
+                try {
+                    val acct = tm.getPhoneAccount(handle)
+                    val name = acct?.label?.toString() ?: "SIM ${idx + 1}"
+                    if (!hasPhoneState) return@mapIndexed name
+                    val num = sm.activeSubscriptionInfoList?.getOrNull(idx)
+                        ?.number?.takeIf { it.isNotBlank() }?.let { "\n$it" } ?: ""
+                    "$name$num"
+                } catch (_: Exception) { "SIM ${idx + 1}" }
+            }.toTypedArray()
+
+            AlertDialog.Builder(this)
+                .setTitle(if (callAfter) "Call ${formatNumber(number)} via…" else "Choose SIM")
+                .setItems(labels) { _, i ->
+                    selectedAccount = accounts[i]
+                    selectedSimLabel = simAccountLabel(i, accounts[i])
+                    b.tvSimChip.text = selectedSimLabel
+                    b.tvSimChip.visibility = View.VISIBLE
+                    if (callAfter) placeCall()
+                }
+                .show()
+        } catch (_: Exception) { if (callAfter) placeCall() }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun simAccountLabel(idx: Int, handle: android.telecom.PhoneAccountHandle): String {
+        return try {
+            val tm = getSystemService(TelecomManager::class.java)
+            tm.getPhoneAccount(handle)?.label?.toString() ?: "SIM ${idx + 1}"
+        } catch (_: Exception) { "SIM ${idx + 1}" }
     }
 
     private fun bindKeys() {
@@ -121,7 +208,12 @@ class DialerActivity : AppCompatActivity() {
             != PackageManager.PERMISSION_GRANTED) return
         val uri = Uri.fromParts("tel", number, null)
         try {
-            getSystemService(TelecomManager::class.java).placeCall(uri, null)
+            val bundle = if (selectedAccount != null) {
+                android.os.Bundle().apply {
+                    putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, selectedAccount)
+                }
+            } else null
+            getSystemService(TelecomManager::class.java).placeCall(uri, bundle)
         } catch (_: Exception) {
             startActivity(Intent(Intent.ACTION_CALL, uri))
         }

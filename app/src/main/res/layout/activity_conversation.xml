@@ -26,7 +26,7 @@
     <!-- Shown when there are more messages above the loaded window -->
     <TextView android:id="@+id/btnLoadEarlier"
         android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:text="⬆  Load all earlier messages"
+        android:text="⬆  Load full history"
         android:textColor="@color/accent"
         android:textSize="13sp"
         android:gravity="center"

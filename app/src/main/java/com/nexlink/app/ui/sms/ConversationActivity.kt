@@ -92,11 +92,23 @@ class ConversationActivity : AppCompatActivity() {
             true
         }
 
+        // Single tap: request RECORD_AUDIO permission if not yet granted
+        b.btnVoice.setOnClickListener {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 101)
+                Toast.makeText(this, "Grant microphone permission, then hold to record", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Hold to record a voice message", Toast.LENGTH_SHORT).show()
+            }
+        }
         // Hold voice button to record; release to send
         b.btnVoice.setOnTouchListener { _, event ->
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) return@setOnTouchListener false
             when (event.action) {
-                MotionEvent.ACTION_DOWN  -> { startRecording(); true }
-                MotionEvent.ACTION_UP    -> { stopAndSendRecording(); true }
+                MotionEvent.ACTION_DOWN   -> { startRecording(); true }
+                MotionEvent.ACTION_UP     -> { stopAndSendRecording(); true }
                 MotionEvent.ACTION_CANCEL -> { cancelRecording(); true }
                 else -> false
             }
@@ -212,6 +224,13 @@ class ConversationActivity : AppCompatActivity() {
 
         val file = audioFile ?: return
         if (!file.exists() || file.length() < 500) { file.delete(); return } // discard < 0.5 s
+
+        // MMS requires being the default SMS app
+        if (!SmsHelper.isDefaultSmsApp(this)) {
+            Toast.makeText(this, "Voice messages require NexLink to be your default SMS app. Set it in Settings → Apps → Default apps.", Toast.LENGTH_LONG).show()
+            file.delete()
+            return
+        }
 
         Thread {
             try {

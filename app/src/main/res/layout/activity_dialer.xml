@@ -23,6 +23,19 @@
         android:gravity="center" android:letterSpacing="0.05"
         android:minHeight="56dp" android:paddingHorizontal="8dp"/>
 
+    <!-- SIM indicator — shown only when multiple SIMs are active -->
+    <TextView android:id="@+id/tvSimChip"
+        android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="2dp" android:layout_marginBottom="2dp"
+        android:layout_marginStart="16dp"
+        android:paddingHorizontal="12dp" android:paddingVertical="4dp"
+        android:textSize="11sp" android:textColor="@color/accent"
+        android:background="@drawable/bg_card_selected"
+        android:clickable="true" android:focusable="true"
+        android:text="SIM 1"
+        android:visibility="gone"/>
+
     <!-- Contact suggestions (up to 3, hidden when empty) -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvSuggestions"
