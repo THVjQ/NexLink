@@ -106,7 +106,7 @@ class BubbleAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     private fun bindMsg(h: MsgVH, m: SmsMessage) {
         h.bubble.text = if (m.isVoice) "🎤 Voice message" else m.body
-        h.time.text   = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(m.timestamp))
+        h.time.text   = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(m.timestamp))
         if (m.isVoice && m.mediaUri != null) {
             h.btnPlay?.setOnClickListener { btn -> playVoice(btn, m.mediaUri) }
         }

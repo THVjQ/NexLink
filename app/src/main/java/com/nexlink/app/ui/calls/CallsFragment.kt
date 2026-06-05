@@ -16,15 +16,27 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.nexlink.app.R
 import com.nexlink.app.databinding.FragmentCallsBinding
 import com.nexlink.app.db.CallEntry
 import com.nexlink.app.db.CallLogHelper
 import com.nexlink.app.util.AvatarColors
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+
+// ── Row model ─────────────────────────────────────────────────────────────────
+private sealed class CallRow {
+    data class DayHeader(val label: String) : CallRow()
+    data class CallGroup(
+        val name: String,
+        val number: String,
+        val latestType: Int,
+        val timestamp: Long,
+        val count: Int              // calls from same number on same day
+    ) : CallRow()
+}
 
 class CallsFragment : Fragment() {
 
@@ -56,48 +68,118 @@ class CallsFragment : Fragment() {
         }.start()
     }
 
+    // ── Build grouped rows ───────────────────────────────────────────────────
+
+    private fun buildRows(calls: List<CallEntry>): List<CallRow> {
+        val result  = mutableListOf<CallRow>()
+        // calls are DATE DESC; label each entry once
+        val labeled = calls.map { it to dayLabel(it.timestamp) }
+        val days    = labeled.map { it.second }.distinct()
+
+        for (day in days) {
+            result += CallRow.DayHeader(day)
+            val dayCalls = labeled.filter { it.second == day }.map { it.first }
+
+            // Group by number preserving newest-first order
+            val groups = LinkedHashMap<String, MutableList<CallEntry>>()
+            for (c in dayCalls) groups.getOrPut(c.number) { mutableListOf() } += c
+
+            for ((num, group) in groups) {
+                val latest = group.first()
+                result += CallRow.CallGroup(latest.name, num, latest.type, latest.timestamp, group.size)
+            }
+        }
+        return result
+    }
+
+    // ── Bind adapter ─────────────────────────────────────────────────────────
+
     private fun bindCalls(calls: List<CallEntry>) {
+        val rows = buildRows(calls)
         b.recyclerCalls.layoutManager = LinearLayoutManager(requireContext())
         b.recyclerCalls.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-            inner class VH(v: View) : RecyclerView.ViewHolder(v) {
+
+            inner class HeaderVH(v: View) : RecyclerView.ViewHolder(v) {
+                val tvDate: TextView = v.findViewById(R.id.tvDate)
+            }
+            inner class CallVH(v: View) : RecyclerView.ViewHolder(v) {
                 val avatar:  TextView    = v.findViewById(R.id.tvAvatar)
                 val name:    TextView    = v.findViewById(R.id.tvName)
                 val detail:  TextView    = v.findViewById(R.id.tvDetail)
                 val btnCall: ImageButton = v.findViewById(R.id.btnCall)
             }
-            override fun onCreateViewHolder(p: ViewGroup, t: Int) =
-                VH(LayoutInflater.from(p.context).inflate(R.layout.item_call_log, p, false))
-            override fun getItemCount() = calls.size
-            override fun onBindViewHolder(h: RecyclerView.ViewHolder, pos: Int) {
-                h as VH
-                val c = calls[pos]
-                val initials = c.name.split(" ").take(2).joinToString("") { it.take(1).uppercase() }.ifBlank { "?" }
-                h.avatar.background.mutate().setTint(AvatarColors.colorFor(initials))
-                h.avatar.text = initials
-                h.name.text   = c.name
-                val typeStr = when (c.type) {
-                    CallLog.Calls.INCOMING_TYPE -> "↙ Incoming"
-                    CallLog.Calls.OUTGOING_TYPE -> "↗ Outgoing"
-                    CallLog.Calls.MISSED_TYPE   -> "↙ Missed"
-                    else -> "Call"
-                }
-                val color = when (c.type) {
-                    CallLog.Calls.MISSED_TYPE   -> 0xFFff5555.toInt()
-                    CallLog.Calls.OUTGOING_TYPE -> 0xFFa29bfe.toInt()
-                    else                        -> 0xFF25d366.toInt()
-                }
-                h.detail.text = "$typeStr · ${formatDate(c.timestamp)}"
-                h.detail.setTextColor(color)
 
-                // Short tap → call with default SIM
-                h.btnCall.setOnClickListener { placeCall(c.number) }
-                h.itemView.setOnClickListener { placeCall(c.number) }
-                // Long-press → SIM picker
-                h.btnCall.setOnLongClickListener { showSimCallPicker(c.number); true }
-                h.itemView.setOnLongClickListener { showSimCallPicker(c.number); true }
+            override fun getItemViewType(pos: Int) = when (rows[pos]) {
+                is CallRow.DayHeader -> 0
+                is CallRow.CallGroup -> 1
+            }
+
+            override fun onCreateViewHolder(p: ViewGroup, t: Int): RecyclerView.ViewHolder {
+                val inf = LayoutInflater.from(p.context)
+                return if (t == 0) HeaderVH(inf.inflate(R.layout.item_date_header, p, false))
+                else CallVH(inf.inflate(R.layout.item_call_log, p, false))
+            }
+
+            override fun getItemCount() = rows.size
+
+            override fun onBindViewHolder(h: RecyclerView.ViewHolder, pos: Int) {
+                when (val row = rows[pos]) {
+                    is CallRow.DayHeader -> (h as HeaderVH).tvDate.text = row.label
+                    is CallRow.CallGroup -> {
+                        h as CallVH
+                        val initials = row.name.split(" ").take(2)
+                            .joinToString("") { it.take(1).uppercase() }.ifBlank { "?" }
+                        h.avatar.background.mutate().setTint(AvatarColors.colorFor(initials))
+                        h.avatar.text = initials
+                        h.name.text   = row.name
+
+                        val typeStr = when (row.latestType) {
+                            CallLog.Calls.INCOMING_TYPE -> "↙ Incoming"
+                            CallLog.Calls.OUTGOING_TYPE -> "↗ Outgoing"
+                            CallLog.Calls.MISSED_TYPE   -> "↙ Missed"
+                            else -> "Call"
+                        }
+                        val color = when (row.latestType) {
+                            CallLog.Calls.MISSED_TYPE   -> 0xFFff5555.toInt()
+                            CallLog.Calls.OUTGOING_TYPE -> 0xFFa29bfe.toInt()
+                            else                        -> 0xFF25d366.toInt()
+                        }
+                        val countSuffix = if (row.count > 1) " · ×${row.count}" else ""
+                        h.detail.text = "$typeStr · ${formatTime(row.timestamp)}$countSuffix"
+                        h.detail.setTextColor(color)
+
+                        h.btnCall.setOnClickListener { placeCall(row.number) }
+                        h.itemView.setOnClickListener { placeCall(row.number) }
+                        h.btnCall.setOnLongClickListener { showSimCallPicker(row.number); true }
+                        h.itemView.setOnLongClickListener { showSimCallPicker(row.number); true }
+                    }
+                }
             }
         }
     }
+
+    // ── Date / time helpers ────────────────────────────────────────────────────
+
+    private fun dayLabel(ms: Long): String {
+        val cal   = Calendar.getInstance().apply { timeInMillis = ms }
+        val today = Calendar.getInstance()
+        val yes   = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
+        fun same(a: Calendar, b: Calendar) =
+            a.get(Calendar.YEAR) == b.get(Calendar.YEAR) &&
+            a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR)
+        return when {
+            same(cal, today) -> "Today"
+            same(cal, yes)   -> "Yesterday"
+            cal.get(Calendar.YEAR) == today.get(Calendar.YEAR) ->
+                SimpleDateFormat("d MMMM", Locale.getDefault()).format(Date(ms))
+            else ->
+                SimpleDateFormat("d MMMM yyyy", Locale.getDefault()).format(Date(ms))
+        }
+    }
+
+    /** Time within a day — shown on each call row */
+    private fun formatTime(ms: Long): String =
+        SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(ms))
 
     // ── SIM-aware call ────────────────────────────────────────────────────────
 
@@ -110,21 +192,16 @@ class CallsFragment : Fragment() {
             val tm = ctx.getSystemService(TelecomManager::class.java)
             val sm = ctx.getSystemService(SubscriptionManager::class.java)
             val accounts = tm.callCapablePhoneAccounts ?: emptyList()
-
             if (accounts.size <= 1) { placeCall(number); return }
 
-            val hasPhoneState = ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_PHONE_STATE) ==
+            val hasState = ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_PHONE_STATE) ==
                 PackageManager.PERMISSION_GRANTED
-
             val labels = accounts.mapIndexed { idx, handle ->
                 try {
-                    // getPhoneAccount gives us the human-readable label (SIM carrier name)
-                    val acct = tm.getPhoneAccount(handle)
-                    val name = acct?.label?.toString() ?: "SIM ${idx + 1}"
-                    if (!hasPhoneState) return@mapIndexed name
-                    // Try to also show the SIM number
-                    val subs = sm.activeSubscriptionInfoList ?: emptyList()
-                    val num  = subs.getOrNull(idx)?.number?.takeIf { it.isNotBlank() }?.let { "\n$it" } ?: ""
+                    val name = tm.getPhoneAccount(handle)?.label?.toString() ?: "SIM ${idx + 1}"
+                    if (!hasState) return@mapIndexed name
+                    val num = sm.activeSubscriptionInfoList?.getOrNull(idx)
+                        ?.number?.takeIf { it.isNotBlank() }?.let { "\n$it" } ?: ""
                     "$name$num"
                 } catch (_: Exception) { "SIM ${idx + 1}" }
             }.toTypedArray()
@@ -138,9 +215,7 @@ class CallsFragment : Fragment() {
                     catch (_: Exception) { placeCall(number) }
                 }
                 .show()
-        } catch (_: Exception) {
-            placeCall(number)
-        }
+        } catch (_: Exception) { placeCall(number) }
     }
 
     private fun placeCall(number: String) {
@@ -149,15 +224,6 @@ class CallsFragment : Fragment() {
         startActivity(Intent(requireContext(), DialerActivity::class.java).apply {
             data = Uri.parse("tel:$number")
         })
-    }
-
-    private fun formatDate(ms: Long): String {
-        val diff = System.currentTimeMillis() - ms
-        return when {
-            diff < 86_400_000      -> SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ms))
-            diff < 7*86_400_000L   -> SimpleDateFormat("EEE HH:mm", Locale.getDefault()).format(Date(ms))
-            else                   -> SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(ms))
-        }
     }
 
     override fun onDestroyView() { super.onDestroyView(); _b = null }
