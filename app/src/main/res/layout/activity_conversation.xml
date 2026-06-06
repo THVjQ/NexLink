@@ -51,6 +51,14 @@
         android:background="@color/surface"
         android:gravity="center_vertical">
 
+        <ImageButton android:id="@+id/btnAttach"
+            android:layout_width="44dp" android:layout_height="44dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/bg_call_btn"
+            android:src="@drawable/ic_attach"
+            android:padding="10dp"
+            android:contentDescription="Attach media"/>
+
         <EditText android:id="@+id/etInput"
             android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
             android:hint="Message" android:textColor="@color/text"

@@ -36,6 +36,12 @@ class SettingsFragment : Fragment() {
 
         val ctx = requireContext()
 
+        // RCS toggle
+        b.switchRcs.isChecked = NotificationPrefs.isRcsEnabled(ctx)
+        b.switchRcs.setOnCheckedChangeListener { _, isChecked ->
+            NotificationPrefs.setRcsEnabled(ctx, isChecked)
+        }
+
         // Suppress-source toggle
         b.switchSuppressSource.isChecked = NotificationPrefs.isSuppressSourceEnabled(ctx)
         b.switchSuppressSource.setOnCheckedChangeListener { _, isChecked ->
@@ -78,6 +84,7 @@ class SettingsFragment : Fragment() {
 
         // Refresh all switch states in case they were changed externally
         val ctx = context ?: return
+        b.switchRcs.isChecked = NotificationPrefs.isRcsEnabled(ctx)
         b.switchSuppressSource.isChecked = NotificationPrefs.isSuppressSourceEnabled(ctx)
         b.switchSuppressCallNotifs.isChecked = NotificationPrefs.isSuppressCallNotifs(ctx)
         b.switchPassThroughMedia.isChecked = NotificationPrefs.isPassThroughMedia(ctx)

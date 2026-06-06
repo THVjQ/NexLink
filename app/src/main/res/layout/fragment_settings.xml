@@ -72,6 +72,36 @@
             android:text="App Permissions &amp; Settings"
             android:layout_marginBottom="20dp"/>
 
+        <!-- Messaging features -->
+        <TextView android:text="MESSAGING" android:textSize="11sp" android:textStyle="bold"
+            android:textColor="@color/muted" android:letterSpacing="0.09"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"/>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:background="@drawable/bg_card" android:padding="14dp"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:padding="8dp">
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical">
+                    <TextView android:text="RCS Chats"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/text" android:textSize="14sp"/>
+                    <TextView android:text="Enable rich messaging (read receipts, typing indicators) when carrier supports it"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/muted" android:textSize="11sp"
+                        android:layout_marginTop="2dp"/>
+                </LinearLayout>
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchRcs"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"/>
+            </LinearLayout>
+
+        </LinearLayout>
+
         <!-- Notification behaviour -->
         <TextView android:text="NOTIFICATIONS" android:textSize="11sp" android:textStyle="bold"
             android:textColor="@color/muted" android:letterSpacing="0.09"

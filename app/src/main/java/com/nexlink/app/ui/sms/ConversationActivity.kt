@@ -3,7 +3,10 @@ package com.nexlink.app.ui.sms
 import android.Manifest
 import android.content.pm.PackageManager
 import android.database.ContentObserver
+import android.graphics.Color
+import android.graphics.PorterDuff
 import android.media.MediaRecorder
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -11,12 +14,15 @@ import android.provider.Telephony
 import android.view.MotionEvent
 import android.view.View
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexlink.app.databinding.ActivityConversationBinding
+import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.ReadTracker
 import com.nexlink.app.db.SimInfo
 import com.nexlink.app.db.SmsHelper
@@ -36,12 +42,48 @@ class ConversationActivity : AppCompatActivity() {
     private var audioFile: File? = null
     private var isRecording = false
 
-    // Guard against concurrent loads (e.g. observer fires while first load still running)
+    private var cameraUri: android.net.Uri? = null
+
     private val loading = AtomicBoolean(false)
 
     private val smsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) { loadMessages() }
     }
+
+    // ── Activity result launchers ─────────────────────────────────────────────
+
+    private val reqCameraPermLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) launchCamera()
+        else Toast.makeText(this, "Camera permission needed", Toast.LENGTH_SHORT).show()
+    }
+
+    private val cameraLauncher = registerForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) cameraUri?.let { sendAttachment(it, "image/jpeg") }
+    }
+
+    private val galleryLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { sendAttachment(it, contentResolver.getType(it) ?: "image/*") }
+    }
+
+    private val videoLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { sendAttachment(it, contentResolver.getType(it) ?: "video/*") }
+    }
+
+    private val fileLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { sendAttachment(it, contentResolver.getType(it) ?: "application/octet-stream") }
+    }
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,7 +95,8 @@ class ConversationActivity : AppCompatActivity() {
 
         setSupportActionBar(b.toolbar)
         supportActionBar?.title = name
-        supportActionBar?.subtitle = address
+        val rcsOn = NotificationPrefs.isRcsEnabled(this)
+        supportActionBar?.subtitle = if (rcsOn) "RCS · $address" else address
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         b.toolbar.setNavigationOnClickListener { finish() }
 
@@ -61,8 +104,6 @@ class ConversationActivity : AppCompatActivity() {
         b.recycler.layoutManager = LinearLayoutManager(this).apply { stackFromEnd = true }
         b.recycler.adapter = adapter
 
-        // Load-full-history banner — now only shown to load without the MMS query
-        // (hide it since we always load everything)
         b.btnLoadEarlier.visibility = View.GONE
         b.dividerLoadEarlier.visibility = View.GONE
 
@@ -85,6 +126,9 @@ class ConversationActivity : AppCompatActivity() {
             if (sims.size > 1) showSimPicker(sendAfter = true) else sendMessage()
             true
         }
+
+        // Attach button
+        b.btnAttach.setOnClickListener { showAttachPicker() }
 
         // Single tap mic: request permission or remind user to hold
         b.btnVoice.setOnClickListener {
@@ -128,7 +172,7 @@ class ConversationActivity : AppCompatActivity() {
     // ── Messages ──────────────────────────────────────────────────────────────
 
     private fun loadMessages() {
-        if (!loading.compareAndSet(false, true)) return // skip if already loading
+        if (!loading.compareAndSet(false, true)) return
         Thread {
             val msgs = SmsHelper.getMessages(this, address)
             runOnUiThread {
@@ -152,6 +196,55 @@ class ConversationActivity : AppCompatActivity() {
             try {
                 SmsHelper.sendSms(this, address, text, selectedSimId)
                 runOnUiThread { loadMessages() }
+            } catch (e: Exception) {
+                runOnUiThread { Toast.makeText(this, "Send failed: ${e.message}", Toast.LENGTH_LONG).show() }
+            }
+        }.start()
+    }
+
+    // ── Attachments ───────────────────────────────────────────────────────────
+
+    private fun showAttachPicker() {
+        val options = arrayOf("📷 Camera", "🖼 Photo / Gallery", "🎬 Video", "📎 File")
+        AlertDialog.Builder(this)
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> {
+                        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                            == PackageManager.PERMISSION_GRANTED) {
+                            launchCamera()
+                        } else {
+                            reqCameraPermLauncher.launch(Manifest.permission.CAMERA)
+                        }
+                    }
+                    1 -> galleryLauncher.launch("image/*")
+                    2 -> videoLauncher.launch("video/*")
+                    3 -> fileLauncher.launch("*/*")
+                }
+            }
+            .show()
+    }
+
+    private fun launchCamera() {
+        val dir = File(cacheDir, "attachments").also { it.mkdirs() }
+        val tmp = File(dir, "photo_${System.currentTimeMillis()}.jpg")
+        val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", tmp)
+        cameraUri = uri
+        cameraLauncher.launch(uri)
+    }
+
+    private fun sendAttachment(uri: android.net.Uri, mimeType: String) {
+        if (address.isEmpty()) return
+        Thread {
+            try {
+                SmsHelper.sendMediaMms(this, address, uri, mimeType, selectedSimId)
+                runOnUiThread { loadMessages() }
+            } catch (e: SecurityException) {
+                runOnUiThread {
+                    Toast.makeText(this,
+                        "Media messages require NexLink as the default SMS app. Go to Settings → Apps → Default apps.",
+                        Toast.LENGTH_LONG).show()
+                }
             } catch (e: Exception) {
                 runOnUiThread { Toast.makeText(this, "Send failed: ${e.message}", Toast.LENGTH_LONG).show() }
             }
@@ -183,8 +276,13 @@ class ConversationActivity : AppCompatActivity() {
     private fun startRecording() {
         try {
             audioFile = File(cacheDir, "voice_${System.currentTimeMillis()}.amr")
-            @Suppress("DEPRECATION")
-            mediaRecorder = MediaRecorder().apply {
+            mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                MediaRecorder(this)
+            } else {
+                @Suppress("DEPRECATION")
+                MediaRecorder()
+            }
+            mediaRecorder!!.apply {
                 setAudioSource(MediaRecorder.AudioSource.MIC)
                 setOutputFormat(MediaRecorder.OutputFormat.AMR_NB)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB)
@@ -193,7 +291,7 @@ class ConversationActivity : AppCompatActivity() {
                 start()
             }
             isRecording = true
-            b.btnVoice.setColorFilter(0xFFFF4444.toInt())
+            b.btnVoice.setColorFilter(Color.RED, PorterDuff.Mode.SRC_IN)
         } catch (e: Exception) {
             Toast.makeText(this, "Cannot record: ${e.message}", Toast.LENGTH_SHORT).show()
             cancelRecording()

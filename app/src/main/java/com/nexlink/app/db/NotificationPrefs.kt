@@ -54,4 +54,14 @@ object NotificationPrefs {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putBoolean("pass_through_media", v).apply()
     }
+
+    // ── RCS Chats ──
+    fun isRcsEnabled(ctx: Context): Boolean =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean("rcs_enabled", false)
+
+    fun setRcsEnabled(ctx: Context, v: Boolean) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean("rcs_enabled", v).apply()
+    }
 }

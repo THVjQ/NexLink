@@ -5,6 +5,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.nexlink.app.R
@@ -14,7 +15,6 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-// ── Row types displayed in a conversation ────────────────────────────────────
 private sealed class Row {
     data class DateSep(val label: String) : Row()
     data class Msg(val msg: SmsMessage)   : Row()
@@ -29,7 +29,6 @@ class BubbleAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         notifyDataSetChanged()
     }
 
-    // Insert a date separator whenever the calendar day changes
     private fun buildRows(msgs: List<SmsMessage>): List<Row> {
         val result = mutableListOf<Row>()
         var lastDay = ""
@@ -61,12 +60,14 @@ class BubbleAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         }
     }
 
-    // View types: 0=date-sep  1=text-in  2=text-out  3=voice-in  4=voice-out
+    // 0=date-sep  1=text-in  2=text-out  3=voice-in  4=voice-out  5=image-in  6=image-out
     override fun getItemViewType(pos: Int) = when (val r = rows[pos]) {
         is Row.DateSep -> 0
         is Row.Msg     -> when {
-            r.msg.isVoice &&  r.msg.isIncoming -> 3
+            r.msg.isVoice && r.msg.isIncoming  -> 3
             r.msg.isVoice && !r.msg.isIncoming -> 4
+            r.msg.mimeType?.startsWith("image/") == true && r.msg.isIncoming  -> 5
+            r.msg.mimeType?.startsWith("image/") == true && !r.msg.isIncoming -> 6
             r.msg.isIncoming                   -> 1
             else                               -> 2
         }
@@ -79,7 +80,9 @@ class BubbleAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             1    -> MsgVH(inf.inflate(R.layout.item_bubble_in, parent, false))
             2    -> MsgVH(inf.inflate(R.layout.item_bubble_out, parent, false))
             3    -> MsgVH(inf.inflate(R.layout.item_bubble_voice_in, parent, false))
-            else -> MsgVH(inf.inflate(R.layout.item_bubble_voice_out, parent, false))
+            4    -> MsgVH(inf.inflate(R.layout.item_bubble_voice_out, parent, false))
+            5    -> ImageVH(inf.inflate(R.layout.item_bubble_image_in, parent, false))
+            else -> ImageVH(inf.inflate(R.layout.item_bubble_image_out, parent, false))
         }
     }
 
@@ -92,23 +95,43 @@ class BubbleAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     }
 
     inner class MsgVH(v: View) : RecyclerView.ViewHolder(v) {
-        val bubble:  TextView  = v.findViewById(R.id.tvBubble)
-        val time:    TextView  = v.findViewById(R.id.tvTime)
+        val bubble:  TextView    = v.findViewById(R.id.tvBubble)
+        val time:    TextView    = v.findViewById(R.id.tvTime)
         val btnPlay: ImageButton? = v.findViewById<View>(R.id.btnPlay) as? ImageButton
+    }
+
+    inner class ImageVH(v: View) : RecyclerView.ViewHolder(v) {
+        val image: ImageView = v.findViewById(R.id.ivBubble)
+        val time:  TextView  = v.findViewById(R.id.tvTime)
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, pos: Int) {
         when (val r = rows[pos]) {
             is Row.DateSep -> (holder as DateVH).tvDate.text = r.label
-            is Row.Msg     -> bindMsg(holder as MsgVH, r.msg)
+            is Row.Msg     -> when (holder) {
+                is MsgVH   -> bindMsg(holder, r.msg)
+                is ImageVH -> bindImage(holder, r.msg)
+                else       -> {}
+            }
         }
     }
 
     private fun bindMsg(h: MsgVH, m: SmsMessage) {
-        h.bubble.text = if (m.isVoice) "🎤 Voice message" else m.body
+        h.bubble.text = m.body
         h.time.text   = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(m.timestamp))
         if (m.isVoice && m.mediaUri != null) {
             h.btnPlay?.setOnClickListener { btn -> playVoice(btn, m.mediaUri) }
+        }
+    }
+
+    private fun bindImage(h: ImageVH, m: SmsMessage) {
+        h.time.text = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(m.timestamp))
+        m.mediaUri?.let { uri ->
+            try {
+                h.image.setImageURI(android.net.Uri.parse(uri))
+            } catch (_: Exception) {
+                h.image.setImageResource(android.R.drawable.ic_menu_gallery)
+            }
         }
     }
 

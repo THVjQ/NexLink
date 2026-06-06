@@ -23,10 +23,13 @@ data class SmsMessage(
     val timestamp: Long,
     val isIncoming: Boolean,
     val isVoice: Boolean = false,
-    val mediaUri: String? = null
+    val mediaUri: String? = null,
+    val mimeType: String? = null
 )
 
 data class SimInfo(val subscriptionId: Int, val displayName: String, val slotIndex: Int, val number: String? = null)
+
+private data class MmsPart(val uri: String, val mimeType: String, val name: String?)
 
 object SmsHelper {
 
@@ -37,7 +40,6 @@ object SmsHelper {
         val uri = Telephony.Sms.CONTENT_URI
         val proj = arrayOf(Telephony.Sms.ADDRESS, Telephony.Sms.BODY, Telephony.Sms.DATE)
 
-        // Single upfront pass: gather unread counts for all addresses at once
         val unreadMap = buildUnreadMap(ctx)
 
         val seen = mutableSetOf<String>()
@@ -61,7 +63,6 @@ object SmsHelper {
         return list
     }
 
-    /** One query to get ALL unread rows, grouped by address. Replaces N per-address queries. */
     private fun buildUnreadMap(ctx: Context): Map<String, Int> {
         val map = mutableMapOf<String, Int>()
         try {
@@ -80,10 +81,9 @@ object SmsHelper {
         return map
     }
 
-    // No limit — always return full conversation history sorted oldest→newest
     fun getMessages(ctx: Context, address: String): List<SmsMessage> {
         val sms = getSmsMessages(ctx, address)
-        val mms = getMmsVoiceMessages(ctx, address)
+        val mms = getMmsMediaMessages(ctx, address)
         return (sms + mms).sortedBy { it.timestamp }
     }
 
@@ -111,12 +111,10 @@ object SmsHelper {
         return list
     }
 
-    // Fast MMS voice-message query: first get relevant MMS IDs from addr table (1 query),
-    // then fetch only those rows (1 query) — avoids scanning all MMS on the device.
-    private fun getMmsVoiceMessages(ctx: Context, address: String): List<SmsMessage> {
+    // Fetches all MMS media (voice, image, video, file) for a conversation
+    private fun getMmsMediaMessages(ctx: Context, address: String): List<SmsMessage> {
         val result = mutableListOf<SmsMessage>()
         try {
-            // Step 1: collect MMS IDs that include this address
             val mmsIds = mutableSetOf<Long>()
             val addrVariants = buildAddressVariants(address)
             val placeholders = addrVariants.joinToString(",") { "?" }
@@ -130,7 +128,6 @@ object SmsHelper {
 
             if (mmsIds.isEmpty()) return result
 
-            // Step 2: fetch only those MMS entries
             val idPlaceholders = mmsIds.joinToString(",") { "?" }
             val proj = arrayOf(Telephony.Mms._ID, Telephony.Mms.DATE, Telephony.Mms.MESSAGE_BOX)
             ctx.contentResolver.query(
@@ -143,45 +140,70 @@ object SmsHelper {
                     val mmsId = c.getLong(0)
                     val date  = c.getLong(1) * 1000L
                     val isIn  = c.getInt(2) == Telephony.Mms.MESSAGE_BOX_INBOX
-                    val audioUri = getMmsAudioPart(ctx, mmsId) ?: continue
-                    result += SmsMessage(mmsId, address, "🎤 Voice message", date, isIn,
-                        isVoice = true, mediaUri = audioUri)
+                    val part  = getMmsFirstMediaPart(ctx, mmsId) ?: continue
+                    val isVoice = part.mimeType.startsWith("audio/")
+                    val body = when {
+                        isVoice -> "🎤 Voice message"
+                        part.mimeType.startsWith("image/") -> ""
+                        part.mimeType.startsWith("video/") -> "🎬 Video"
+                        else -> "📎 ${part.name ?: "File"}"
+                    }
+                    result += SmsMessage(mmsId, address, body, date, isIn,
+                        isVoice = isVoice, mediaUri = part.uri, mimeType = part.mimeType)
                 }
             }
         } catch (_: Exception) {}
         return result
     }
 
-    // Build a small set of address variants to match in the addr table
     private fun buildAddressVariants(address: String): List<String> {
         val digits = address.replace("[^\\d]".toRegex(), "")
         val variants = mutableSetOf(address)
         if (digits.length >= 9) {
-            variants += digits                           // raw digits
-            variants += digits.takeLast(9)               // last 9 digits (local)
+            variants += digits
+            variants += digits.takeLast(9)
             if (digits.startsWith("61") && digits.length > 9) {
-                variants += "0${digits.drop(2)}"         // 0412…
-                variants += "+${digits}"                 // +61412…
+                variants += "0${digits.drop(2)}"
+                variants += "+${digits}"
             } else if (digits.startsWith("0") && digits.length == 10) {
-                variants += "61${digits.drop(1)}"        // 61412…
-                variants += "+61${digits.drop(1)}"       // +61412…
+                variants += "61${digits.drop(1)}"
+                variants += "+61${digits.drop(1)}"
             }
         }
         return variants.toList()
     }
 
-    private fun getMmsAudioPart(ctx: Context, mmsId: Long): String? {
+    // Returns first non-SMIL, non-text part of an MMS — handles audio/image/video/file
+    private fun getMmsFirstMediaPart(ctx: Context, mmsId: Long): MmsPart? {
         ctx.contentResolver.query(
             android.net.Uri.parse("content://mms/part"),
-            arrayOf(Telephony.Mms.Part._ID, Telephony.Mms.Part.CONTENT_TYPE),
+            arrayOf(Telephony.Mms.Part._ID, Telephony.Mms.Part.CONTENT_TYPE, Telephony.Mms.Part.NAME),
             "mid = ?", arrayOf(mmsId.toString()), null
         )?.use { c ->
             while (c.moveToNext()) {
                 val ct = c.getString(1) ?: continue
-                if (ct.startsWith("audio/")) return "content://mms/part/${c.getLong(0)}"
+                if (ct == "application/smil" || ct.startsWith("text/")) continue
+                return MmsPart(
+                    uri = "content://mms/part/${c.getLong(0)}",
+                    mimeType = ct,
+                    name = c.getString(2)
+                )
             }
         }
         return null
+    }
+
+    fun saveIncomingSms(ctx: Context, address: String, body: String) {
+        val values = android.content.ContentValues().apply {
+            put(Telephony.Sms.ADDRESS, address)
+            put(Telephony.Sms.BODY, body)
+            put(Telephony.Sms.DATE, System.currentTimeMillis())
+            put(Telephony.Sms.DATE_SENT, System.currentTimeMillis())
+            put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_INBOX)
+            put(Telephony.Sms.READ, 0)
+            put(Telephony.Sms.SEEN, 0)
+        }
+        try { ctx.contentResolver.insert(Telephony.Sms.Inbox.CONTENT_URI, values) } catch (_: Exception) {}
     }
 
     fun sendVoiceMms(ctx: Context, to: String, audioFile: java.io.File, subId: Int = -1) {
@@ -204,15 +226,67 @@ object SmsHelper {
         })
 
         val smil = "<smil><head><layout><root-layout/></layout></head><body><par dur=\"10000ms\"><audio src=\"audio.amr\"/></par></body></smil>"
-        ctx.contentResolver.insert(android.net.Uri.parse("content://mms/$mmsId/part"), android.content.ContentValues().apply {
-            put("mid", mmsId); put("ct", "application/smil"); put("cid", "<smil>")
-            put("_data", smil.toByteArray())
+        val smilUri = ctx.contentResolver.insert(android.net.Uri.parse("content://mms/$mmsId/part"), android.content.ContentValues().apply {
+            put("mid", mmsId); put("ct", "application/smil"); put("cid", "<smil>"); put("cl", "smil.xml")
         })
+        smilUri?.let { ctx.contentResolver.openOutputStream(it)?.use { os -> os.write(smil.toByteArray()) } }
 
         val partUri = ctx.contentResolver.insert(android.net.Uri.parse("content://mms/$mmsId/part"), android.content.ContentValues().apply {
             put("mid", mmsId); put("ct", "audio/amr"); put("name", "audio.amr"); put("cid", "<audio>")
         }) ?: return
         ctx.contentResolver.openOutputStream(partUri)?.use { out -> audioFile.inputStream().copyTo(out) }
+
+        @Suppress("DEPRECATION")
+        val sm = if (subId >= 0) android.telephony.SmsManager.getSmsManagerForSubscriptionId(subId)
+                 else android.telephony.SmsManager.getDefault()
+        sm.sendMultimediaMessage(ctx, mmsUri, null, null, null)
+    }
+
+    fun sendMediaMms(ctx: Context, to: String, mediaUri: android.net.Uri, mimeType: String, subId: Int = -1) {
+        val threadId = try { Telephony.Threads.getOrCreateThreadId(ctx, to) } catch (_: Exception) { 0L }
+        val ext = mimeType.substringAfter("/").take(8)
+        val fileName = "media.$ext"
+        val mediaSmilTag = when {
+            mimeType.startsWith("image/") -> "img"
+            mimeType.startsWith("video/") -> "video"
+            mimeType.startsWith("audio/") -> "audio"
+            else -> null
+        }
+        val msgCt = if (mediaSmilTag != null) "application/vnd.wap.multipart.related"
+                    else "application/vnd.wap.multipart.mixed"
+
+        val msgValues = android.content.ContentValues().apply {
+            put("thread_id", threadId)
+            put("date", System.currentTimeMillis() / 1000)
+            put("msg_box", 4)
+            put("m_type", 128)
+            put("v", 18)
+            put("ct", msgCt)
+            put("read", 1); put("seen", 1)
+            if (subId >= 0) put("sub_id", subId)
+        }
+        val mmsUri = ctx.contentResolver.insert(android.net.Uri.parse("content://mms"), msgValues) ?: return
+        val mmsId  = mmsUri.lastPathSegment ?: return
+
+        ctx.contentResolver.insert(android.net.Uri.parse("content://mms/$mmsId/addr"), android.content.ContentValues().apply {
+            put("address", to); put("type", 151); put("charset", 106)
+        })
+
+        if (mediaSmilTag != null) {
+            val smil = "<smil><head><layout><root-layout/></layout></head><body><par dur=\"10000ms\"><$mediaSmilTag src=\"$fileName\"/></par></body></smil>"
+            val smilUri = ctx.contentResolver.insert(android.net.Uri.parse("content://mms/$mmsId/part"), android.content.ContentValues().apply {
+                put("mid", mmsId); put("ct", "application/smil"); put("cid", "<smil>"); put("cl", "smil.xml")
+            })
+            smilUri?.let { ctx.contentResolver.openOutputStream(it)?.use { os -> os.write(smil.toByteArray()) } }
+        }
+
+        val partUri = ctx.contentResolver.insert(android.net.Uri.parse("content://mms/$mmsId/part"), android.content.ContentValues().apply {
+            put("mid", mmsId); put("ct", mimeType); put("name", fileName); put("cid", "<media>")
+        }) ?: return
+
+        ctx.contentResolver.openInputStream(mediaUri)?.use { input ->
+            ctx.contentResolver.openOutputStream(partUri)?.use { output -> input.copyTo(output) }
+        }
 
         @Suppress("DEPRECATION")
         val sm = if (subId >= 0) android.telephony.SmsManager.getSmsManagerForSubscriptionId(subId)

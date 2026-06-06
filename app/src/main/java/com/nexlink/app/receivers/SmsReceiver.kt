@@ -30,6 +30,8 @@ class SmsReceiver : BroadcastReceiver() {
         Thread {
             try {
                 for ((sender, body) in grouped) {
+                    // As the default SMS app we must persist the message ourselves
+                    com.nexlink.app.db.SmsHelper.saveIncomingSms(context, sender, body.toString())
                     SmsNotifier.notify(context, sender, body.toString())
                 }
             } finally {
