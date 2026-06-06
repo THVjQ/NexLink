@@ -3,6 +3,11 @@
     android:layout_width="match_parent" android:layout_height="wrap_content"
     android:orientation="vertical" android:gravity="start"
     android:paddingHorizontal="12dp" android:paddingVertical="3dp">
+    <TextView android:id="@+id/tvSenderName"
+        android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:textSize="11sp" android:textStyle="bold"
+        android:layout_marginStart="4dp" android:layout_marginBottom="2dp"
+        android:visibility="gone"/>
     <TextView android:id="@+id/tvBubble"
         android:layout_width="wrap_content" android:layout_height="wrap_content"
         android:background="@drawable/bg_bubble_in"

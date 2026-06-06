@@ -15,8 +15,9 @@ sealed class ContactListItem {
 }
 
 class ContactsAdapter(
-    private val onSms:  (Contact) -> Unit,
-    private val onCall: (Contact) -> Unit
+    private val onSms:    (Contact) -> Unit,
+    private val onCall:   (Contact) -> Unit,
+    private val onDelete: ((Contact) -> Unit)? = null
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     private var items = listOf<ContactListItem>()
@@ -97,6 +98,7 @@ class ContactsAdapter(
                 h.btnSms.setOnClickListener  { onSms(c) }
                 h.btnCall.setOnClickListener { onCall(c) }
                 h.itemView.setOnClickListener { onSms(c) }
+                h.itemView.setOnLongClickListener { onDelete?.invoke(c); true }
             }
         }
     }

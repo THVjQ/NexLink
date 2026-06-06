@@ -13,7 +13,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class ConversationAdapter(private val onClick: (Conversation) -> Unit) :
+class ConversationAdapter(
+    private val onClick: (Conversation) -> Unit,
+    private val onLongClick: ((Conversation) -> Unit)? = null
+) :
     RecyclerView.Adapter<ConversationAdapter.VH>() {
 
     private var items = listOf<Conversation>()
@@ -61,6 +64,7 @@ class ConversationAdapter(private val onClick: (Conversation) -> Unit) :
         }
 
         h.itemView.setOnClickListener { onClick(c) }
+        h.itemView.setOnLongClickListener { onLongClick?.invoke(c); true }
     }
 
     private fun formatTime(ms: Long): String {

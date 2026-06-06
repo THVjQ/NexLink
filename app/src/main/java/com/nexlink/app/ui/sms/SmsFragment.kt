@@ -3,6 +3,7 @@ package com.nexlink.app.ui.sms
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import androidx.appcompat.app.AlertDialog
 import android.database.ContentObserver
 import android.os.Bundle
 import android.os.Handler
@@ -39,7 +40,10 @@ class SmsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        adapter = ConversationAdapter { conv -> openConversation(conv) }
+        adapter = ConversationAdapter(
+            onClick     = { conv -> openConversation(conv) },
+            onLongClick = { conv -> confirmDeleteConversation(conv) }
+        )
         b.recycler.layoutManager = LinearLayoutManager(requireContext())
         b.recycler.adapter = adapter
 
@@ -136,7 +140,23 @@ class SmsFragment : Fragment() {
         startActivity(Intent(requireContext(), ConversationActivity::class.java).apply {
             putExtra("address", conv.address)
             putExtra("contact_name", conv.contactName)
+            putExtra("thread_id", conv.threadId)
+            putStringArrayListExtra("participants", ArrayList(conv.participants))
         })
+    }
+
+    private fun confirmDeleteConversation(conv: Conversation) {
+        AlertDialog.Builder(requireContext())
+            .setTitle("Delete conversation")
+            .setMessage("Delete conversation with ${conv.contactName.ifBlank { conv.address }}?")
+            .setPositiveButton("Delete") { _, _ ->
+                Thread {
+                    SmsHelper.deleteThread(requireContext(), conv.threadId)
+                    loadConversations()
+                }.start()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     override fun onDestroyView() { super.onDestroyView(); _b = null }

@@ -18,7 +18,7 @@ import com.nexlink.app.databinding.FragmentContactsBinding
 import com.nexlink.app.db.DeepLinkHelper
 import com.nexlink.app.ui.sms.ConversationActivity
 
-data class Contact(val name: String, val number: String)
+data class Contact(val name: String, val number: String, val lookupKey: String = "")
 
 class ContactsFragment : Fragment() {
 
@@ -35,8 +35,9 @@ class ContactsFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         adapter = ContactsAdapter(
-            onSms  = { c -> openSms(c) },
-            onCall = { c -> placeCall(c) }
+            onSms    = { c -> openSms(c) },
+            onCall   = { c -> placeCall(c) },
+            onDelete = { c -> confirmDeleteContact(c) }
         )
         b.recycler.layoutManager = LinearLayoutManager(requireContext())
         b.recycler.adapter = adapter
@@ -65,7 +66,8 @@ class ContactsFragment : Fragment() {
             val list = mutableListOf<Contact>()
             val proj = arrayOf(
                 android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-                android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER
+                android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER,
+                android.provider.ContactsContract.CommonDataKinds.Phone.LOOKUP_KEY
             )
             ctx.contentResolver.query(
                 android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
@@ -78,7 +80,7 @@ class ContactsFragment : Fragment() {
                     val num  = c.getString(1)?.replace("\\s".toRegex(), "") ?: continue
                     if (num in seen) continue
                     seen += num
-                    list += Contact(name, num)
+                    list += Contact(name, num, c.getString(2) ?: "")
                 }
             }
             if (!isAdded) return@Thread
@@ -134,6 +136,24 @@ class ContactsFragment : Fragment() {
         AlertDialog.Builder(ctx)
             .setTitle("Call ${c.name} via…")
             .setItems(options.toTypedArray()) { _, i -> actions[i]() }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun confirmDeleteContact(c: Contact) {
+        AlertDialog.Builder(requireContext())
+            .setTitle("Delete contact")
+            .setMessage("Delete ${c.name} from contacts?")
+            .setPositiveButton("Delete") { _, _ ->
+                if (c.lookupKey.isNotBlank()) {
+                    Thread {
+                        val uri = android.provider.ContactsContract.Contacts.CONTENT_LOOKUP_URI
+                            .buildUpon().appendPath(c.lookupKey).build()
+                        try { requireContext().contentResolver.delete(uri, null, null) } catch (_: Exception) {}
+                        loadContacts()
+                    }.start()
+                }
+            }
             .setNegativeButton("Cancel", null)
             .show()
     }

@@ -11,6 +11,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Telephony
+import android.view.Menu
+import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
 import android.widget.Toast
@@ -21,11 +23,13 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.nexlink.app.R
 import com.nexlink.app.databinding.ActivityConversationBinding
 import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.ReadTracker
 import com.nexlink.app.db.SimInfo
 import com.nexlink.app.db.SmsHelper
+import com.nexlink.app.db.SmsMessage
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -35,13 +39,16 @@ class ConversationActivity : AppCompatActivity() {
     private lateinit var adapter: BubbleAdapter
     private lateinit var address: String
 
-    private var sims = listOf<SimInfo>()
+    private var threadId     = 0L
+    private var participants = listOf<String>()
+    private val isGroup get() = participants.size > 1
+
+    private var sims        = listOf<SimInfo>()
     private var selectedSimId = -1
 
     private var mediaRecorder: MediaRecorder? = null
     private var audioFile: File? = null
     private var isRecording = false
-
     private var cameraUri: android.net.Uri? = null
 
     private val loading = AtomicBoolean(false)
@@ -50,38 +57,31 @@ class ConversationActivity : AppCompatActivity() {
         override fun onChange(selfChange: Boolean) { loadMessages() }
     }
 
-    // ── Activity result launchers ─────────────────────────────────────────────
+    // ── Launchers ─────────────────────────────────────────────────────────────
 
     private val reqCameraPermLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) launchCamera()
-        else Toast.makeText(this, "Camera permission needed", Toast.LENGTH_SHORT).show()
-    }
+    ) { granted -> if (granted) launchCamera() else Toast.makeText(this, "Camera permission needed", Toast.LENGTH_SHORT).show() }
 
     private val cameraLauncher = registerForActivityResult(
         ActivityResultContracts.TakePicture()
-    ) { success ->
-        if (success) cameraUri?.let { sendAttachment(it, "image/jpeg") }
-    }
+    ) { success -> if (success) cameraUri?.let { sendAttachment(it, "image/jpeg") } }
 
     private val galleryLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let { sendAttachment(it, contentResolver.getType(it) ?: "image/*") }
-    }
+    ) { uri -> uri?.let { sendAttachment(it, contentResolver.getType(it) ?: "image/*") } }
 
     private val videoLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let { sendAttachment(it, contentResolver.getType(it) ?: "video/*") }
-    }
+    ) { uri -> uri?.let { sendAttachment(it, contentResolver.getType(it) ?: "video/*") } }
+
+    private val audioLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri -> uri?.let { sendAttachment(it, contentResolver.getType(it) ?: "audio/*") } }
 
     private val fileLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let { sendAttachment(it, contentResolver.getType(it) ?: "application/octet-stream") }
-    }
+    ) { uri -> uri?.let { sendAttachment(it, contentResolver.getType(it) ?: "application/octet-stream") } }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -90,24 +90,37 @@ class ConversationActivity : AppCompatActivity() {
         b = ActivityConversationBinding.inflate(layoutInflater)
         setContentView(b.root)
 
-        address = intent.getStringExtra("address") ?: ""
-        val name = intent.getStringExtra("contact_name") ?: address
+        address      = intent.getStringExtra("address") ?: ""
+        threadId     = intent.getLongExtra("thread_id", 0L)
+        participants = intent.getStringArrayListExtra("participants") ?: listOf(address)
+        val name     = intent.getStringExtra("contact_name") ?: address
 
         setSupportActionBar(b.toolbar)
         supportActionBar?.title = name
         val rcsOn = NotificationPrefs.isRcsEnabled(this)
-        supportActionBar?.subtitle = if (rcsOn) "RCS · $address" else address
+        supportActionBar?.subtitle = when {
+            isGroup -> participants.size.toString() + " participants"
+            rcsOn   -> "RCS · $address"
+            else    -> address
+        }
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         b.toolbar.setNavigationOnClickListener { finish() }
 
-        adapter = BubbleAdapter()
+        adapter = BubbleAdapter(
+            isGroup   = isGroup,
+            onForward = { msg -> showForwardPicker(msg) },
+            onDelete  = { id, isMms ->
+                Thread {
+                    SmsHelper.deleteMessage(this, id, isMms)
+                    loadMessages()
+                }.start()
+            }
+        )
         b.recycler.layoutManager = LinearLayoutManager(this).apply { stackFromEnd = true }
         b.recycler.adapter = adapter
-
         b.btnLoadEarlier.visibility = View.GONE
         b.dividerLoadEarlier.visibility = View.GONE
 
-        // SIM detection
         Thread {
             val s = SmsHelper.getSims(this)
             runOnUiThread {
@@ -126,21 +139,17 @@ class ConversationActivity : AppCompatActivity() {
             if (sims.size > 1) showSimPicker(sendAfter = true) else sendMessage()
             true
         }
-
-        // Attach button
         b.btnAttach.setOnClickListener { showAttachPicker() }
 
-        // Single tap mic: request permission or remind user to hold
         b.btnVoice.setOnClickListener {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 101)
-                Toast.makeText(this, "Microphone permission granted — now hold to record", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Microphone permission granted — hold to record", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(this, "Hold to record a voice message", Toast.LENGTH_SHORT).show()
             }
         }
-        // Hold mic: record while pressed, send on release
         b.btnVoice.setOnTouchListener { _, event ->
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) return@setOnTouchListener false
@@ -152,8 +161,15 @@ class ConversationActivity : AppCompatActivity() {
             }
         }
 
+        // Pre-fill forwarded message if any
+        intent.getStringExtra("forward_text")?.let { b.etInput.setText(it) }
+
         loadMessages()
-        SmsHelper.markRead(this, address)
+        if (threadId > 0) {
+            SmsHelper.markReadByThread(this, threadId)
+        } else {
+            SmsHelper.markRead(this, address)
+        }
         ReadTracker.markRead(this, address)
     }
 
@@ -169,12 +185,40 @@ class ConversationActivity : AppCompatActivity() {
         cancelRecording()
     }
 
+    override fun onDestroy() { super.onDestroy(); cancelRecording() }
+
+    // ── Options menu (delete conversation) ───────────────────────────────────
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.menu_conversation, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        if (item.itemId == R.id.action_delete_conversation) {
+            AlertDialog.Builder(this)
+                .setTitle("Delete conversation")
+                .setMessage("This will delete all messages in this conversation.")
+                .setPositiveButton("Delete") { _, _ ->
+                    Thread {
+                        if (threadId > 0) SmsHelper.deleteThread(this, threadId)
+                        runOnUiThread { finish() }
+                    }.start()
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+            return true
+        }
+        return super.onOptionsItemSelected(item)
+    }
+
     // ── Messages ──────────────────────────────────────────────────────────────
 
     private fun loadMessages() {
         if (!loading.compareAndSet(false, true)) return
         Thread {
-            val msgs = SmsHelper.getMessages(this, address)
+            val msgs = if (threadId > 0) SmsHelper.getMessagesByThread(this, threadId, address)
+                       else SmsHelper.getMessages(this, address)
             runOnUiThread {
                 loading.set(false)
                 adapter.setData(msgs)
@@ -194,8 +238,16 @@ class ConversationActivity : AppCompatActivity() {
         b.etInput.text?.clear()
         Thread {
             try {
-                SmsHelper.sendSms(this, address, text, selectedSimId)
+                if (isGroup && threadId > 0) {
+                    SmsHelper.sendGroupText(this, threadId, participants, text, selectedSimId)
+                } else {
+                    SmsHelper.sendSms(this, address, text, selectedSimId)
+                }
                 runOnUiThread { loadMessages() }
+            } catch (e: SecurityException) {
+                runOnUiThread { Toast.makeText(this,
+                    "Group messages require NexLink as the default SMS app.",
+                    Toast.LENGTH_LONG).show() }
             } catch (e: Exception) {
                 runOnUiThread { Toast.makeText(this, "Send failed: ${e.message}", Toast.LENGTH_LONG).show() }
             }
@@ -205,21 +257,19 @@ class ConversationActivity : AppCompatActivity() {
     // ── Attachments ───────────────────────────────────────────────────────────
 
     private fun showAttachPicker() {
-        val options = arrayOf("📷 Camera", "🖼 Photo / Gallery", "🎬 Video", "📎 File")
+        val options = arrayOf("📷 Camera", "🖼 Photo / Gallery", "🎬 Video", "🎵 Audio file", "📎 File")
         AlertDialog.Builder(this)
             .setItems(options) { _, which ->
                 when (which) {
                     0 -> {
                         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-                            == PackageManager.PERMISSION_GRANTED) {
-                            launchCamera()
-                        } else {
-                            reqCameraPermLauncher.launch(Manifest.permission.CAMERA)
-                        }
+                            == PackageManager.PERMISSION_GRANTED) launchCamera()
+                        else reqCameraPermLauncher.launch(Manifest.permission.CAMERA)
                     }
                     1 -> galleryLauncher.launch("image/*")
                     2 -> videoLauncher.launch("video/*")
-                    3 -> fileLauncher.launch("*/*")
+                    3 -> audioLauncher.launch("audio/*")
+                    4 -> fileLauncher.launch("*/*")
                 }
             }
             .show()
@@ -237,16 +287,41 @@ class ConversationActivity : AppCompatActivity() {
         if (address.isEmpty()) return
         Thread {
             try {
-                SmsHelper.sendMediaMms(this, address, uri, mimeType, selectedSimId)
+                SmsHelper.sendMediaMms(this, address, uri, mimeType, selectedSimId,
+                    extraRecipients = if (isGroup) participants.drop(1) else emptyList())
                 runOnUiThread { loadMessages() }
             } catch (e: SecurityException) {
-                runOnUiThread {
-                    Toast.makeText(this,
-                        "Media messages require NexLink as the default SMS app. Go to Settings → Apps → Default apps.",
-                        Toast.LENGTH_LONG).show()
-                }
+                runOnUiThread { Toast.makeText(this,
+                    "Media messages require NexLink as the default SMS app. Go to Settings → Apps → Default apps.",
+                    Toast.LENGTH_LONG).show() }
             } catch (e: Exception) {
                 runOnUiThread { Toast.makeText(this, "Send failed: ${e.message}", Toast.LENGTH_LONG).show() }
+            }
+        }.start()
+    }
+
+    // ── Forward ───────────────────────────────────────────────────────────────
+
+    private fun showForwardPicker(msg: SmsMessage) {
+        Thread {
+            val convs = SmsHelper.getConversations(this, 20)
+            runOnUiThread {
+                val names = convs.map { it.contactName.ifBlank { it.address } }.toTypedArray()
+                AlertDialog.Builder(this)
+                    .setTitle("Forward to…")
+                    .setItems(names) { _, i ->
+                        val c = convs[i]
+                        android.content.Intent(this, ConversationActivity::class.java).also { intent ->
+                            intent.putExtra("address", c.address)
+                            intent.putExtra("contact_name", c.contactName)
+                            intent.putExtra("thread_id", c.threadId)
+                            intent.putStringArrayListExtra("participants", ArrayList(c.participants))
+                            intent.putExtra("forward_text", msg.body)
+                            startActivity(intent)
+                        }
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
             }
         }.start()
     }
@@ -276,19 +351,14 @@ class ConversationActivity : AppCompatActivity() {
     private fun startRecording() {
         try {
             audioFile = File(cacheDir, "voice_${System.currentTimeMillis()}.amr")
-            mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                MediaRecorder(this)
-            } else {
-                @Suppress("DEPRECATION")
-                MediaRecorder()
-            }
+            mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(this)
+                            else @Suppress("DEPRECATION") MediaRecorder()
             mediaRecorder!!.apply {
                 setAudioSource(MediaRecorder.AudioSource.MIC)
                 setOutputFormat(MediaRecorder.OutputFormat.AMR_NB)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB)
                 setOutputFile(audioFile!!.absolutePath)
-                prepare()
-                start()
+                prepare(); start()
             }
             isRecording = true
             b.btnVoice.setColorFilter(Color.RED, PorterDuff.Mode.SRC_IN)
@@ -301,14 +371,11 @@ class ConversationActivity : AppCompatActivity() {
     private fun stopAndSendRecording() {
         if (!isRecording) return
         try { mediaRecorder?.stop(); mediaRecorder?.release() } catch (_: Exception) {}
-        mediaRecorder = null
-        isRecording = false
+        mediaRecorder = null; isRecording = false
         b.btnVoice.clearColorFilter()
-
         val file = audioFile ?: return
         audioFile = null
         if (!file.exists() || file.length() < 500) { file.delete(); return }
-
         Thread {
             try {
                 SmsHelper.sendVoiceMms(this, address, file, selectedSimId)
@@ -316,11 +383,9 @@ class ConversationActivity : AppCompatActivity() {
                 runOnUiThread { loadMessages() }
             } catch (e: SecurityException) {
                 file.delete()
-                runOnUiThread {
-                    Toast.makeText(this,
-                        "Voice messages require NexLink as the default SMS app. Go to Settings → Apps → Default apps.",
-                        Toast.LENGTH_LONG).show()
-                }
+                runOnUiThread { Toast.makeText(this,
+                    "Voice messages require NexLink as the default SMS app. Go to Settings → Apps → Default apps.",
+                    Toast.LENGTH_LONG).show() }
             } catch (e: Exception) {
                 file.delete()
                 runOnUiThread { Toast.makeText(this, "Voice send failed: ${e.message}", Toast.LENGTH_LONG).show() }
@@ -330,11 +395,8 @@ class ConversationActivity : AppCompatActivity() {
 
     private fun cancelRecording() {
         try { mediaRecorder?.stop(); mediaRecorder?.release() } catch (_: Exception) {}
-        mediaRecorder = null
-        isRecording = false
+        mediaRecorder = null; isRecording = false
         b.btnVoice.clearColorFilter()
         audioFile?.delete(); audioFile = null
     }
-
-    override fun onDestroy() { super.onDestroy(); cancelRecording() }
 }
