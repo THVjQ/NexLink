@@ -366,29 +366,32 @@ object SmsHelper {
         try { ctx.contentResolver.insert(Telephony.Sms.Sent.CONTENT_URI, values) } catch (_: Exception) {}
     }
 
-    fun sendGroupText(ctx: Context, threadId: Long, participants: List<String>, text: String, subId: Int = -1) {
-        val mmsUri = createMmsRecord(ctx, threadId, "application/vnd.wap.multipart.mixed", subId) ?: return
-        val mmsId  = mmsUri.lastPathSegment ?: return
+    fun sendGroupText(ctx: Context, threadId: Long, participants: List<String>, text: String, subId: Int = -1): Long {
+        val tid = if (threadId > 0) threadId
+                  else runCatching { Telephony.Threads.getOrCreateThreadId(ctx, participants.toSet()) }.getOrDefault(0L)
+        val mmsUri = createMmsRecord(ctx, tid, "application/vnd.wap.multipart.mixed", subId)
+        val mmsId  = mmsUri.lastPathSegment ?: throw Exception("Invalid MMS URI")
         participants.forEach { addr -> insertMmsAddr(ctx, mmsId, addr) }
         val partUri = ctx.contentResolver.insert(Uri.parse("content://mms/$mmsId/part"),
             ContentValues().apply {
                 put("mid", mmsId); put("ct", "text/plain"); put("cid", "<text>"); put("cl", "text.txt")
-            }) ?: return
+            }) ?: throw Exception("Failed to create MMS text part")
         ctx.contentResolver.openOutputStream(partUri)?.use { it.write(text.toByteArray(Charsets.UTF_8)) }
         sendMms(ctx, mmsUri, subId)
+        return tid
     }
 
     fun sendVoiceMms(ctx: Context, to: String, audioFile: java.io.File, subId: Int = -1) {
         val threadId = runCatching { Telephony.Threads.getOrCreateThreadId(ctx, setOf(to)) }.getOrDefault(0L)
-        val mmsUri   = createMmsRecord(ctx, threadId, "application/vnd.wap.multipart.related", subId) ?: return
-        val mmsId    = mmsUri.lastPathSegment ?: return
+        val mmsUri   = createMmsRecord(ctx, threadId, "application/vnd.wap.multipart.related", subId)
+        val mmsId    = mmsUri.lastPathSegment ?: throw Exception("Invalid MMS URI")
         insertMmsAddr(ctx, mmsId, to)
         val smil = "<smil><head><layout><root-layout/></layout></head><body><par dur=\"10000ms\"><audio src=\"audio.amr\"/></par></body></smil>"
         insertSmilPart(ctx, mmsId, smil)
         val partUri = ctx.contentResolver.insert(Uri.parse("content://mms/$mmsId/part"),
             ContentValues().apply {
                 put("mid", mmsId); put("ct", "audio/amr"); put("name", "audio.amr"); put("cid", "<audio>")
-            }) ?: return
+            }) ?: throw Exception("Failed to create MMS audio part")
         ctx.contentResolver.openOutputStream(partUri)?.use { audioFile.inputStream().copyTo(it) }
         sendMms(ctx, mmsUri, subId)
     }
@@ -399,8 +402,8 @@ object SmsHelper {
         val threadId = runCatching { Telephony.Threads.getOrCreateThreadId(ctx, allRecipients) }.getOrDefault(0L)
         val smilTag  = when { mimeType.startsWith("image/") -> "img"; mimeType.startsWith("video/") -> "video"; mimeType.startsWith("audio/") -> "audio"; else -> null }
         val msgCt    = if (smilTag != null) "application/vnd.wap.multipart.related" else "application/vnd.wap.multipart.mixed"
-        val mmsUri2  = createMmsRecord(ctx, threadId, msgCt, subId) ?: return
-        val mmsId    = mmsUri2.lastPathSegment ?: return
+        val mmsUri2  = createMmsRecord(ctx, threadId, msgCt, subId)
+        val mmsId    = mmsUri2.lastPathSegment ?: throw Exception("Invalid MMS URI")
         allRecipients.forEach { addr -> insertMmsAddr(ctx, mmsId, addr) }
         val fileName = "media.${mimeType.substringAfter("/").take(8)}"
         if (smilTag != null) {
@@ -410,21 +413,25 @@ object SmsHelper {
         val partUri = ctx.contentResolver.insert(Uri.parse("content://mms/$mmsId/part"),
             ContentValues().apply {
                 put("mid", mmsId); put("ct", mimeType); put("name", fileName); put("cid", "<media>")
-            }) ?: return
-        ctx.contentResolver.openInputStream(mediaUri)?.use { i ->
+            }) ?: throw Exception("Failed to create MMS media part")
+        val inputStream = ctx.contentResolver.openInputStream(mediaUri)
+            ?: throw Exception("Cannot read selected media file")
+        inputStream.use { i ->
             ctx.contentResolver.openOutputStream(partUri)?.use { o -> i.copyTo(o) }
         }
         sendMms(ctx, mmsUri2, subId)
     }
 
-    private fun createMmsRecord(ctx: Context, threadId: Long, contentType: String, subId: Int): Uri? {
+    private fun createMmsRecord(ctx: Context, threadId: Long, contentType: String, subId: Int): Uri {
         val values = ContentValues().apply {
             put("thread_id", threadId); put("date", System.currentTimeMillis() / 1000)
             put("msg_box", 4); put("m_type", 128); put("v", 18); put("ct", contentType)
             put("read", 1); put("seen", 1)
             if (subId >= 0) put("sub_id", subId)
         }
-        return try { ctx.contentResolver.insert(Uri.parse("content://mms"), values) } catch (_: Exception) { null }
+        // SecurityException propagates if NexLink is not the default SMS app
+        return ctx.contentResolver.insert(Uri.parse("content://mms"), values)
+            ?: throw Exception("Failed to create MMS record — check MMS/APN settings and that NexLink is the default SMS app")
     }
 
     private fun insertMmsAddr(ctx: Context, mmsId: String, address: String) {
@@ -466,6 +473,15 @@ object SmsHelper {
     }
 
     // ── Misc ──────────────────────────────────────────────────────────────────
+
+    fun isDefaultSmsApp(ctx: Context): Boolean {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            val rm = ctx.getSystemService(android.app.role.RoleManager::class.java)
+            rm?.isRoleHeld(android.app.role.RoleManager.ROLE_SMS) == true
+        } else {
+            Telephony.Sms.getDefaultSmsPackage(ctx) == ctx.packageName
+        }
+    }
 
     fun saveIncomingSms(ctx: Context, address: String, body: String) {
         val values = ContentValues().apply {

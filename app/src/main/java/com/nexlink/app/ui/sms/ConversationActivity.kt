@@ -8,6 +8,7 @@ import android.graphics.PorterDuff
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.os.Handler
 import android.os.Looper
 import android.provider.Telephony
@@ -212,11 +213,37 @@ class ConversationActivity : AppCompatActivity() {
         return super.onOptionsItemSelected(item)
     }
 
+    // ── Default SMS app check ─────────────────────────────────────────────────
+
+    private fun requireDefaultSmsApp(): Boolean {
+        if (SmsHelper.isDefaultSmsApp(this)) return true
+        AlertDialog.Builder(this)
+            .setTitle("Default SMS app required")
+            .setMessage("To send media, voice messages, or group texts, NexLink must be set as your default SMS app.")
+            .setPositiveButton("Open settings") { _, _ ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val rm = getSystemService(android.app.role.RoleManager::class.java)
+                    startActivity(rm.createRequestRoleIntent(android.app.role.RoleManager.ROLE_SMS))
+                } else {
+                    startActivity(android.content.Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+        return false
+    }
+
     // ── Messages ──────────────────────────────────────────────────────────────
 
     private fun loadMessages() {
         if (!loading.compareAndSet(false, true)) return
         Thread {
+            // Auto-resolve thread ID for new group conversations
+            if (threadId == 0L && isGroup) {
+                threadId = runCatching {
+                    android.provider.Telephony.Threads.getOrCreateThreadId(this, participants.toSet())
+                }.getOrDefault(0L)
+            }
             val msgs = if (threadId > 0) SmsHelper.getMessagesByThread(this, threadId, address)
                        else SmsHelper.getMessages(this, address)
             runOnUiThread {
@@ -235,19 +262,19 @@ class ConversationActivity : AppCompatActivity() {
         }
         val text = b.etInput.text.toString().trim()
         if (text.isEmpty() || address.isEmpty()) return
+        if (isGroup && !requireDefaultSmsApp()) return
         b.etInput.text?.clear()
         Thread {
             try {
-                if (isGroup && threadId > 0) {
-                    SmsHelper.sendGroupText(this, threadId, participants, text, selectedSimId)
+                if (isGroup) {
+                    val resolvedTid = SmsHelper.sendGroupText(this, threadId, participants, text, selectedSimId)
+                    if (threadId == 0L && resolvedTid > 0L) threadId = resolvedTid
                 } else {
                     SmsHelper.sendSms(this, address, text, selectedSimId)
                 }
                 runOnUiThread { loadMessages() }
             } catch (e: SecurityException) {
-                runOnUiThread { Toast.makeText(this,
-                    "Group messages require NexLink as the default SMS app.",
-                    Toast.LENGTH_LONG).show() }
+                runOnUiThread { requireDefaultSmsApp() }
             } catch (e: Exception) {
                 runOnUiThread { Toast.makeText(this, "Send failed: ${e.message}", Toast.LENGTH_LONG).show() }
             }
@@ -285,15 +312,14 @@ class ConversationActivity : AppCompatActivity() {
 
     private fun sendAttachment(uri: android.net.Uri, mimeType: String) {
         if (address.isEmpty()) return
+        if (!requireDefaultSmsApp()) return
         Thread {
             try {
                 SmsHelper.sendMediaMms(this, address, uri, mimeType, selectedSimId,
                     extraRecipients = if (isGroup) participants.drop(1) else emptyList())
                 runOnUiThread { loadMessages() }
             } catch (e: SecurityException) {
-                runOnUiThread { Toast.makeText(this,
-                    "Media messages require NexLink as the default SMS app. Go to Settings → Apps → Default apps.",
-                    Toast.LENGTH_LONG).show() }
+                runOnUiThread { requireDefaultSmsApp() }
             } catch (e: Exception) {
                 runOnUiThread { Toast.makeText(this, "Send failed: ${e.message}", Toast.LENGTH_LONG).show() }
             }
@@ -376,6 +402,7 @@ class ConversationActivity : AppCompatActivity() {
         val file = audioFile ?: return
         audioFile = null
         if (!file.exists() || file.length() < 500) { file.delete(); return }
+        if (!requireDefaultSmsApp()) { file.delete(); return }
         Thread {
             try {
                 SmsHelper.sendVoiceMms(this, address, file, selectedSimId)

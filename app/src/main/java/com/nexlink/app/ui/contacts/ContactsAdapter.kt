@@ -22,6 +22,9 @@ class ContactsAdapter(
 
     private var items = listOf<ContactListItem>()
 
+    fun getContactAt(position: Int): Contact? =
+        (items.getOrNull(position) as? ContactListItem.Item)?.contact
+
     fun setData(contacts: List<Contact>) {
         val sorted = contacts.sortedBy { it.name.lowercase() }
         val built  = mutableListOf<ContactListItem>()

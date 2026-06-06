@@ -1,85 +1,84 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:background="@color/bg">
+    android:background="@color/bg">
 
-    <!-- Header -->
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:paddingHorizontal="16dp"
-        android:paddingTop="16dp" android:paddingBottom="10dp" android:gravity="center_vertical">
-        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:orientation="vertical">
-            <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:orientation="horizontal" android:gravity="center_vertical">
-                <TextView android:text="Messages" android:textSize="22sp" android:textStyle="bold"
-                    android:textColor="@color/text"
+    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- Header -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:paddingHorizontal="16dp"
+            android:paddingTop="16dp" android:paddingBottom="10dp" android:gravity="center_vertical">
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:orientation="vertical">
+                <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical">
+                    <TextView android:text="Messages" android:textSize="22sp" android:textStyle="bold"
+                        android:textColor="@color/text"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                    <TextView android:id="@+id/btnFilterUnread"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Unread" android:textSize="11sp" android:textColor="@color/muted"
+                        android:background="@drawable/bg_card_unselected"
+                        android:paddingHorizontal="10dp" android:paddingVertical="4dp"
+                        android:layout_marginStart="10dp"
+                        android:clickable="true" android:focusable="true"/>
+                </LinearLayout>
+                <TextView android:id="@+id/tvUnread" android:textSize="12sp" android:textColor="@color/muted"
                     android:layout_width="wrap_content" android:layout_height="wrap_content"/>
-                <!-- Unread filter toggle — right of "Messages" -->
-                <TextView android:id="@+id/btnFilterUnread"
-                    android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="Unread"
-                    android:textSize="11sp"
-                    android:textColor="@color/muted"
-                    android:background="@drawable/bg_card_unselected"
-                    android:paddingHorizontal="10dp"
-                    android:paddingVertical="4dp"
-                    android:layout_marginStart="10dp"
-                    android:clickable="true"
-                    android:focusable="true"/>
             </LinearLayout>
-            <TextView android:id="@+id/tvUnread" android:textSize="12sp" android:textColor="@color/muted"
-                android:layout_width="wrap_content" android:layout_height="wrap_content"/>
         </LinearLayout>
-    </LinearLayout>
 
-    <!-- Search bar -->
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingHorizontal="14dp" android:paddingBottom="10dp"
-        android:gravity="center_vertical">
-
-        <LinearLayout android:layout_width="match_parent" android:layout_height="44dp"
+        <!-- Search bar -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:background="@drawable/bg_search"
-            android:gravity="center_vertical"
-            android:paddingHorizontal="12dp">
-
-            <ImageView
-                android:layout_width="18dp" android:layout_height="18dp"
-                android:src="@drawable/ic_search"
-                android:layout_marginEnd="8dp"
-                android:alpha="0.5"/>
-
-            <EditText android:id="@+id/etSearch"
-                android:layout_width="0dp" android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:hint="Search messages"
-                android:textColor="@color/text"
-                android:textColorHint="@color/muted"
-                android:textSize="15sp"
-                android:background="@null"
-                android:singleLine="true"
-                android:imeOptions="actionSearch"
-                android:inputType="text"/>
-
-            <ImageView android:id="@+id/btnClear"
-                android:layout_width="18dp" android:layout_height="18dp"
-                android:src="@drawable/ic_clear"
-                android:alpha="0.5"
-                android:visibility="gone"/>
-
+            android:paddingHorizontal="14dp" android:paddingBottom="10dp"
+            android:gravity="center_vertical">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="44dp"
+                android:orientation="horizontal"
+                android:background="@drawable/bg_search"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="12dp">
+                <ImageView android:layout_width="18dp" android:layout_height="18dp"
+                    android:src="@drawable/ic_search" android:layout_marginEnd="8dp" android:alpha="0.5"/>
+                <EditText android:id="@+id/etSearch"
+                    android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+                    android:hint="Search messages" android:textColor="@color/text"
+                    android:textColorHint="@color/muted" android:textSize="15sp"
+                    android:background="@null" android:singleLine="true"
+                    android:imeOptions="actionSearch" android:inputType="text"/>
+                <ImageView android:id="@+id/btnClear"
+                    android:layout_width="18dp" android:layout_height="18dp"
+                    android:src="@drawable/ic_clear" android:alpha="0.5" android:visibility="gone"/>
+            </LinearLayout>
         </LinearLayout>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp"
+            android:background="@color/divider"/>
+
+        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+            android:id="@+id/swipe"
+            android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recycler"
+                android:layout_width="match_parent" android:layout_height="match_parent"
+                android:paddingBottom="80dp" android:clipToPadding="false"/>
+        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
     </LinearLayout>
 
-    <View android:layout_width="match_parent" android:layout_height="1dp"
-        android:background="@color/divider"/>
+    <!-- FAB — pops up from bottom right -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabNewChat"
+        android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="20dp"
+        android:src="@drawable/ic_compose"
+        android:contentDescription="New chat"
+        app:backgroundTint="@color/accent"
+        app:tint="@android:color/white"
+        app:elevation="6dp"/>
 
-    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-        android:id="@+id/swipe"
-        android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recycler"
-            android:layout_width="match_parent" android:layout_height="match_parent"/>
-    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
-
-</LinearLayout>
+</FrameLayout>
