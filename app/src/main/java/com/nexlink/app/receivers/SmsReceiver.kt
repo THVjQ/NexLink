@@ -233,7 +233,19 @@ class MmsSentReceiver : BroadcastReceiver() {
         android.util.Log.d("NexLink_MMS",
             "MmsSentReceiver: httpOk=$isOk mmscStatus=$statusDesc(${status?.let{"0x%02X".format(it)}}) pdu=$hex")
 
-        if (status != null && status != 0x80) {
+        val outboxId = intent.getLongExtra("outbox_id", -1L)
+        if (status == 0x80 && outboxId > 0) {
+            // Flip outbox row → sent so the UI dedupes the optimistic bubble
+            try {
+                val uri = android.content.ContentUris.withAppendedId(
+                    android.provider.Telephony.Mms.CONTENT_URI, outboxId)
+                ctx.contentResolver.update(uri,
+                    android.content.ContentValues().apply {
+                        put(android.provider.Telephony.Mms.MESSAGE_BOX,
+                            android.provider.Telephony.Mms.MESSAGE_BOX_SENT)
+                    }, null, null)
+            } catch (_: Exception) {}
+        } else if (status != null && status != 0x80) {
             android.util.Log.e("NexLink_MMS", "MMSC REJECTED: $statusDesc — see pdu bytes above for full response")
         }
     }

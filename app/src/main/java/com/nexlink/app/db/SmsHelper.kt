@@ -501,11 +501,14 @@ object SmsHelper {
         }
         android.util.Log.d("NexLink_MMS", "sendViaMms: recipients=$recipients txId=$txId pdu=${pduBytes.size}B subId=$subId")
 
-        // Insert outbox row for UI thread tracking
-        val outboxUri = runCatching { insertToOutbox(ctx, recipients, parts, txId) }.getOrNull()
-        android.util.Log.d("NexLink_MMS", "sendViaMms: outbox row=$outboxUri")
+        val threadId = runCatching {
+            Telephony.Threads.getOrCreateThreadId(ctx, recipients.toSet())
+        }.getOrDefault(0L)
 
-        // Serve PDU via MmsFileProvider → sendMultimediaMessage → Samsung posts to MMSC
+        val outboxUri = runCatching { insertToOutbox(ctx, recipients, parts, txId, threadId) }.getOrNull()
+        val outboxId  = outboxUri?.lastPathSegment?.toLongOrNull() ?: -1L
+        android.util.Log.d("NexLink_MMS", "sendViaMms: outbox row=$outboxUri threadId=$threadId")
+
         val contentUri = MmsFileProvider.writePdu(ctx, pduBytes)
         android.util.Log.d("NexLink_MMS", "sendViaMms: pdu uri=$contentUri")
 
@@ -515,20 +518,22 @@ object SmsHelper {
             putInt(android.telephony.SmsManager.MMS_CONFIG_MAX_MESSAGE_SIZE, 1_200_000)
         }
         getSmsManager(subId).sendMultimediaMessage(
-            ctx.applicationContext, contentUri, null, configOverrides, makeSentIntent(ctx))
+            ctx.applicationContext, contentUri, null, configOverrides, makeSentIntent(ctx, outboxId))
         android.os.Handler(android.os.Looper.getMainLooper())
             .postDelayed({ java.io.File(ctx.cacheDir, contentUri.lastPathSegment ?: "").delete() }, 180_000L)
     }
 
     private fun insertToOutbox(ctx: Context, recipients: List<String>,
-                               parts: List<MmsPduBuilder.Part>, txId: String): Uri {
+                               parts: List<MmsPduBuilder.Part>, txId: String,
+                               threadId: Long = 0L): Uri {
         val mmsUri = ctx.contentResolver.insert(Telephony.Mms.CONTENT_URI, ContentValues().apply {
             put(Telephony.Mms.MESSAGE_TYPE,  128)   // M-Send.req = 0x80
             put(Telephony.Mms.MESSAGE_BOX,   Telephony.Mms.MESSAGE_BOX_OUTBOX)
             put(Telephony.Mms.CONTENT_TYPE,  "application/vnd.wap.multipart.related")
             put(Telephony.Mms.DATE,          System.currentTimeMillis() / 1000L)
             put(Telephony.Mms.READ,          1)
-            put("tr_id",                     txId)  // Telephony.Mms.TRANSACTION_ID
+            put("tr_id",                     txId)
+            if (threadId > 0) put(Telephony.Mms.THREAD_ID, threadId)
         }) ?: throw Exception("insertToOutbox: insert failed")
 
         val id      = android.content.ContentUris.parseId(mmsUri)
@@ -575,10 +580,12 @@ object SmsHelper {
         if (subId >= 0) android.telephony.SmsManager.getSmsManagerForSubscriptionId(subId)
         else android.telephony.SmsManager.getDefault()
 
-    private fun makeSentIntent(ctx: Context) = android.app.PendingIntent.getBroadcast(
+    private fun makeSentIntent(ctx: Context, outboxId: Long = -1L) = android.app.PendingIntent.getBroadcast(
         ctx.applicationContext,
         (System.currentTimeMillis() % Int.MAX_VALUE).toInt(),
-        android.content.Intent("${ctx.packageName}.MMS_SENT").setPackage(ctx.packageName),
+        android.content.Intent("${ctx.packageName}.MMS_SENT")
+            .setPackage(ctx.packageName)
+            .putExtra("outbox_id", outboxId),
         android.app.PendingIntent.FLAG_MUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
     )
 
