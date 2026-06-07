@@ -3,6 +3,12 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace 'com.nexlink.app'
     compileSdk 34
@@ -15,8 +21,18 @@ android {
         versionName "1.1.0"
     }
 
+    signingConfigs {
+        release {
+            storeFile     file(keystoreProperties['storeFile'] ?: 'nexlink-release.jks')
+            storePassword keystoreProperties['storePassword']
+            keyAlias      keystoreProperties['keyAlias']      ?: 'nexlink'
+            keyPassword   keystoreProperties['keyPassword']
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
