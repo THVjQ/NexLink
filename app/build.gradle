@@ -14,7 +14,7 @@ android {
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.nexlink.app"
+        applicationId "com.thvjq.nexlink"
         minSdk 26
         targetSdk 34
         versionCode 2
