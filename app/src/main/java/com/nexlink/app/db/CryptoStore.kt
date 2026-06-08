@@ -76,15 +76,28 @@ object CryptoStore {
 
     // ── Wire format ───────────────────────────────────────────────────────────
 
-    fun buildKeyExchange(pubKeyBytes: ByteArray) = "[NXKEY1:${b64enc(pubKeyBytes)}]"
+    private val KEY_EXCHANGE_PREAMBLE = """
+This message was sent automatically by NexLink to establish an end-to-end encrypted session for this conversation.
+
+• If you have NexLink installed, all future messages will be encrypted automatically — no action is required on your part.
+• If you do not use NexLink, please disregard this message entirely.
+
+NexLink is a private, open-source messaging app. Learn more at nexlink.app.
+""".trimIndent()
+
+    fun buildKeyExchange(pubKeyBytes: ByteArray) =
+        "$KEY_EXCHANGE_PREAMBLE\n[NXKEY1:${b64enc(pubKeyBytes)}]"
 
     fun parseKeyExchange(msg: String): ByteArray? {
         if (!isKeyExchange(msg)) return null
-        return try { b64dec(msg.removePrefix("[NXKEY1:").removeSuffix("]")) }
+        val start = msg.indexOf("[NXKEY1:")
+        val end   = msg.indexOf("]", start + 8)
+        if (start < 0 || end < 0) return null
+        return try { b64dec(msg.substring(start + 8, end)) }
         catch (_: Exception) { null }
     }
 
-    fun isKeyExchange(msg: String) = msg.startsWith("[NXKEY1:") && msg.endsWith("]")
+    fun isKeyExchange(msg: String) = msg.contains("[NXKEY1:")
     fun isEncrypted(msg: String)   = msg.startsWith("[NXMSG1:") && msg.endsWith("]")
 
     // ── Encrypt / Decrypt ─────────────────────────────────────────────────────
