@@ -33,6 +33,27 @@ class SettingsFragment : Fragment() {
                 data = Uri.fromParts("package", requireContext().packageName, null)
             })
         }
+        b.btnReportBug.setOnClickListener {
+            val body = buildString {
+                appendLine("Bug Report — NexLink")
+                appendLine("====================")
+                appendLine("Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+                appendLine("Android: ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})")
+                appendLine()
+                appendLine("Describe the bug:")
+                appendLine()
+                appendLine("Steps to reproduce:")
+                appendLine()
+                appendLine("Expected behaviour:")
+            }
+            val intent = Intent(Intent.ACTION_SENDTO).apply {
+                data = Uri.parse("mailto:")
+                putExtra(Intent.EXTRA_EMAIL, arrayOf("google.alumni829@passmail.net"))
+                putExtra(Intent.EXTRA_SUBJECT, "NexLink Bug Report")
+                putExtra(Intent.EXTRA_TEXT, body)
+            }
+            startActivity(intent)
+        }
 
         val ctx = requireContext()
 

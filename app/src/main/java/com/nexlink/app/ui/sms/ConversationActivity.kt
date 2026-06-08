@@ -6,6 +6,7 @@ import android.database.ContentObserver
 import android.graphics.Color
 import android.graphics.PorterDuff
 import android.media.MediaRecorder
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -28,9 +29,11 @@ import com.nexlink.app.R
 import com.nexlink.app.databinding.ActivityConversationBinding
 import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.ReadTracker
+import com.nexlink.app.db.SentMmsStore
 import com.nexlink.app.db.SimInfo
 import com.nexlink.app.db.SmsHelper
 import com.nexlink.app.db.SmsMessage
+import com.nexlink.app.receivers.SmsNotifier
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -53,9 +56,20 @@ class ConversationActivity : AppCompatActivity() {
     private var cameraUri: android.net.Uri? = null
 
     private val loading = AtomicBoolean(false)
+    private val debounceHandler = Handler(Looper.getMainLooper())
+    private val debounceLoad = Runnable { loadMessages() }
+
+    // Debounced: rapid-fire DB notifications (e.g. during a batch insert) collapse to one reload
+    private fun scheduleLoad() {
+        debounceHandler.removeCallbacks(debounceLoad)
+        debounceHandler.postDelayed(debounceLoad, 150)
+    }
 
     private val smsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
-        override fun onChange(selfChange: Boolean) { loadMessages() }
+        override fun onChange(selfChange: Boolean) { scheduleLoad() }
+    }
+    private val mmsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) { scheduleLoad() }
     }
 
     // ── Launchers ─────────────────────────────────────────────────────────────
@@ -172,17 +186,20 @@ class ConversationActivity : AppCompatActivity() {
             SmsHelper.markRead(this, address)
         }
         ReadTracker.markRead(this, address)
+        SmsNotifier.clearPending(this, address)
     }
 
     override fun onResume() {
         super.onResume()
         contentResolver.registerContentObserver(Telephony.Sms.CONTENT_URI, true, smsObserver)
+        contentResolver.registerContentObserver(android.net.Uri.parse("content://mms"), true, mmsObserver)
         loadMessages()
     }
 
     override fun onPause() {
         super.onPause()
         contentResolver.unregisterContentObserver(smsObserver)
+        contentResolver.unregisterContentObserver(mmsObserver)
         cancelRecording()
     }
 
@@ -196,6 +213,18 @@ class ConversationActivity : AppCompatActivity() {
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        if (item.itemId == R.id.action_call) {
+            if (address.isBlank()) return true
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
+                == PackageManager.PERMISSION_GRANTED) {
+                startActivity(android.content.Intent(android.content.Intent.ACTION_CALL,
+                    Uri.parse("tel:$address")))
+            } else {
+                ActivityCompat.requestPermissions(this,
+                    arrayOf(Manifest.permission.CALL_PHONE), 200)
+            }
+            return true
+        }
         if (item.itemId == R.id.action_delete_conversation) {
             AlertDialog.Builder(this)
                 .setTitle("Delete conversation")
@@ -313,8 +342,30 @@ class ConversationActivity : AppCompatActivity() {
     private fun sendAttachment(uri: android.net.Uri, mimeType: String) {
         if (address.isEmpty()) return
         if (!requireDefaultSmsApp()) return
+
+        // Add an optimistic outgoing bubble immediately — visible before content://mms updates
+        val optimisticMsg = SmsMessage(
+            id          = -(System.currentTimeMillis()),
+            threadId    = threadId,
+            address     = address,
+            body        = when {
+                mimeType.startsWith("audio/") -> "🎤 Voice message"
+                mimeType.startsWith("video/") -> "🎬 Video"
+                else                          -> ""
+            },
+            timestamp   = System.currentTimeMillis(),
+            isIncoming  = false,
+            isMms       = true,
+            isVoice     = mimeType.startsWith("audio/"),
+            mediaUri    = uri.toString(),
+            mimeType    = if (mimeType.startsWith("image/")) "image/jpeg" else mimeType
+        )
+        adapter.addOptimistic(optimisticMsg)
+        b.recycler.scrollToPosition(adapter.itemCount - 1)
+
         Thread {
             try {
+                SentMmsStore.save(this, optimisticMsg)
                 SmsHelper.sendMediaMms(this, address, uri, mimeType, selectedSimId,
                     extraRecipients = if (isGroup) participants.drop(1) else emptyList())
                 runOnUiThread { loadMessages() }
@@ -403,15 +454,34 @@ class ConversationActivity : AppCompatActivity() {
         audioFile = null
         if (!file.exists() || file.length() < 500) { file.delete(); return }
         if (!requireDefaultSmsApp()) { file.delete(); return }
+
+        // Optimistic bubble — show immediately; keep file so play button works
+        val audioUri = android.net.Uri.fromFile(file)
+        val optimisticVoice = com.nexlink.app.db.SmsMessage(
+            id         = -System.currentTimeMillis(),
+            address    = address,
+            body       = "🎤 Voice message",
+            timestamp  = System.currentTimeMillis(),
+            isIncoming = false,
+            isMms      = true,
+            isVoice    = true,
+            mediaUri   = audioUri.toString(),
+            mimeType   = "audio/amr"
+        )
+        adapter.addOptimistic(optimisticVoice)
+        b.recycler.scrollToPosition(adapter.itemCount - 1)
+
         Thread {
             try {
+                SentMmsStore.save(this, optimisticVoice)
                 SmsHelper.sendVoiceMms(this, address, file, selectedSimId)
-                file.delete()
+                // Keep file in cache so the optimistic play button still works;
+                // OS will evict it when cache needs space
                 runOnUiThread { loadMessages() }
             } catch (e: SecurityException) {
                 file.delete()
                 runOnUiThread { Toast.makeText(this,
-                    "Voice messages require NexLink as the default SMS app. Go to Settings → Apps → Default apps.",
+                    "Voice messages require NexLink as the default SMS app.",
                     Toast.LENGTH_LONG).show() }
             } catch (e: Exception) {
                 file.delete()

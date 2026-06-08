@@ -1,21 +1,26 @@
 package com.nexlink.app.ui.sms
 
+import android.app.Dialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.media.MediaPlayer
 import android.net.Uri
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.Window
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.nexlink.app.R
+import com.nexlink.app.db.AudioTranscriber
 import com.nexlink.app.db.SmsMessage
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -35,9 +40,57 @@ class BubbleAdapter(
 
     private var rows = listOf<Row>()
 
+    // Outgoing MMS sent optimistically before content://mms is updated by the system.
+    // Cleared when a real DB message appears within 10 seconds of the optimistic timestamp.
+    private val optimistic = mutableListOf<SmsMessage>()
+
+    /** Add an outgoing MMS immediately after dispatch so the user sees it as a bubble. */
+    fun addOptimistic(msg: SmsMessage) {
+        optimistic.add(msg)
+        applyDiff(buildRows(mergeOptimistic(rows.filterIsInstance<Row.Msg>().map { it.msg })))
+    }
+
     fun setData(msgs: List<SmsMessage>) {
-        rows = buildRows(msgs)
-        notifyDataSetChanged()
+        // Drop optimistic entries whose real DB counterpart has appeared (same mime, outgoing, ±30 s)
+        optimistic.removeAll { opt ->
+            msgs.any { real ->
+                !real.isIncoming && real.isMms &&
+                real.mimeType == opt.mimeType &&
+                kotlin.math.abs(real.timestamp - opt.timestamp) < 30_000L
+            }
+        }
+        applyDiff(buildRows(mergeOptimistic(msgs)))
+    }
+
+    private fun applyDiff(newRows: List<Row>) {
+        val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize() = rows.size
+            override fun getNewListSize() = newRows.size
+            override fun areItemsTheSame(o: Int, n: Int): Boolean {
+                val a = rows[o]; val b = newRows[n]
+                return when {
+                    a is Row.DateSep && b is Row.DateSep -> a.label == b.label
+                    a is Row.Msg     && b is Row.Msg     -> a.msg.id == b.msg.id
+                    else -> false
+                }
+            }
+            override fun areContentsTheSame(o: Int, n: Int): Boolean {
+                val a = rows[o]; val b = newRows[n]
+                return when {
+                    a is Row.DateSep && b is Row.DateSep -> a == b
+                    a is Row.Msg     && b is Row.Msg     ->
+                        a.msg.body == b.msg.body && a.msg.mediaUri == b.msg.mediaUri
+                    else -> false
+                }
+            }
+        })
+        rows = newRows
+        diff.dispatchUpdatesTo(this)
+    }
+
+    private fun mergeOptimistic(msgs: List<SmsMessage>): List<SmsMessage> {
+        if (optimistic.isEmpty()) return msgs
+        return (msgs + optimistic).sortedBy { it.timestamp }
     }
 
     private fun buildRows(msgs: List<SmsMessage>): List<Row> {
@@ -105,16 +158,20 @@ class BubbleAdapter(
     }
 
     inner class MsgVH(v: View) : RecyclerView.ViewHolder(v) {
-        val bubble:  TextView     = v.findViewById(R.id.tvBubble)
-        val time:    TextView     = v.findViewById(R.id.tvTime)
-        val sender:  TextView?    = v.findViewById(R.id.tvSenderName)
-        val btnPlay: ImageButton? = v.findViewById<View>(R.id.btnPlay) as? ImageButton
+        val bubble:       TextView     = v.findViewById(R.id.tvBubble)
+        val time:         TextView     = v.findViewById(R.id.tvTime)
+        val sender:       TextView?    = v.findViewById(R.id.tvSenderName)
+        val btnPlay:      ImageButton? = v.findViewById<View>(R.id.btnPlay) as? ImageButton
+        val status:       ImageView?   = v.findViewById(R.id.ivStatus)
+        val btnTranscript: TextView?   = v.findViewById(R.id.btnTranscript)
+        val tvTranscript:  TextView?   = v.findViewById(R.id.tvTranscript)
     }
 
     inner class ImageVH(v: View) : RecyclerView.ViewHolder(v) {
-        val image:  ImageView = v.findViewById(R.id.ivBubble)
-        val time:   TextView  = v.findViewById(R.id.tvTime)
-        val sender: TextView? = v.findViewById(R.id.tvSenderName)
+        val image:  ImageView  = v.findViewById(R.id.ivBubble)
+        val time:   TextView   = v.findViewById(R.id.tvTime)
+        val sender: TextView?  = v.findViewById(R.id.tvSenderName)
+        val status: ImageView? = v.findViewById(R.id.ivStatus)
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, pos: Int) {
@@ -138,12 +195,48 @@ class BubbleAdapter(
         }
     }
 
+    private fun bindStatus(iv: ImageView?, m: SmsMessage) {
+        if (iv == null || m.isIncoming) { iv?.visibility = View.GONE; return }
+        iv.visibility = View.VISIBLE
+        val (drawable, tint) = when {
+            m.id < 0 -> Pair(R.drawable.ic_status_pending,   0x80FFFFFF.toInt())  // clock, dim white
+            else     -> Pair(R.drawable.ic_status_sent,      0xAAFFFFFF.toInt())  // single tick, white
+        }
+        iv.setImageResource(drawable)
+        iv.imageTintList = ColorStateList.valueOf(tint)
+    }
+
     private fun bindMsg(h: MsgVH, m: SmsMessage) {
         h.bubble.text = m.body
         h.time.text   = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(m.timestamp))
         bindSender(h.sender, m)
+        bindStatus(h.status, m)
         if (m.isVoice && m.mediaUri != null) {
             h.btnPlay?.setOnClickListener { btn -> playAudio(btn.context, m.mediaUri) }
+            h.tvTranscript?.visibility = View.GONE
+            h.btnTranscript?.let { btn ->
+                btn.visibility = View.VISIBLE
+                btn.text = if (m.isIncoming) " · Transcript" else "Transcript · "
+                btn.isClickable = true
+                btn.setOnClickListener { v ->
+                    btn.text = if (m.isIncoming) " · …" else "… · "
+                    btn.isClickable = false
+                    AudioTranscriber.transcribe(v.context, m.mediaUri) { result ->
+                        if (result != null) {
+                            btn.visibility = View.GONE
+                            h.tvTranscript?.text = "“$result”"
+                            h.tvTranscript?.visibility = View.VISIBLE
+                        } else {
+                            btn.text = if (m.isIncoming) " · Transcript" else "Transcript · "
+                            btn.isClickable = true
+                            Toast.makeText(v.context, "Speech recognition unavailable on this device", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+        } else {
+            h.btnTranscript?.visibility = View.GONE
+            h.tvTranscript?.visibility = View.GONE
         }
         h.itemView.setOnLongClickListener { showMenu(it.context, m); true }
     }
@@ -151,17 +244,31 @@ class BubbleAdapter(
     private fun bindImage(h: ImageVH, m: SmsMessage) {
         h.time.text = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(m.timestamp))
         bindSender(h.sender, m)
+        bindStatus(h.status, m)
         val isVideo = m.mimeType?.startsWith("video/") == true
         if (isVideo) {
             h.image.setImageResource(android.R.drawable.ic_media_play)
+            // Videos open in system player (can't play inline easily)
+            h.image.setOnClickListener { openMedia(it.context, m.mediaUri, m.mimeType) }
         } else {
-            m.mediaUri?.let { uri ->
-                try { h.image.setImageURI(Uri.parse(uri)) }
-                catch (_: Exception) { h.image.setImageResource(android.R.drawable.ic_menu_gallery) }
+            m.mediaUri?.let { uri -> loadImageAsync(h.image, uri) }
+            h.image.setOnClickListener { ctx ->
+                m.mediaUri?.let { showFullscreen(ctx.context, Uri.parse(it)) }
             }
         }
-        h.image.setOnClickListener { openMedia(it.context, m.mediaUri, m.mimeType) }
         h.itemView.setOnLongClickListener { showMenu(it.context, m); true }
+    }
+
+    private fun showFullscreen(ctx: Context, uri: Uri) {
+        val dialog = Dialog(ctx, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        val iv = ImageView(ctx).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            try { setImageURI(uri) } catch (_: Exception) { setImageResource(android.R.drawable.ic_menu_gallery) }
+            setOnClickListener { dialog.dismiss() }
+        }
+        dialog.setContentView(iv)
+        dialog.show()
     }
 
     private fun showMenu(ctx: Context, m: SmsMessage) {
@@ -188,6 +295,19 @@ class BubbleAdapter(
                 }
             }
             .show()
+    }
+
+    private fun loadImageAsync(iv: ImageView, uriStr: String) {
+        iv.setImageResource(android.R.drawable.ic_menu_gallery)
+        val uri = Uri.parse(uriStr)
+        Thread {
+            try {
+                val bmp = iv.context.contentResolver.openInputStream(uri)?.use {
+                    android.graphics.BitmapFactory.decodeStream(it)
+                }
+                iv.post { if (bmp != null) iv.setImageBitmap(bmp) }
+            } catch (_: Exception) {}
+        }.start()
     }
 
     private fun openMedia(ctx: Context, uri: String?, mimeType: String?) {

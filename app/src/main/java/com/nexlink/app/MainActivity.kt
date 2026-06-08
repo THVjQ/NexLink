@@ -50,7 +50,7 @@ class MainActivity : AppCompatActivity() {
         promptDefaultSmsApp()
         promptNotificationAccess()
 
-        loadFragment(inboxFragment)
+        loadFragment(smsFragment)
 
         binding.bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
@@ -62,7 +62,7 @@ class MainActivity : AppCompatActivity() {
                 else -> false
             }
         }
-        binding.bottomNav.selectedItemId = R.id.nav_inbox
+        binding.bottomNav.selectedItemId = R.id.nav_sms
     }
 
     private fun loadFragment(f: Fragment) {

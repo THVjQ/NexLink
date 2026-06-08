@@ -163,9 +163,14 @@ object SmsHelper {
                else (getSmsMessages(ctx, address) + getMmsMediaMessages(ctx, address)).sortedBy { it.timestamp }
     }
 
-    fun getMessagesByThread(ctx: Context, threadId: Long, primaryAddress: String): List<SmsMessage> =
-        (getSmsMessagesByThread(ctx, threadId) + getMmsMessagesByThread(ctx, threadId, primaryAddress))
+    fun getMessagesByThread(ctx: Context, threadId: Long, primaryAddress: String): List<SmsMessage> {
+        val fromDb = (getSmsMessagesByThread(ctx, threadId) + getMmsMessagesByThread(ctx, threadId, primaryAddress))
             .sortedBy { it.timestamp }
+        // Remove locally-stored sent entries that now appear in the real DB (Samsung wrote them back)
+        SentMmsStore.dedup(ctx, primaryAddress, fromDb)
+        val localSent = SentMmsStore.loadForAddress(ctx, primaryAddress)
+        return (fromDb + localSent).sortedBy { it.timestamp }
+    }
 
     private fun getSmsMessagesByThread(ctx: Context, threadId: Long): List<SmsMessage> {
         val list = mutableListOf<SmsMessage>()
@@ -193,38 +198,94 @@ object SmsHelper {
     private fun getMmsMessagesByThread(ctx: Context, threadId: Long, primaryAddress: String): List<SmsMessage> {
         val result = mutableListOf<SmsMessage>()
         try {
-            val proj = arrayOf(Telephony.Mms._ID, Telephony.Mms.DATE, Telephony.Mms.MESSAGE_BOX)
-            ctx.contentResolver.query(Telephony.Mms.CONTENT_URI, proj,
+            // Step 1: fetch all MMS rows in this thread (1 query)
+            data class MmsRow(val id: Long, val date: Long, val msgBox: Int)
+            val rows = mutableListOf<MmsRow>()
+            ctx.contentResolver.query(Telephony.Mms.CONTENT_URI,
+                arrayOf(Telephony.Mms._ID, Telephony.Mms.DATE, Telephony.Mms.MESSAGE_BOX),
                 "${Telephony.Mms.THREAD_ID} = ?", arrayOf(threadId.toString()),
                 "${Telephony.Mms.DATE} ASC")?.use { c ->
+                while (c.moveToNext())
+                    rows += MmsRow(c.getLong(0), c.getLong(1) * 1000L, c.getInt(2))
+            }
+            if (rows.isEmpty()) return result
+
+            val ids  = rows.map { it.id }
+            val idPh = ids.joinToString(",") { "?" }
+            val idArgs = ids.map { it.toString() }.toTypedArray()
+
+            // Step 2: batch-fetch all parts (1 query instead of N)
+            val mediaPartMap = mutableMapOf<Long, MmsPart>()
+            val textPartMap  = mutableMapOf<Long, MmsPart>()
+            ctx.contentResolver.query(
+                Uri.parse("content://mms/part"),
+                arrayOf("mid", Telephony.Mms.Part._ID, Telephony.Mms.Part.CONTENT_TYPE,
+                        Telephony.Mms.Part.NAME, "text"),
+                "mid IN ($idPh)", idArgs, null)?.use { c ->
                 while (c.moveToNext()) {
-                    val mmsId = c.getLong(0)
-                    val date  = c.getLong(1) * 1000L
-                    val isIn  = c.getInt(2) == Telephony.Mms.MESSAGE_BOX_INBOX
-                    val part  = getMmsFirstMediaPart(ctx, mmsId) ?: continue
-                    val isVoice = part.mimeType.startsWith("audio/")
-                    val body = when {
-                        part.mimeType == "text/plain"           -> part.textBody ?: ""
-                        isVoice                                  -> "🎤 Voice message"
-                        part.mimeType.startsWith("image/")      -> ""
-                        part.mimeType.startsWith("video/")      -> "🎬 Video"
-                        else                                     -> "📎 ${part.name ?: "File"}"
+                    val mid = c.getLong(0); val ct = c.getString(2) ?: continue
+                    if (ct == "application/smil") continue
+                    val partUri = "content://mms/part/${c.getLong(1)}"
+                    if (ct.startsWith("text/")) {
+                        if (!textPartMap.containsKey(mid))
+                            textPartMap[mid] = MmsPart(partUri, ct, c.getString(3), c.getString(4) ?: "")
+                    } else if (!mediaPartMap.containsKey(mid)) {
+                        mediaPartMap[mid] = MmsPart(partUri, ct, c.getString(3))
                     }
-                    val senderAddr = if (isIn) getMmsSenderAddress(ctx, mmsId) else null
-                    result += SmsMessage(
-                        id         = mmsId,
-                        threadId   = threadId,
-                        address    = senderAddr ?: primaryAddress,
-                        body       = body,
-                        timestamp  = date,
-                        isIncoming = isIn,
-                        senderName = senderAddr?.let { getContactName(ctx, it) },
-                        isMms      = true,
-                        isVoice    = isVoice,
-                        mediaUri   = if (part.mimeType == "text/plain") null else part.uri,
-                        mimeType   = if (part.mimeType == "text/plain") null else part.mimeType
-                    )
                 }
+            }
+
+            // Step 3: batch-fetch sender addresses for incoming messages (1 query instead of N)
+            val senderMap = mutableMapOf<Long, String>()
+            val inIds = ids.filter { id -> rows.first { it.id == id }.msgBox == Telephony.Mms.MESSAGE_BOX_INBOX }
+            if (inIds.isNotEmpty()) {
+                val inPh   = inIds.joinToString(",") { "?" }
+                val inArgs = inIds.map { it.toString() }.toTypedArray()
+                try {
+                    ctx.contentResolver.query(
+                        Uri.parse("content://mms/addr"),
+                        arrayOf("msg_id", "address"),
+                        "msg_id IN ($inPh) AND type = 137", inArgs, null)?.use { c ->
+                        while (c.moveToNext()) {
+                            val addr = c.getString(1)
+                            if (!addr.isNullOrBlank() && addr != "insert-address-token")
+                                senderMap.putIfAbsent(c.getLong(0), addr)
+                        }
+                    }
+                } catch (_: Exception) {
+                    // Fallback: per-row query if batch addr query unsupported
+                    for (id in inIds) {
+                        getMmsSenderAddress(ctx, id)?.let { senderMap[id] = it }
+                    }
+                }
+            }
+
+            // Step 4: assemble results
+            for (row in rows) {
+                val part = mediaPartMap[row.id] ?: textPartMap[row.id] ?: continue
+                val isIn    = row.msgBox == Telephony.Mms.MESSAGE_BOX_INBOX
+                val isVoice = part.mimeType.startsWith("audio/")
+                val body = when {
+                    part.mimeType == "text/plain"          -> part.textBody ?: ""
+                    isVoice                                -> "🎤 Voice message"
+                    part.mimeType.startsWith("image/")     -> ""
+                    part.mimeType.startsWith("video/")     -> "🎬 Video"
+                    else                                   -> "📎 ${part.name ?: "File"}"
+                }
+                val senderAddr = if (isIn) senderMap[row.id] else null
+                result += SmsMessage(
+                    id         = row.id,
+                    threadId   = threadId,
+                    address    = senderAddr ?: primaryAddress,
+                    body       = body,
+                    timestamp  = row.date,
+                    isIncoming = isIn,
+                    senderName = senderAddr?.let { getContactName(ctx, it) },
+                    isMms      = true,
+                    isVoice    = isVoice,
+                    mediaUri   = if (part.mimeType == "text/plain") null else part.uri,
+                    mimeType   = if (part.mimeType == "text/plain") null else part.mimeType
+                )
             }
         } catch (_: Exception) {}
         return result
@@ -368,91 +429,167 @@ object SmsHelper {
 
     fun sendGroupText(ctx: Context, threadId: Long, participants: List<String>, text: String, subId: Int = -1): Long {
         val tid = if (threadId > 0) threadId
-                  else runCatching { Telephony.Threads.getOrCreateThreadId(ctx, participants.toSet()) }.getOrDefault(0L)
-        val mmsUri = createMmsRecord(ctx, tid, "application/vnd.wap.multipart.mixed", subId)
-        val mmsId  = mmsUri.lastPathSegment ?: throw Exception("Invalid MMS URI")
-        participants.forEach { addr -> insertMmsAddr(ctx, mmsId, addr) }
-        val partUri = ctx.contentResolver.insert(Uri.parse("content://mms/$mmsId/part"),
-            ContentValues().apply {
-                put("mid", mmsId); put("ct", "text/plain"); put("cid", "<text>"); put("cl", "text.txt")
-            }) ?: throw Exception("Failed to create MMS text part")
-        ctx.contentResolver.openOutputStream(partUri)?.use { it.write(text.toByteArray(Charsets.UTF_8)) }
-        sendMms(ctx, mmsUri, subId)
+                  else try { Telephony.Threads.getOrCreateThreadId(ctx, participants.toSet()) }
+                       catch (e: Exception) { throw Exception("Cannot resolve thread: ${e.message}") }
+        val parts = listOf(MmsPduBuilder.Part("text/plain", text.toByteArray(Charsets.UTF_8)))
+        sendViaMms(ctx, participants, parts, subId)
         return tid
     }
 
     fun sendVoiceMms(ctx: Context, to: String, audioFile: java.io.File, subId: Int = -1) {
-        val threadId = runCatching { Telephony.Threads.getOrCreateThreadId(ctx, setOf(to)) }.getOrDefault(0L)
-        val mmsUri   = createMmsRecord(ctx, threadId, "application/vnd.wap.multipart.related", subId)
-        val mmsId    = mmsUri.lastPathSegment ?: throw Exception("Invalid MMS URI")
-        insertMmsAddr(ctx, mmsId, to)
-        val smil = "<smil><head><layout><root-layout/></layout></head><body><par dur=\"10000ms\"><audio src=\"audio.amr\"/></par></body></smil>"
-        insertSmilPart(ctx, mmsId, smil)
-        val partUri = ctx.contentResolver.insert(Uri.parse("content://mms/$mmsId/part"),
-            ContentValues().apply {
-                put("mid", mmsId); put("ct", "audio/amr"); put("name", "audio.amr"); put("cid", "<audio>")
-            }) ?: throw Exception("Failed to create MMS audio part")
-        ctx.contentResolver.openOutputStream(partUri)?.use { audioFile.inputStream().copyTo(it) }
-        sendMms(ctx, mmsUri, subId)
+        val parts = listOf(MmsPduBuilder.Part("audio/amr", audioFile.readBytes()))
+        sendViaMms(ctx, listOf(to), parts, subId)
     }
 
     fun sendMediaMms(ctx: Context, to: String, mediaUri: android.net.Uri, mimeType: String,
                      subId: Int = -1, extraRecipients: List<String> = emptyList()) {
-        val allRecipients = (listOf(to) + extraRecipients).toSet()
-        val threadId = runCatching { Telephony.Threads.getOrCreateThreadId(ctx, allRecipients) }.getOrDefault(0L)
-        val smilTag  = when { mimeType.startsWith("image/") -> "img"; mimeType.startsWith("video/") -> "video"; mimeType.startsWith("audio/") -> "audio"; else -> null }
-        val msgCt    = if (smilTag != null) "application/vnd.wap.multipart.related" else "application/vnd.wap.multipart.mixed"
-        val mmsUri2  = createMmsRecord(ctx, threadId, msgCt, subId)
-        val mmsId    = mmsUri2.lastPathSegment ?: throw Exception("Invalid MMS URI")
-        allRecipients.forEach { addr -> insertMmsAddr(ctx, mmsId, addr) }
-        val fileName = "media.${mimeType.substringAfter("/").take(8)}"
-        if (smilTag != null) {
-            val smil = "<smil><head><layout><root-layout/></layout></head><body><par dur=\"10000ms\"><$smilTag src=\"$fileName\"/></par></body></smil>"
-            insertSmilPart(ctx, mmsId, smil)
-        }
-        val partUri = ctx.contentResolver.insert(Uri.parse("content://mms/$mmsId/part"),
-            ContentValues().apply {
-                put("mid", mmsId); put("ct", mimeType); put("name", fileName); put("cid", "<media>")
-            }) ?: throw Exception("Failed to create MMS media part")
-        val inputStream = ctx.contentResolver.openInputStream(mediaUri)
-            ?: throw Exception("Cannot read selected media file")
-        inputStream.use { i ->
-            ctx.contentResolver.openOutputStream(partUri)?.use { o -> i.copyTo(o) }
-        }
-        sendMms(ctx, mmsUri2, subId)
+        val recipients = (listOf(to) + extraRecipients).distinct()
+        val (data, effectiveMime) = compressForMms(ctx, mediaUri, mimeType)
+        android.util.Log.d("NexLink_MMS", "sendMediaMms: to=$to mime=$effectiveMime bytes=${data.size}")
+        val parts = listOf(MmsPduBuilder.Part(effectiveMime, data))
+        sendViaMms(ctx, recipients, parts, subId)
     }
 
-    private fun createMmsRecord(ctx: Context, threadId: Long, contentType: String, subId: Int): Uri {
-        val values = ContentValues().apply {
-            put("thread_id", threadId); put("date", System.currentTimeMillis() / 1000)
-            put("msg_box", 4); put("m_type", 128); put("v", 18); put("ct", contentType)
-            put("read", 1); put("seen", 1)
-            if (subId >= 0) put("sub_id", subId)
-        }
-        // SecurityException propagates if NexLink is not the default SMS app
-        return ctx.contentResolver.insert(Uri.parse("content://mms"), values)
-            ?: throw Exception("Failed to create MMS record — check MMS/APN settings and that NexLink is the default SMS app")
-    }
+    /**
+     * Compresses images to ≤ 500 KB for MMS. Non-image types are returned as-is
+     * (audio/AMR from the voice recorder is already small; video is passed through).
+     * Returns the compressed bytes and the effective MIME type (always image/jpeg for images).
+     */
+    private fun compressForMms(ctx: Context, mediaUri: android.net.Uri, mimeType: String): Pair<ByteArray, String> {
+        val raw = ctx.contentResolver.openInputStream(mediaUri)?.use { it.readBytes() }
+            ?: throw Exception("Cannot read media file")
 
-    private fun insertMmsAddr(ctx: Context, mmsId: String, address: String) {
-        ctx.contentResolver.insert(Uri.parse("content://mms/$mmsId/addr"),
-            ContentValues().apply { put("address", address); put("type", 151); put("charset", 106) })
-    }
+        if (!mimeType.startsWith("image/")) return Pair(raw, mimeType)
 
-    private fun insertSmilPart(ctx: Context, mmsId: String, smil: String) {
-        val uri = ctx.contentResolver.insert(Uri.parse("content://mms/$mmsId/part"),
-            ContentValues().apply {
-                put("mid", mmsId); put("ct", "application/smil"); put("cid", "<smil>"); put("cl", "smil.xml")
-            })
-        uri?.let { ctx.contentResolver.openOutputStream(it)?.use { os -> os.write(smil.toByteArray()) } }
+        val MAX_BYTES = 500 * 1024  // 500 KB target
+        val MAX_DIM   = 1024        // max dimension in pixels
+
+        // Decode bounds only to find the sampling factor needed
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        android.graphics.BitmapFactory.decodeByteArray(raw, 0, raw.size, bounds)
+
+        var sample = 1
+        var w = bounds.outWidth; var h = bounds.outHeight
+        while (w > MAX_DIM || h > MAX_DIM) { sample *= 2; w /= 2; h /= 2 }
+
+        val bmp = android.graphics.BitmapFactory.decodeByteArray(raw, 0, raw.size,
+            android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
+            ?: return Pair(raw, mimeType)
+
+        var quality = 85
+        var result: ByteArray
+        do {
+            val baos = java.io.ByteArrayOutputStream()
+            bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, baos)
+            result = baos.toByteArray()
+            quality -= 10
+        } while (result.size > MAX_BYTES && quality >= 20)
+
+        bmp.recycle()
+        android.util.Log.d("NexLink_MMS", "compressForMms: ${raw.size / 1024}KB → ${result.size / 1024}KB (q=${ quality + 10})")
+        return Pair(result, "image/jpeg")
     }
 
     @Suppress("DEPRECATION")
-    private fun sendMms(ctx: Context, mmsUri: Uri, subId: Int) {
-        val sm = if (subId >= 0) android.telephony.SmsManager.getSmsManagerForSubscriptionId(subId)
-                 else android.telephony.SmsManager.getDefault()
-        sm.sendMultimediaMessage(ctx, mmsUri, null, null, null)
+    private fun sendViaMms(ctx: Context, recipients: List<String>, parts: List<MmsPduBuilder.Part>,
+                           subId: Int) {
+        // Generate one Transaction-ID used in both the PDU and the content://mms outbox row.
+        // Samsung's MmsService reads tr_id from content://mms/outbox to embed in the actual
+        // M-Send.req it posts to the MMSC — without a matching row it falls back to "Unknown",
+        // which causes Optus MMSC to return error 3514.
+        val txId     = MmsPduBuilder.generateTxId()
+        val pduBytes = MmsPduBuilder.build(recipients, parts, txId)
+        android.util.Log.d("NexLink_MMS", "sendViaMms: recipients=$recipients txId=$txId pdu=${pduBytes.size}B subId=$subId")
+
+        // Attempt 1: direct HTTP POST to carrier MMSC (full PDU control, bypasses Samsung layer)
+        if (MmsSender.send(ctx, pduBytes, subId) == 0) {
+            android.util.Log.d("NexLink_MMS", "sendViaMms: direct HTTP succeeded"); return
+        }
+
+        // Attempt 2: MmsFileProvider + outbox row — matches QKSMS / Fossify Messages exactly.
+        //
+        // Step A: Insert message into content://mms/outbox with tr_id so Samsung's MmsService
+        //         can find the row and embed a proper Transaction-ID in its PDU recomposition.
+        val outboxUri = runCatching { insertToOutbox(ctx, recipients, parts, txId) }.getOrNull()
+        android.util.Log.d("NexLink_MMS", "sendViaMms: outbox row=$outboxUri")
+
+        // Step B: Write PDU to cache file (MmsFileProvider, exported=false grantUriPermissions=true)
+        val contentUri = MmsFileProvider.writePdu(ctx, pduBytes)
+
+        // Step C: Send — locationUrl=null lets Samsung use its own APN config
+        @Suppress("DEPRECATION")
+        val configOverrides = android.os.Bundle().apply {
+            putBoolean(android.telephony.SmsManager.MMS_CONFIG_GROUP_MMS_ENABLED, true)
+            putInt(android.telephony.SmsManager.MMS_CONFIG_MAX_MESSAGE_SIZE, 1_200_000)
+        }
+        android.util.Log.d("NexLink_MMS", "sendViaMms: MmsFileProvider uri=$contentUri")
+        getSmsManager(subId).sendMultimediaMessage(
+            ctx.applicationContext, contentUri, null, configOverrides, makeSentIntent(ctx))
+        android.os.Handler(android.os.Looper.getMainLooper())
+            .postDelayed({ java.io.File(ctx.cacheDir, contentUri.lastPathSegment ?: "").delete() }, 180_000L)
     }
+
+    private fun insertToOutbox(ctx: Context, recipients: List<String>,
+                               parts: List<MmsPduBuilder.Part>, txId: String): Uri {
+        val mmsUri = ctx.contentResolver.insert(Telephony.Mms.CONTENT_URI, ContentValues().apply {
+            put(Telephony.Mms.MESSAGE_TYPE,  128)   // M-Send.req = 0x80
+            put(Telephony.Mms.MESSAGE_BOX,   Telephony.Mms.MESSAGE_BOX_OUTBOX)
+            put(Telephony.Mms.CONTENT_TYPE,  "application/vnd.wap.multipart.related")
+            put(Telephony.Mms.DATE,          System.currentTimeMillis() / 1000L)
+            put(Telephony.Mms.READ,          1)
+            put("tr_id",                     txId)  // Telephony.Mms.TRANSACTION_ID
+        }) ?: throw Exception("insertToOutbox: insert failed")
+
+        val id      = android.content.ContentUris.parseId(mmsUri)
+        val addrUri = Uri.parse("content://mms/$id/addr")
+        val partUri = Uri.parse("content://mms/$id/part")
+
+        // FROM address
+        ctx.contentResolver.insert(addrUri, ContentValues().apply {
+            put("address", "insert-address-token"); put("type", 137); put("charset", 106)
+        })
+        // TO addresses
+        for (to in recipients) {
+            ctx.contentResolver.insert(addrUri, ContentValues().apply {
+                put("address", MmsPduBuilder.normalizeToE164(to)); put("type", 151); put("charset", 106)
+            })
+        }
+        // Media parts (Samsung may use these to recompose the PDU)
+        for (part in parts) {
+            val pUri = ctx.contentResolver.insert(partUri, ContentValues().apply {
+                put(Telephony.Mms.Part.CONTENT_TYPE, part.contentType)
+                put(Telephony.Mms.Part.NAME, outboxPartName(part.contentType))
+                if (part.contentType.startsWith("text/")) put(Telephony.Mms.Part.CHARSET, 106)
+            }) ?: continue
+            ctx.contentResolver.openOutputStream(pUri)?.use { it.write(part.data) }
+        }
+
+        android.util.Log.d("NexLink_MMS", "insertToOutbox: $mmsUri txId=$txId parts=${parts.size}")
+        return mmsUri
+    }
+
+    private fun outboxPartName(mime: String) = when {
+        mime.contains("jpeg") || mime.contains("jpg") -> "photo.jpg"
+        mime.contains("png")      -> "photo.png"
+        mime.contains("amr")      -> "voice.amr"
+        mime.contains("mp4")      -> "video.mp4"
+        mime.contains("3gp")      -> "video.3gp"
+        mime.startsWith("audio/") -> "audio.mp3"
+        mime.startsWith("text/")  -> "message.txt"
+        else                      -> "file.dat"
+    }
+
+    @Suppress("DEPRECATION")
+    private fun getSmsManager(subId: Int) =
+        if (subId >= 0) android.telephony.SmsManager.getSmsManagerForSubscriptionId(subId)
+        else android.telephony.SmsManager.getDefault()
+
+    private fun makeSentIntent(ctx: Context) = android.app.PendingIntent.getBroadcast(
+        ctx.applicationContext,
+        (System.currentTimeMillis() % Int.MAX_VALUE).toInt(),
+        android.content.Intent("${ctx.packageName}.MMS_SENT").setPackage(ctx.packageName),
+        android.app.PendingIntent.FLAG_MUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+    )
 
     // ── Mark read ─────────────────────────────────────────────────────────────
 

@@ -2,6 +2,11 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
+        android:id="@+id/action_call"
+        android:title="Call"
+        android:icon="@drawable/ic_call"
+        app:showAsAction="always"/>
+    <item
         android:id="@+id/action_delete_conversation"
         android:title="Delete conversation"
         app:showAsAction="never"/>

@@ -29,6 +29,8 @@
 
     <!-- System -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
@@ -43,6 +45,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.NexLink">
 
         <!-- ── Main entry ── -->
@@ -164,6 +167,24 @@
                 <data android:scheme="mmsto"/>
             </intent-filter>
         </service>
+
+        <!-- ── MMS file provider — exported=false + grantUriPermissions so Android's SmsManager
+             grants the telephony service one-shot read access automatically (QKSMS / Fossify approach) ── -->
+        <provider
+            android:name=".db.MmsFileProvider"
+            android:authorities="${applicationId}.MmsFileProvider"
+            android:exported="false"
+            android:grantUriPermissions="true"/>
+
+        <!-- ── MMS sent-result receiver ── exported=true so Samsung's MMS service can fire the callback -->
+        <receiver android:name=".receivers.MmsSentReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="${applicationId}.MMS_SENT"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- ── Notification inline reply ── -->
+        <receiver android:name=".receivers.NotificationReplyReceiver" android:exported="false"/>
 
         <!-- ── FileProvider for camera attachments ── -->
         <provider
