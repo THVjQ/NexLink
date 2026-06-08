@@ -21,6 +21,13 @@ object MmsDownloader {
     private const val TAG = "NexLink_MMS"
 
     /**
+     * Parses and stores a raw MMS PDU (RetrieveConf) that was already downloaded by
+     * SmsManager.downloadMultimediaMessage().  Returns the sender address or null on error.
+     * May be called from any thread.
+     */
+    fun storeRawPdu(ctx: Context, pduBytes: ByteArray): String? = storePdu(ctx, pduBytes, -1)
+
+    /**
      * Downloads the MMS PDU from contentLocation and stores it in content://mms.
      * Returns the normalised sender address, or null if the download or store failed.
      * Must be called from a background thread.

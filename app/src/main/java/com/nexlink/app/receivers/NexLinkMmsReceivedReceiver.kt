@@ -15,6 +15,7 @@ import com.klinker.android.send_message.MmsReceivedReceiver
 class NexLinkMmsReceivedReceiver : MmsReceivedReceiver() {
 
     override fun onMessageReceived(ctx: Context, messageUri: Uri?) {
+        android.util.Log.d("NexLink_MMS", "onMessageReceived: uri=$messageUri")
         messageUri ?: return
         val id = ContentUris.parseId(messageUri)
 

@@ -1,5 +1,6 @@
 package com.nexlink.app.receivers
 
+import android.app.Activity
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -8,14 +9,21 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.net.Uri
 import android.provider.Telephony
+import android.telephony.SmsManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
+import com.google.android.mms.pdu_alt.NotificationInd
+import com.google.android.mms.pdu_alt.PduParser
 import com.nexlink.app.App
 import com.nexlink.app.R
 import com.nexlink.app.db.CryptoStore
+import com.nexlink.app.db.MmsDownloader
 import com.nexlink.app.db.SmsHelper
 import com.nexlink.app.ui.sms.ConversationActivity
+import java.io.File
 
 class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -72,11 +80,118 @@ class SmsReceiverFallback : BroadcastReceiver() {
     }
 }
 
-// Delegates all WAP push handling, MMS network download, PDU storage, and MMSC ACKs
-// to the android-smsmms PushReceiver — the same base class used by QKSMS / Fossify Messages.
-// After download completes, TransactionService broadcasts MMS_RECEIVED which is handled
-// by NexLinkMmsReceivedReceiver.
-class MmsReceiver : com.android.mms.transaction.PushReceiver()
+class MmsReceiver : BroadcastReceiver() {
+    override fun onReceive(ctx: Context, intent: Intent) {
+        if (intent.action != "android.provider.Telephony.WAP_PUSH_DELIVER") return
+        if (intent.type != "application/vnd.wap.mms-message") return
+
+        val pending = goAsync()
+        val data = intent.getByteArrayExtra("data")
+        Log.d("NexLink_MMS", "WAP push arrived: dataLen=${data?.size}")
+
+        if (data == null) {
+            Log.e("NexLink_MMS", "WAP push has no data extra")
+            pending.finish()
+            return
+        }
+
+        // Parse M-Notification.ind to extract content-location URL
+        val notif = try { PduParser(data, true).parse() as? NotificationInd } catch (e: Exception) {
+            Log.e("NexLink_MMS", "PDU parse failed: ${e.message}")
+            null
+        }
+        val contentUrl = notif?.contentLocation?.let { String(it, Charsets.UTF_8) }?.trim()
+        Log.d("NexLink_MMS", "WAP push content-location=$contentUrl")
+
+        if (contentUrl.isNullOrBlank()) {
+            Log.e("NexLink_MMS", "No content-location — cannot download MMS")
+            pending.finish()
+            return
+        }
+
+        // Temp file the telephony service will write the downloaded PDU into
+        val fileName = "mms_inbound_${System.currentTimeMillis()}.pdu"
+        val destUri = Uri.Builder()
+            .scheme("content")
+            .authority("${ctx.packageName}.MmsFileProvider")
+            .path(fileName)
+            .build()
+
+        // Explicitly grant write access to the telephony packages that run MmsService
+        for (pkg in listOf(
+            "com.android.providers.telephony",
+            "com.android.phone",
+            "com.android.mms.service"
+        )) {
+            try {
+                ctx.grantUriPermission(pkg, destUri,
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: Exception) {}
+        }
+
+        val onDone = Intent("com.nexlink.app.MMS_DOWNLOADED").apply {
+            setPackage(ctx.packageName)
+            putExtra("file_name", fileName)
+        }
+        val pi = PendingIntent.getBroadcast(
+            ctx, System.currentTimeMillis().toInt(), onDone,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_ONE_SHOT
+        )
+
+        try {
+            @Suppress("DEPRECATION")
+            SmsManager.getDefault().downloadMultimediaMessage(ctx, contentUrl, destUri, null, pi)
+            Log.d("NexLink_MMS", "downloadMultimediaMessage() called: $contentUrl → $destUri")
+        } catch (e: Exception) {
+            Log.e("NexLink_MMS", "downloadMultimediaMessage() threw: ${e.message}")
+        }
+
+        pending.finish()
+    }
+}
+
+/** Receives the completion broadcast from SmsManager.downloadMultimediaMessage(). */
+class MmsDownloadReceiver : BroadcastReceiver() {
+    override fun onReceive(ctx: Context, intent: Intent) {
+        val rc = resultCode
+        val fileName = intent.getStringExtra("file_name") ?: return
+        Log.d("NexLink_MMS", "MmsDownloadReceiver: rc=$rc fileName=$fileName")
+
+        if (rc != Activity.RESULT_OK) {
+            Log.e("NexLink_MMS", "downloadMultimediaMessage failed: resultCode=$rc")
+            SmsNotifier.notify(ctx, "MMS", "📷 MMS (download failed, code=$rc)")
+            return
+        }
+
+        val file = File(ctx.cacheDir, fileName)
+        if (!file.exists()) {
+            Log.e("NexLink_MMS", "Downloaded PDU file missing: $fileName")
+            return
+        }
+
+        val pduBytes = try { file.readBytes() } catch (e: Exception) {
+            Log.e("NexLink_MMS", "Failed to read PDU file: ${e.message}")
+            return
+        }
+        file.delete()
+        Log.d("NexLink_MMS", "MmsDownloadReceiver: read ${pduBytes.size}B, persisting…")
+
+        val pending = goAsync()
+        Thread {
+            try {
+                val sender = MmsDownloader.storeRawPdu(ctx, pduBytes)
+                if (sender != null) {
+                    SmsNotifier.notify(ctx, sender, "📷 MMS")
+                } else {
+                    Log.e("NexLink_MMS", "storePdu returned null — notifying generic")
+                    SmsNotifier.notify(ctx, "Unknown", "📷 MMS received")
+                }
+            } finally {
+                pending.finish()
+            }
+        }.start()
+    }
+}
 
 /** Receives the result of SmsManager.sendMultimediaMessage() and logs it. */
 class MmsSentReceiver : BroadcastReceiver() {

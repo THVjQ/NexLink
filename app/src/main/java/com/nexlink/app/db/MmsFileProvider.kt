@@ -45,10 +45,16 @@ class MmsFileProvider : ContentProvider() {
         val name = uri.lastPathSegment
             ?: throw FileNotFoundException("Missing filename in $uri")
         val file = File(ctx().cacheDir, name)
+        val write = mode.contains("w")
         android.util.Log.d("NexLink_MMS",
-            "MmsFileProvider.openFile: $name (${file.length()} B) callerUid=${android.os.Binder.getCallingUid()}")
-        if (!file.exists()) throw FileNotFoundException("PDU file not found: $name")
-        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+            "MmsFileProvider.openFile: $name mode=$mode (${file.length()}B) callerUid=${android.os.Binder.getCallingUid()}")
+        val pdMode = if (write)
+            ParcelFileDescriptor.MODE_WRITE_ONLY or ParcelFileDescriptor.MODE_CREATE or ParcelFileDescriptor.MODE_TRUNCATE
+        else {
+            if (!file.exists()) throw FileNotFoundException("PDU file not found: $name")
+            ParcelFileDescriptor.MODE_READ_ONLY
+        }
+        return ParcelFileDescriptor.open(file, pdMode)
     }
 
     private fun ctx() = context ?: throw FileNotFoundException("Provider has no context")

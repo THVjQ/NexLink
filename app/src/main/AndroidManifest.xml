@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- SMS -->
+    <!-- SMS / MMS -->
     <uses-permission android:name="android.permission.READ_SMS"/>
     <uses-permission android:name="android.permission.SEND_SMS"/>
     <uses-permission android:name="android.permission.RECEIVE_SMS"/>
     <uses-permission android:name="android.permission.WRITE_SMS"/>
     <uses-permission android:name="android.permission.RECEIVE_MMS"/>
+    <uses-permission android:name="android.permission.RECEIVE_WAP_PUSH"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.SEND_RESPOND_VIA_MESSAGE"/>
 
@@ -154,16 +155,22 @@
             </intent-filter>
         </receiver>
 
-        <!-- android-smsmms TransactionService — does the HTTP download of the MMS PDU over the
-             carrier's MMS APN and broadcasts MMS_RECEIVED when done -->
-        <service android:name="com.android.mms.transaction.TransactionService"
-            android:exported="false"/>
+        <!-- Diagnostic: also listen on WAP_PUSH_RECEIVED (no default-app requirement) so we
+             can confirm the WAP push reaches the app at all, regardless of default SMS status -->
+        <receiver android:name=".receivers.WapSniffReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_WAP_PUSH">
+            <intent-filter android:priority="999">
+                <action android:name="android.provider.Telephony.WAP_PUSH_RECEIVED"/>
+                <data android:mimeType="application/vnd.wap.mms-message"/>
+            </intent-filter>
+        </receiver>
 
-        <!-- Receives MMS_RECEIVED from TransactionService, stores PDU, sends ACKs, notifies user -->
-        <receiver android:name=".receivers.NexLinkMmsReceivedReceiver"
+        <!-- Completion handler for SmsManager.downloadMultimediaMessage() -->
+        <receiver android:name=".receivers.MmsDownloadReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.klinker.android.messaging.MMS_RECEIVED"/>
+                <action android:name="com.nexlink.app.MMS_DOWNLOADED"/>
             </intent-filter>
         </receiver>
 
