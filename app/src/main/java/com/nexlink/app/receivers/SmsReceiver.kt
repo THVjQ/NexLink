@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import com.nexlink.app.App
 import com.nexlink.app.R
+import com.nexlink.app.db.MmsDownloader
 import com.nexlink.app.db.SmsHelper
 import com.nexlink.app.ui.sms.ConversationActivity
 
@@ -53,18 +54,28 @@ class MmsReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         if (intent.action != "android.provider.Telephony.WAP_PUSH_DELIVER") return
         val pushData = intent.getByteArrayExtra("data") ?: return
-        val pending = goAsync()
+        val pending  = goAsync()
         Thread {
             try {
-                // Parse enough of the PDU to get sender and subject/content type
-                val info = MmsPduParser.parse(pushData)
-                val sender = info?.from ?: intent.getStringExtra("address") ?: "Unknown"
+                val subId    = intent.getIntExtra("subscription", -1)
+                val location = MmsPduParser.parseContentLocation(pushData)
+                val info     = MmsPduParser.parse(pushData)
+                val fallback = info?.from ?: intent.getStringExtra("address") ?: "Unknown"
+
+                // Download the MMS from the carrier MMSC and store it in content://mms.
+                // ConversationActivity's ContentObserver will reload automatically on success.
+                val sender = if (location != null) {
+                    MmsDownloader.downloadAndStore(ctx, location, subId) ?: fallback
+                } else {
+                    fallback
+                }
+
                 val typeLabel = when {
-                    info?.hasImage == true  -> "📷 Photo"   // 📷
-                    info?.hasVideo == true  -> "🎥 Video"   // 🎬
-                    info?.hasAudio == true  -> "🎤 Audio"   // 🎤
-                    info?.hasText  == true  -> info.textSnippet ?: "Message"
-                    else                    -> "📎 Attachment" // 📎
+                    info?.hasImage == true -> "📷 Photo"
+                    info?.hasVideo == true -> "🎥 Video"
+                    info?.hasAudio == true -> "🎤 Audio"
+                    info?.hasText  == true -> info.textSnippet ?: "Message"
+                    else                   -> "📎 Attachment"
                 }
                 SmsNotifier.notify(ctx, sender, typeLabel)
             } finally {
@@ -84,6 +95,23 @@ object MmsPduParser {
         val hasText: Boolean,
         val textSnippet: String?
     )
+
+    /** Extracts the X-Mms-Content-Location URL (field 0x03) from an M-Notification.ind PDU. */
+    fun parseContentLocation(pdu: ByteArray): String? {
+        return try {
+            var i = 0
+            while (i < pdu.size - 1) {
+                val fc = pdu[i++].toInt() and 0xFF
+                if (fc == 0x83) { // 0x03 | 0x80 = Content-Location
+                    val start = i
+                    while (i < pdu.size && pdu[i] != 0.toByte()) i++
+                    return String(pdu, start, i - start, Charsets.ISO_8859_1).trim().ifBlank { null }
+                }
+                i += skipFieldValue(pdu, i)
+            }
+            null
+        } catch (_: Exception) { null }
+    }
 
     fun parse(pdu: ByteArray): MmsInfo? {
         return try {
