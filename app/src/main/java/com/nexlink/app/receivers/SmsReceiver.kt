@@ -42,25 +42,10 @@ class SmsReceiver : BroadcastReceiver() {
 class SmsReceiverFallback : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != "android.provider.Telephony.SMS_RECEIVED") return
-        // SmsReceiver already handles SMS_DELIVER when we're the default SMS app.
-        // Bail out here to prevent a duplicate notification.
-        if (Telephony.Sms.getDefaultSmsPackage(context) == context.packageName) return
-        val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
-        val grouped = mutableMapOf<String, StringBuilder>()
-        for (msg in messages) {
-            grouped.getOrPut(msg.originatingAddress ?: "") { StringBuilder() }
-                .append(msg.messageBody)
-        }
-        val pending = goAsync()
-        Thread {
-            try {
-                for ((sender, body) in grouped) {
-                    SmsNotifier.notify(context, sender, body.toString())
-                }
-            } finally {
-                pending.finish()
-            }
-        }.start()
+        // When NexLink is the default SMS app, SmsReceiver already handles SMS_DELIVER
+        // and posts one notification. When we are NOT the default, the system's default
+        // SMS app will post its own notification — we must not add a second one here.
+        // This receiver is a required stub for the default-SMS-app contract only.
     }
 }
 

@@ -17,7 +17,7 @@ object NotificationPrefs {
 
     fun isSuppressSourceEnabled(ctx: Context): Boolean =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getBoolean(KEY_SUPPRESS_SOURCE, false)
+            .getBoolean(KEY_SUPPRESS_SOURCE, true)
 
     fun setSuppressSource(ctx: Context, enabled: Boolean) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
