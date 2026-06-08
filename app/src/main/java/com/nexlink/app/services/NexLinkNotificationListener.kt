@@ -10,7 +10,6 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
 import com.nexlink.app.App
-import com.nexlink.app.MainActivity
 import com.nexlink.app.R
 import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.NotificationStore
@@ -19,6 +18,13 @@ import com.nexlink.app.db.SocialNotification
 class NexLinkNotificationListener : NotificationListenerService() {
 
     companion object {
+        // Original contentIntents from social apps — keyed by StatusBarNotification.key.
+        // Stored so tapping the NexLink re-post opens the exact conversation.
+        private val contentIntents = mutableMapOf<String, android.app.PendingIntent>()
+
+        fun popContentIntent(key: String): android.app.PendingIntent? =
+            contentIntents.remove(key)
+
         // Common system SMS/MMS apps — suppressed when "Only notify via NexLink" is on.
         // NexLink itself is the SMS handler and re-posts its own notification, so these
         // are duplicates.
@@ -101,6 +107,9 @@ class NexLinkNotificationListener : NotificationListenerService() {
             }
         }
 
+        // Cache the social app's own contentIntent so we can open the exact conversation on tap
+        sbn.notification.contentIntent?.let { contentIntents[sbn.key] = it }
+
         val n = SocialNotification(
             id          = "${sbn.key}",
             platform    = NotificationStore.platform(pkg),
@@ -131,14 +140,25 @@ class NexLinkNotificationListener : NotificationListenerService() {
         }
     }
 
-    override fun onNotificationRemoved(sbn: StatusBarNotification) { /* intentionally empty */ }
+    override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        val pkg = sbn.packageName ?: return
+        if (pkg !in NotificationStore.watchedPackages) return
+        // Social app dismissed its own notification → user read the message in the app
+        val extras = sbn.notification?.extras ?: return
+        val title  = extras.getCharSequence("android.title")?.toString() ?: return
+        NotificationStore.markRead(NotificationStore.platform(pkg), title)
+        contentIntents.remove(sbn.key)
+    }
 
     private fun postNexLinkNotification(n: SocialNotification) {
         val ctx = applicationContext
-        val pi = PendingIntent.getActivity(
+        // Tap opens the social app's exact conversation and marks the thread read.
+        val pi = PendingIntent.getBroadcast(
             ctx, n.id.hashCode(),
-            Intent(ctx, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            Intent(ctx, com.nexlink.app.receivers.SocialOpenReceiver::class.java).apply {
+                putExtra("platform",         n.platform)
+                putExtra("sender",           n.sender)
+                putExtra("notification_key", n.id)
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )

@@ -24,6 +24,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexlink.app.R
 import com.nexlink.app.databinding.ActivityConversationBinding
@@ -104,6 +106,16 @@ class ConversationActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         b = ActivityConversationBinding.inflate(layoutInflater)
         setContentView(b.root)
+
+        // On Android 15+, edge-to-edge is enforced so adjustResize no longer works.
+        // Apply bottom padding equal to the keyboard (IME) height so the compose bar
+        // always stays visible above the keyboard.
+        ViewCompat.setOnApplyWindowInsetsListener(b.root) { v, insets ->
+            val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            val navBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, maxOf(imeBottom, navBottom))
+            insets
+        }
 
         address      = intent.getStringExtra("address") ?: ""
         threadId     = intent.getLongExtra("thread_id", 0L)

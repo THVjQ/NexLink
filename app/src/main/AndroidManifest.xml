@@ -186,6 +186,9 @@
         <!-- ── Notification inline reply ── -->
         <receiver android:name=".receivers.NotificationReplyReceiver" android:exported="false"/>
 
+        <!-- ── Social notification tap → open social app + mark read ── -->
+        <receiver android:name=".receivers.SocialOpenReceiver" android:exported="false"/>
+
         <!-- ── FileProvider for camera attachments ── -->
         <provider
             android:name="androidx.core.content.FileProvider"
