@@ -3,10 +3,12 @@ package com.nexlink.app.ui.sms
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.nexlink.app.R
 import com.nexlink.app.db.Conversation
+import com.nexlink.app.db.CryptoStore
 import com.nexlink.app.db.ReadTracker
 import com.nexlink.app.util.AvatarColors
 import java.text.SimpleDateFormat
@@ -24,11 +26,12 @@ class ConversationAdapter(
     fun setData(data: List<Conversation>) { items = data; notifyDataSetChanged() }
 
     inner class VH(v: View) : RecyclerView.ViewHolder(v) {
-        val avatar:  TextView = v.findViewById(R.id.tvAvatar)
-        val name:    TextView = v.findViewById(R.id.tvName)
-        val preview: TextView = v.findViewById(R.id.tvPreview)
-        val time:    TextView = v.findViewById(R.id.tvTime)
-        val badge:   TextView = v.findViewById(R.id.tvBadge)
+        val avatar:  TextView   = v.findViewById(R.id.tvAvatar)
+        val name:    TextView   = v.findViewById(R.id.tvName)
+        val preview: TextView   = v.findViewById(R.id.tvPreview)
+        val time:    TextView   = v.findViewById(R.id.tvTime)
+        val badge:   TextView   = v.findViewById(R.id.tvBadge)
+        val lock:    ImageView  = v.findViewById(R.id.ivLock)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
@@ -47,6 +50,8 @@ class ConversationAdapter(
         h.name.text    = c.contactName.ifBlank { c.address }
         h.preview.text = c.lastMessage
         h.time.text    = formatTime(c.timestamp)
+        h.lock.visibility = if (CryptoStore.getSessionKey(h.itemView.context, c.address) != null)
+            View.VISIBLE else View.GONE
 
         // Treat as read if system says 0 unread OR user locally viewed it
         val effectivelyRead = c.unreadCount == 0 ||

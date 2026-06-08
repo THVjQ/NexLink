@@ -29,6 +29,14 @@
                 android:textSize="15sp"
                 android:singleLine="true"
                 android:ellipsize="end"/>
+            <ImageView
+                android:id="@+id/ivLock"
+                android:layout_width="13dp" android:layout_height="13dp"
+                android:src="@drawable/ic_lock"
+                android:layout_marginStart="4dp"
+                android:tint="@color/muted"
+                android:visibility="gone"
+                android:contentDescription="Encrypted"/>
             <TextView android:id="@+id/tvTime"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:textColor="@color/muted"

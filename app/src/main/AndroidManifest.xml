@@ -144,13 +144,26 @@
             </intent-filter>
         </receiver>
 
-        <!-- ── MMS stub (required for default SMS app) ── -->
+        <!-- ── MMS WAP push receiver — delegates to android-smsmms PushReceiver (QKSMS pattern) ── -->
         <receiver android:name=".receivers.MmsReceiver"
             android:exported="true"
             android:permission="android.permission.BROADCAST_WAP_PUSH">
             <intent-filter>
                 <action android:name="android.provider.Telephony.WAP_PUSH_DELIVER"/>
                 <data android:mimeType="application/vnd.wap.mms-message"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- android-smsmms TransactionService — does the HTTP download of the MMS PDU over the
+             carrier's MMS APN and broadcasts MMS_RECEIVED when done -->
+        <service android:name="com.android.mms.transaction.TransactionService"
+            android:exported="false"/>
+
+        <!-- Receives MMS_RECEIVED from TransactionService, stores PDU, sends ACKs, notifies user -->
+        <receiver android:name=".receivers.NexLinkMmsReceivedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.klinker.android.messaging.MMS_RECEIVED"/>
             </intent-filter>
         </receiver>
 

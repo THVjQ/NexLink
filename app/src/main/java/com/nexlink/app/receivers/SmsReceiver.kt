@@ -14,7 +14,6 @@ import androidx.core.app.RemoteInput
 import com.nexlink.app.App
 import com.nexlink.app.R
 import com.nexlink.app.db.CryptoStore
-import com.nexlink.app.db.MmsDownloader
 import com.nexlink.app.db.SmsHelper
 import com.nexlink.app.ui.sms.ConversationActivity
 
@@ -73,171 +72,11 @@ class SmsReceiverFallback : BroadcastReceiver() {
     }
 }
 
-class MmsReceiver : BroadcastReceiver() {
-    override fun onReceive(ctx: Context, intent: Intent) {
-        if (intent.action != "android.provider.Telephony.WAP_PUSH_DELIVER") return
-        val pushData = intent.getByteArrayExtra("data") ?: return
-        val pending  = goAsync()
-        Thread {
-            try {
-                val subId    = intent.getIntExtra("subscription", -1)
-                val location = MmsPduParser.parseContentLocation(pushData)
-                val info     = MmsPduParser.parse(pushData)
-                val fallback = info?.from ?: intent.getStringExtra("address") ?: "Unknown"
-
-                // Download the MMS from the carrier MMSC and store it in content://mms.
-                // ConversationActivity's ContentObserver will reload automatically on success.
-                val sender = if (location != null) {
-                    MmsDownloader.downloadAndStore(ctx, location, subId) ?: fallback
-                } else {
-                    fallback
-                }
-
-                val typeLabel = when {
-                    info?.hasImage == true -> "📷 Photo"
-                    info?.hasVideo == true -> "🎥 Video"
-                    info?.hasAudio == true -> "🎤 Audio"
-                    info?.hasText  == true -> info.textSnippet ?: "Message"
-                    else                   -> "📎 Attachment"
-                }
-                SmsNotifier.notify(ctx, sender, typeLabel)
-            } finally {
-                pending.finish()
-            }
-        }.start()
-    }
-}
-
-/** Minimal WAP PDU parser — extracts sender and part types from an M-Retrieve.conf or M-Send.req */
-object MmsPduParser {
-    data class MmsInfo(
-        val from: String?,
-        val hasImage: Boolean,
-        val hasVideo: Boolean,
-        val hasAudio: Boolean,
-        val hasText: Boolean,
-        val textSnippet: String?
-    )
-
-    /** Extracts the X-Mms-Content-Location URL (field 0x03) from an M-Notification.ind PDU. */
-    fun parseContentLocation(pdu: ByteArray): String? {
-        return try {
-            var i = 0
-            while (i < pdu.size - 1) {
-                val fc = pdu[i++].toInt() and 0xFF
-                if (fc == 0x83) { // 0x03 | 0x80 = Content-Location
-                    val start = i
-                    while (i < pdu.size && pdu[i] != 0.toByte()) i++
-                    return String(pdu, start, i - start, Charsets.ISO_8859_1).trim().ifBlank { null }
-                }
-                i += skipFieldValue(pdu, i)
-            }
-            null
-        } catch (_: Exception) { null }
-    }
-
-    fun parse(pdu: ByteArray): MmsInfo? {
-        return try {
-            var from: String?       = null
-            var hasImage            = false
-            var hasVideo            = false
-            var hasAudio            = false
-            var hasText             = false
-            var snippet: String?    = null
-            var i = 0
-            while (i < pdu.size - 1) {
-                val fieldCode = pdu[i++].toInt() and 0xFF
-                when (fieldCode) {
-                    0x89 -> { // From field
-                        val len = readUintVar(pdu, i); i += uintVarLen(pdu, i)
-                        val end = minOf(i + len, pdu.size)
-                        val raw = String(pdu, i, end - i, Charsets.ISO_8859_1)
-                        from = raw.substringBefore("/TYPE=").trim()
-                        i = end
-                    }
-                    0x84 -> { // Content-Type
-                        val ct = readContentType(pdu, i)
-                        val ctLower = ct.lowercase()
-                        when {
-                            ctLower.contains("image") -> hasImage = true
-                            ctLower.contains("video") -> hasVideo = true
-                            ctLower.contains("audio") -> hasAudio = true
-                            ctLower.contains("text")  -> hasText  = true
-                            ctLower.contains("multipart") -> {
-                                // scan part types in the body — simplified
-                                val body = String(pdu, i, pdu.size - i, Charsets.ISO_8859_1)
-                                if (body.contains("image"))  hasImage = true
-                                if (body.contains("video"))  hasVideo = true
-                                if (body.contains("audio"))  hasAudio = true
-                                if (body.contains("text/plain")) hasText = true
-                            }
-                        }
-                        break // Content-Type is near the end of headers; stop linear scan
-                    }
-                    else -> i += skipFieldValue(pdu, i)
-                }
-            }
-            MmsInfo(from, hasImage, hasVideo, hasAudio, hasText, snippet)
-        } catch (_: Exception) { null }
-    }
-
-    private fun readUintVar(buf: ByteArray, offset: Int): Int {
-        var result = 0; var i = offset
-        while (i < buf.size) {
-            val b = buf[i++].toInt() and 0xFF
-            result = (result shl 7) or (b and 0x7F)
-            if (b and 0x80 == 0) break
-        }
-        return result
-    }
-
-    private fun uintVarLen(buf: ByteArray, offset: Int): Int {
-        var len = 0; var i = offset
-        while (i < buf.size) { val b = buf[i++].toInt() and 0xFF; len++; if (b and 0x80 == 0) break }
-        return len
-    }
-
-    private fun readContentType(buf: ByteArray, offset: Int): String {
-        if (offset >= buf.size) return ""
-        val b = buf[offset].toInt() and 0xFF
-        return if (b and 0x80 != 0) {
-            // Short-integer well-known content type
-            when (b and 0x7F) {
-                0x03 -> "text/plain"; 0x0E, 0x0F -> "image/jpeg"; 0x10 -> "image/png"
-                0x1C -> "video/mpeg"; 0x22 -> "video/3gpp"
-                0x23 -> "application/vnd.wap.multipart.mixed"
-                0x33 -> "application/vnd.wap.multipart.related"
-                else -> "application/octet-stream"
-            }
-        } else {
-            val end = buf.indexOf(0.toByte(), offset).takeIf { it >= 0 } ?: buf.size
-            String(buf, offset, end - offset, Charsets.ISO_8859_1)
-        }
-    }
-
-    private fun skipFieldValue(buf: ByteArray, offset: Int): Int {
-        if (offset >= buf.size) return 1
-        val b = buf[offset].toInt() and 0xFF
-        return when {
-            b == 0 -> 1
-            b < 0x1F -> { // Length-quote: next byte is length
-                val len = if (offset + 1 < buf.size) (buf[offset + 1].toInt() and 0xFF) else 0
-                2 + len
-            }
-            b and 0x80 != 0 -> 1  // Short-integer
-            else -> {  // Text string — scan to null terminator
-                var end = offset
-                while (end < buf.size && buf[end] != 0.toByte()) end++
-                end - offset + 1
-            }
-        }
-    }
-
-    private fun ByteArray.indexOf(target: Byte, from: Int): Int {
-        for (i in from until size) if (this[i] == target) return i
-        return -1
-    }
-}
+// Delegates all WAP push handling, MMS network download, PDU storage, and MMSC ACKs
+// to the android-smsmms PushReceiver — the same base class used by QKSMS / Fossify Messages.
+// After download completes, TransactionService broadcasts MMS_RECEIVED which is handled
+// by NexLinkMmsReceivedReceiver.
+class MmsReceiver : com.android.mms.transaction.PushReceiver()
 
 /** Receives the result of SmsManager.sendMultimediaMessage() and logs it. */
 class MmsSentReceiver : BroadcastReceiver() {
