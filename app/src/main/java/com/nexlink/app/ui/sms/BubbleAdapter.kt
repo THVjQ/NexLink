@@ -21,6 +21,7 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.nexlink.app.R
 import com.nexlink.app.db.AudioTranscriber
+import com.nexlink.app.db.CryptoStore
 import com.nexlink.app.db.SmsMessage
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -206,8 +207,16 @@ class BubbleAdapter(
         iv.imageTintList = ColorStateList.valueOf(tint)
     }
 
+    private fun decryptBody(ctx: Context, m: SmsMessage): String {
+        if (!CryptoStore.isEncrypted(m.body)) return m.body
+        val key = CryptoStore.getSessionKey(ctx, m.address) ?: return "🔒 Encrypted message"
+        return CryptoStore.decrypt(m.body, key) ?: "🔒 Encrypted message"
+    }
+
     private fun bindMsg(h: MsgVH, m: SmsMessage) {
-        h.bubble.text = m.body
+        val ctx = h.itemView.context
+        val body = decryptBody(ctx, m)
+        h.bubble.text = body
         h.time.text   = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(m.timestamp))
         bindSender(h.sender, m)
         bindStatus(h.status, m)
@@ -238,7 +247,7 @@ class BubbleAdapter(
             h.btnTranscript?.visibility = View.GONE
             h.tvTranscript?.visibility = View.GONE
         }
-        h.itemView.setOnLongClickListener { showMenu(it.context, m); true }
+        h.itemView.setOnLongClickListener { showMenu(it.context, m, body); true }
     }
 
     private fun bindImage(h: ImageVH, m: SmsMessage) {
@@ -271,9 +280,9 @@ class BubbleAdapter(
         dialog.show()
     }
 
-    private fun showMenu(ctx: Context, m: SmsMessage) {
+    private fun showMenu(ctx: Context, m: SmsMessage, displayBody: String = m.body) {
         val opts = mutableListOf<String>()
-        if (m.body.isNotBlank()) opts += "Copy text"
+        if (displayBody.isNotBlank()) opts += "Copy text"
         opts += "Forward"
         opts += "Delete message"
         AlertDialog.Builder(ctx)
@@ -281,7 +290,7 @@ class BubbleAdapter(
                 when (opts[i]) {
                     "Copy text" -> {
                         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        cm.setPrimaryClip(ClipData.newPlainText("msg", m.body))
+                        cm.setPrimaryClip(ClipData.newPlainText("msg", displayBody))
                         Toast.makeText(ctx, "Copied", Toast.LENGTH_SHORT).show()
                     }
                     "Forward" -> onForward?.invoke(m)

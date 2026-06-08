@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import com.nexlink.app.App
 import com.nexlink.app.R
+import com.nexlink.app.db.CryptoStore
 import com.nexlink.app.db.MmsDownloader
 import com.nexlink.app.db.SmsHelper
 import com.nexlink.app.ui.sms.ConversationActivity
@@ -30,8 +31,30 @@ class SmsReceiver : BroadcastReceiver() {
         Thread {
             try {
                 for ((sender, body) in grouped) {
-                    SmsHelper.saveIncomingSms(context, sender, body.toString())
-                    SmsNotifier.notify(context, sender, body.toString())
+                    val bodyStr = body.toString()
+                    when {
+                        CryptoStore.isKeyExchange(bodyStr) -> {
+                            // Peer has NexLink — store their public key and establish a session.
+                            // Auto-reply with our public key if we haven't sent it yet.
+                            val peerPub = CryptoStore.parseKeyExchange(bodyStr)
+                            if (peerPub != null) {
+                                CryptoStore.storePeerKey(context, sender, peerPub)
+                                if (!CryptoStore.hasSentKey(context, sender)) {
+                                    CryptoStore.markKeySent(context, sender)
+                                    val ourPub = CryptoStore.getPublicKeyBytes(context)
+                                    SmsHelper.sendSms(context, sender,
+                                        CryptoStore.buildKeyExchange(ourPub), -1)
+                                }
+                            }
+                            // Key exchange messages are internal — not shown to the user
+                        }
+                        else -> {
+                            SmsHelper.saveIncomingSms(context, sender, bodyStr)
+                            val notif = if (CryptoStore.isEncrypted(bodyStr))
+                                "🔒 Encrypted message" else bodyStr
+                            SmsNotifier.notify(context, sender, notif)
+                        }
+                    }
                 }
             } finally {
                 pending.finish()

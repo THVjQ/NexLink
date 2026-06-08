@@ -9,6 +9,8 @@ import android.os.Bundle
 import android.provider.CallLog
 import android.telecom.TelecomManager
 import android.telephony.SubscriptionManager
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.*
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
@@ -43,6 +45,8 @@ class CallsFragment : Fragment() {
     private var _b: FragmentCallsBinding? = null
     private val b get() = _b!!
 
+    private var allCalls = listOf<CallEntry>()
+
     override fun onCreateView(i: LayoutInflater, c: ViewGroup?, s: Bundle?): View {
         _b = FragmentCallsBinding.inflate(i, c, false); return b.root
     }
@@ -52,6 +56,11 @@ class CallsFragment : Fragment() {
         b.btnDialpad.setOnClickListener {
             startActivity(Intent(requireContext(), DialerActivity::class.java))
         }
+        b.etSearch.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) { filterCalls(s?.toString().orEmpty()) }
+        })
         loadCallLog()
     }
 
@@ -64,8 +73,18 @@ class CallsFragment : Fragment() {
         Thread {
             val calls = CallLogHelper.getCalls(ctx)
             if (!isAdded) return@Thread
-            activity?.runOnUiThread { bindCalls(calls) }
+            activity?.runOnUiThread {
+                allCalls = calls
+                filterCalls(b.etSearch.text?.toString().orEmpty())
+            }
         }.start()
+    }
+
+    private fun filterCalls(query: String) {
+        val q = query.trim().lowercase()
+        val filtered = if (q.isEmpty()) allCalls
+                       else allCalls.filter { it.name.lowercase().contains(q) || it.number.contains(q) }
+        bindCalls(filtered)
     }
 
     // ── Build grouped rows ───────────────────────────────────────────────────

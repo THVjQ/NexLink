@@ -29,6 +29,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexlink.app.R
 import com.nexlink.app.databinding.ActivityConversationBinding
+import com.nexlink.app.db.CryptoStore
 import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.ReadTracker
 import com.nexlink.app.db.SentMmsStore
@@ -132,6 +133,19 @@ class ConversationActivity : AppCompatActivity() {
         }
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         b.toolbar.setNavigationOnClickListener { finish() }
+
+        if (!isGroup && address.isNotEmpty()) {
+            Thread {
+                val hasSession = CryptoStore.getSessionKey(this, address) != null
+                if (hasSession) {
+                    runOnUiThread { supportActionBar?.subtitle = "🔒 End-to-end encrypted" }
+                } else if (!CryptoStore.hasSentKey(this, address)) {
+                    CryptoStore.markKeySent(this, address)
+                    val pub = CryptoStore.getPublicKeyBytes(this)
+                    SmsHelper.sendSms(this, address, CryptoStore.buildKeyExchange(pub), -1)
+                }
+            }.start()
+        }
 
         adapter = BubbleAdapter(
             isGroup   = isGroup,
@@ -311,7 +325,9 @@ class ConversationActivity : AppCompatActivity() {
                     val resolvedTid = SmsHelper.sendGroupText(this, threadId, participants, text, selectedSimId)
                     if (threadId == 0L && resolvedTid > 0L) threadId = resolvedTid
                 } else {
-                    SmsHelper.sendSms(this, address, text, selectedSimId)
+                    val sessionKey = CryptoStore.getSessionKey(this, address)
+                    val outgoing = if (sessionKey != null) CryptoStore.encrypt(text, sessionKey) else text
+                    SmsHelper.sendSms(this, address, outgoing, selectedSimId)
                 }
                 runOnUiThread { loadMessages() }
             } catch (e: SecurityException) {

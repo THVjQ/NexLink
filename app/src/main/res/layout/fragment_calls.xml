@@ -21,7 +21,18 @@
         <TextView android:text="RECENT CALLS" android:textSize="11sp" android:textStyle="bold"
             android:textColor="@color/muted" android:letterSpacing="0.09"
             android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:layout_marginHorizontal="16dp" android:layout_marginBottom="4dp"/>
+            android:layout_marginHorizontal="16dp" android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etSearch"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginHorizontal="16dp" android:layout_marginBottom="8dp"
+            android:hint="Search calls…"
+            android:inputType="text"
+            android:background="@drawable/bg_input"
+            android:padding="10dp"
+            android:textColor="@color/text"
+            android:textColorHint="@color/muted"/>
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recyclerCalls"
