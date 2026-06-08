@@ -493,36 +493,27 @@ object SmsHelper {
     @Suppress("DEPRECATION")
     private fun sendViaMms(ctx: Context, recipients: List<String>, parts: List<MmsPduBuilder.Part>,
                            subId: Int) {
-        // Generate one Transaction-ID used in both the PDU and the content://mms outbox row.
-        // Samsung's MmsService reads tr_id from content://mms/outbox to embed in the actual
-        // M-Send.req it posts to the MMSC — without a matching row it falls back to "Unknown",
-        // which causes Optus MMSC to return error 3514.
-        val txId     = MmsPduBuilder.generateTxId()
-        val pduBytes = MmsPduBuilder.build(recipients, parts, txId)
+        val txId = MmsPduBuilder.generateTxId()
+        val pduBytes = try {
+            MmsPduBuilder.build(ctx, recipients, parts, txId)
+        } catch (e: Throwable) {
+            android.util.Log.e("NexLink_MMS", "sendViaMms: PduComposer FAILED", e); return
+        }
         android.util.Log.d("NexLink_MMS", "sendViaMms: recipients=$recipients txId=$txId pdu=${pduBytes.size}B subId=$subId")
 
-        // Attempt 1: direct HTTP POST to carrier MMSC (full PDU control, bypasses Samsung layer)
-        if (MmsSender.send(ctx, pduBytes, subId) == 0) {
-            android.util.Log.d("NexLink_MMS", "sendViaMms: direct HTTP succeeded"); return
-        }
-
-        // Attempt 2: MmsFileProvider + outbox row — matches QKSMS / Fossify Messages exactly.
-        //
-        // Step A: Insert message into content://mms/outbox with tr_id so Samsung's MmsService
-        //         can find the row and embed a proper Transaction-ID in its PDU recomposition.
+        // Insert outbox row for UI thread tracking
         val outboxUri = runCatching { insertToOutbox(ctx, recipients, parts, txId) }.getOrNull()
         android.util.Log.d("NexLink_MMS", "sendViaMms: outbox row=$outboxUri")
 
-        // Step B: Write PDU to cache file (MmsFileProvider, exported=false grantUriPermissions=true)
+        // Serve PDU via MmsFileProvider → sendMultimediaMessage → Samsung posts to MMSC
         val contentUri = MmsFileProvider.writePdu(ctx, pduBytes)
+        android.util.Log.d("NexLink_MMS", "sendViaMms: pdu uri=$contentUri")
 
-        // Step C: Send — locationUrl=null lets Samsung use its own APN config
         @Suppress("DEPRECATION")
         val configOverrides = android.os.Bundle().apply {
             putBoolean(android.telephony.SmsManager.MMS_CONFIG_GROUP_MMS_ENABLED, true)
             putInt(android.telephony.SmsManager.MMS_CONFIG_MAX_MESSAGE_SIZE, 1_200_000)
         }
-        android.util.Log.d("NexLink_MMS", "sendViaMms: MmsFileProvider uri=$contentUri")
         getSmsManager(subId).sendMultimediaMessage(
             ctx.applicationContext, contentUri, null, configOverrides, makeSentIntent(ctx))
         android.os.Handler(android.os.Looper.getMainLooper())
@@ -561,7 +552,7 @@ object SmsHelper {
                 put(Telephony.Mms.Part.NAME, outboxPartName(part.contentType))
                 if (part.contentType.startsWith("text/")) put(Telephony.Mms.Part.CHARSET, 106)
             }) ?: continue
-            ctx.contentResolver.openOutputStream(pUri)?.use { it.write(part.data) }
+            ctx.contentResolver.openOutputStream(pUri)?.use { it.write(part.bytes) }
         }
 
         android.util.Log.d("NexLink_MMS", "insertToOutbox: $mmsUri txId=$txId parts=${parts.size}")
