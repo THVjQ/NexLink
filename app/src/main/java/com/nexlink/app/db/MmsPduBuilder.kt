@@ -16,23 +16,31 @@ import java.io.ByteArrayOutputStream
 object MmsPduBuilder {
 
     // OMA-MMS-ENC message header field codes (field-index | 0x80)
-    private const val MF_MESSAGE_TYPE   = 0x8C  // 0x0C | 0x80
-    private const val MF_TRANSACTION_ID = 0x98  // 0x18 | 0x80
-    private const val MF_MMS_VERSION    = 0x8D  // 0x0D | 0x80
-    private const val MF_DATE           = 0x85  // 0x05 | 0x80
-    private const val MF_FROM           = 0x89  // 0x09 | 0x80
-    private const val MF_TO             = 0x97  // 0x17 | 0x80
-    private const val MF_CONTENT_TYPE   = 0x84  // 0x04 | 0x80
+    private const val MF_MESSAGE_TYPE    = 0x8C  // 0x0C | 0x80
+    private const val MF_TRANSACTION_ID  = 0x98  // 0x18 | 0x80
+    private const val MF_MMS_VERSION     = 0x8D  // 0x0D | 0x80
+    private const val MF_DATE            = 0x85  // 0x05 | 0x80
+    private const val MF_FROM            = 0x89  // 0x09 | 0x80
+    private const val MF_TO              = 0x97  // 0x17 | 0x80
+    private const val MF_CONTENT_TYPE    = 0x84  // 0x04 | 0x80
+    private const val MF_MESSAGE_CLASS   = 0x8A  // 0x0A | 0x80
+    private const val MF_EXPIRY          = 0x88  // 0x08 | 0x80
+    private const val MF_PRIORITY        = 0x8F  // 0x0F | 0x80
+    private const val MF_DELIVERY_REPORT = 0x86  // 0x06 | 0x80
+    private const val MF_READ_REPLY      = 0x90  // 0x10 | 0x80
 
     private const val V_M_SEND_REQ      = 0x80
     private const val V_MMS_1_2         = 0x92
-    // OMA-MMS-ENC §7.3.11: Insert-address-token = 129 = 0x81 (NOT 0x80 which is Address-present-token)
-    private const val V_INSERT_ADDRESS  = 0x81
+    private const val V_INSERT_ADDRESS  = 0x81   // OMA-MMS-ENC §7.3.11
+    private const val V_PERSONAL        = 0x80   // Message-Class: Personal
+    private const val V_NORMAL          = 0x81   // Priority: Normal
+    private const val V_NO              = 0x80   // Delivery-Report / Read-Reply: No
+    private const val V_RELATIVE        = 0x81   // Expiry: relative-token
 
-    // WSP well-known param tokens (WAP-230-WSP Table 38, v1.2 assignments)
-    // Type  = 0x09 in WSP 1.2  → short-int 0x89
-    // Start = 0x0A in WSP 1.2  → short-int 0x8A
-    private const val WP_TYPE  = 0x89  // 0x09 | 0x80
+    // WSP well-known param tokens (WAP-230-WSP Table 38)
+    // Type  = 0x03 in WSP → short-int 0x83  (NOT 0x09 which is Content-MO-Type)
+    // Start = 0x0A in WSP → short-int 0x8A
+    private const val WP_TYPE  = 0x83  // 0x03 | 0x80
     private const val WP_START = 0x8A  // 0x0A | 0x80
 
     // WSP well-known content-type tokens (used in multipart PART headers only)
@@ -73,10 +81,14 @@ object MmsPduBuilder {
 
         val out = ByteArrayOutputStream()
 
-        // ── Message headers ───────────────────────────────────────────────────
+        // ── Message headers (order matches QKSMS / android-smsmms PduComposer output) ──
         writeByte(out, MF_MESSAGE_TYPE);   writeByte(out, V_M_SEND_REQ)
         writeByte(out, MF_TRANSACTION_ID); writeText(out, txId)
         writeByte(out, MF_MMS_VERSION);    writeByte(out, V_MMS_1_2)
+
+        // Date (required by most carrier MMSCs even though optional per spec)
+        val epochSecs = System.currentTimeMillis() / 1000L
+        writeByte(out, MF_DATE); writeLongInteger(out, epochSecs)
 
         writeByte(out, MF_FROM); writeByte(out, 1); writeByte(out, V_INSERT_ADDRESS)
 
@@ -86,14 +98,22 @@ object MmsPduBuilder {
             writeByte(out, MF_TO); writeText(out, normalized)
         }
 
+        // Optional but widely required headers — Optus MMSC returns 3514 without them
+        writeByte(out, MF_MESSAGE_CLASS);   writeByte(out, V_PERSONAL)  // Personal
+        writeByte(out, MF_PRIORITY);        writeByte(out, V_NORMAL)    // Normal
+        writeByte(out, MF_DELIVERY_REPORT); writeByte(out, V_NO)        // No
+        writeByte(out, MF_READ_REPLY);      writeByte(out, V_NO)        // No
+
+        // Expiry: 7 days relative = 604800s = 0x093A80 (3 bytes)
+        // Value: value-length=5, Relative-token=0x81, Long-integer(3, 0x093A80)
+        writeByte(out, MF_EXPIRY); writeByte(out, 5)
+        writeByte(out, V_RELATIVE); writeByte(out, 3)
+        writeByte(out, 0x09); writeByte(out, 0x3A); writeByte(out, 0x80)
+
         // Content-Type: application/vnd.wap.multipart.related; type="application/smil"; start="<smil>"
-        // Using Content-general-form (value-length + media-type + params) as AOSP PduComposer does.
-        //   0xB3 = multipart/related short-int
-        //   0x89 = type param token (WSP 1.2 well-known param 0x09 | 0x80)
-        //   "application/smil\0" = 17 bytes
-        //   0x8A = start param token (WSP 1.2 well-known param 0x0A | 0x80)
-        //   "<smil>\0" = 7 bytes
-        //   total value bytes = 1+1+17+1+7 = 27 → Short-length 0x1B
+        //   WP_TYPE  = 0x83 (WSP param 0x03 = "type")
+        //   WP_START = 0x8A (WSP param 0x0A = "start")
+        //   value bytes: 1(B3) + 1(WP_TYPE) + 17("application/smil\0") + 1(WP_START) + 7("<smil>\0") = 27
         writeByte(out, MF_CONTENT_TYPE)
         writeByte(out, 27)         // Short-length = value-length
         writeByte(out, 0xB3)       // application/vnd.wap.multipart.related
@@ -240,6 +260,16 @@ object MmsPduBuilder {
 
     private fun writeText(out: ByteArrayOutputStream, s: String) {
         out.write(s.toByteArray(Charsets.UTF_8)); out.write(0)
+    }
+
+    // OMA-MMS-ENC §8.3.2.2 Long-integer: length-byte (1-8) + big-endian bytes
+    private fun writeLongInteger(out: ByteArrayOutputStream, v: Long) {
+        val bytes = mutableListOf<Int>()
+        var tmp = v
+        while (tmp > 0) { bytes.add(0, (tmp and 0xFF).toInt()); tmp = tmp ushr 8 }
+        if (bytes.isEmpty()) bytes.add(0)
+        out.write(bytes.size)
+        bytes.forEach { out.write(it) }
     }
 
     fun writeUintVar(out: ByteArrayOutputStream, n: Int) {
