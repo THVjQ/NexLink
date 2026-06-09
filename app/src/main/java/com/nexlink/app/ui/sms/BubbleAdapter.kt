@@ -255,8 +255,12 @@ class BubbleAdapter(
                 }
             }
         } else {
-            h.bubble.setOnClickListener(null)
+            h.bubble.isClickable = false
         }
+        // Long-press on both bubble and item row so it fires regardless of which view consumes touch
+        val longClick = View.OnLongClickListener { showMenu(it.context, m, body); true }
+        h.bubble.setOnLongClickListener(longClick)
+        h.itemView.setOnLongClickListener(longClick)
         if (m.isVoice && m.mediaUri != null) {
             h.btnPlay?.setOnClickListener { btn -> playAudio(btn.context, m.mediaUri) }
             h.tvTranscript?.visibility = View.GONE
@@ -284,7 +288,6 @@ class BubbleAdapter(
             h.btnTranscript?.visibility = View.GONE
             h.tvTranscript?.visibility = View.GONE
         }
-        h.itemView.setOnLongClickListener { showMenu(it.context, m, body); true }
     }
 
     private fun bindImage(h: ImageVH, m: SmsMessage) {
@@ -294,7 +297,6 @@ class BubbleAdapter(
         val isVideo = m.mimeType?.startsWith("video/") == true
         if (isVideo) {
             h.image.setImageResource(android.R.drawable.ic_media_play)
-            // Videos open in system player (can't play inline easily)
             h.image.setOnClickListener { openMedia(it.context, m.mediaUri, m.mimeType) }
         } else {
             m.mediaUri?.let { uri -> loadImageAsync(h.image, uri) }
@@ -302,6 +304,9 @@ class BubbleAdapter(
                 m.mediaUri?.let { showFullscreen(ctx.context, Uri.parse(it)) }
             }
         }
+        // Long-press on the image itself (the click listener above makes h.image intercept all
+        // touch events, so putting long-click on h.itemView would never fire)
+        h.image.setOnLongClickListener { showMediaMenu(it.context, m); true }
         h.itemView.setOnLongClickListener { showMediaMenu(it.context, m); true }
     }
 
