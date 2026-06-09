@@ -85,13 +85,14 @@ object SmsHelper {
             }
         } catch (_: Exception) {}
         if (list.isEmpty()) return getConversationsFallback(ctx, limit)
-        // Deduplicate: same normalised address can appear twice when both SMS and MMS threads exist
+        // Deduplicate: same number in different formats (0412… vs +61412… vs 61412…) gets one entry.
+        // Match on last 9 digits — robust across all Australian/international format variants.
         val seen = mutableSetOf<String>()
-        val deduped = list.filter { conv ->
-            val norm = MmsPduBuilder.normalizeToE164(conv.address)
-            seen.add(norm)
+        return list.filter { conv ->
+            val digits = conv.address.replace("[^\\d]".toRegex(), "")
+            val key = if (digits.length >= 9) digits.takeLast(9) else digits.ifEmpty { conv.address }
+            seen.add(key)
         }
-        return deduped
     }
 
     private fun getConversationsFallback(ctx: Context, limit: Int): List<Conversation> {
@@ -416,6 +417,63 @@ object SmsHelper {
         try {
             ctx.contentResolver.delete(Uri.parse("content://mms-sms/conversations/$threadId"), null, null)
         } catch (_: Exception) {}
+    }
+
+    // ── Drawer helpers (media + files for thread) ─────────────────────────────
+
+    fun getMediaUrisForThread(ctx: Context, threadId: Long): List<String> {
+        val result = mutableListOf<String>()
+        try {
+            val mmsIds = mutableListOf<Long>()
+            ctx.contentResolver.query(Telephony.Mms.CONTENT_URI,
+                arrayOf(Telephony.Mms._ID), "${Telephony.Mms.THREAD_ID} = ?",
+                arrayOf(threadId.toString()), null)?.use { c ->
+                while (c.moveToNext()) mmsIds.add(c.getLong(0))
+            }
+            if (mmsIds.isEmpty()) return result
+            val ph = mmsIds.joinToString(",") { "?" }
+            ctx.contentResolver.query(Uri.parse("content://mms/part"),
+                arrayOf(Telephony.Mms.Part._ID, Telephony.Mms.Part.CONTENT_TYPE),
+                "mid IN ($ph)", mmsIds.map { it.toString() }.toTypedArray(), null)?.use { c ->
+                val idIdx = c.getColumnIndex(Telephony.Mms.Part._ID)
+                val ctIdx = c.getColumnIndex(Telephony.Mms.Part.CONTENT_TYPE)
+                while (c.moveToNext()) {
+                    val ct = c.getString(ctIdx) ?: continue
+                    if (ct.startsWith("image/") || ct.startsWith("video/"))
+                        result.add("content://mms/part/${c.getLong(idIdx)}")
+                }
+            }
+        } catch (_: Exception) {}
+        return result
+    }
+
+    fun getFilesForThread(ctx: Context, threadId: Long): List<Pair<String, String>> {
+        val result = mutableListOf<Pair<String, String>>()
+        try {
+            val mmsIds = mutableListOf<Long>()
+            ctx.contentResolver.query(Telephony.Mms.CONTENT_URI,
+                arrayOf(Telephony.Mms._ID), "${Telephony.Mms.THREAD_ID} = ?",
+                arrayOf(threadId.toString()), null)?.use { c ->
+                while (c.moveToNext()) mmsIds.add(c.getLong(0))
+            }
+            if (mmsIds.isEmpty()) return result
+            val ph = mmsIds.joinToString(",") { "?" }
+            ctx.contentResolver.query(Uri.parse("content://mms/part"),
+                arrayOf(Telephony.Mms.Part._ID, Telephony.Mms.Part.CONTENT_TYPE, Telephony.Mms.Part.NAME),
+                "mid IN ($ph)", mmsIds.map { it.toString() }.toTypedArray(), null)?.use { c ->
+                val idIdx   = c.getColumnIndex(Telephony.Mms.Part._ID)
+                val ctIdx   = c.getColumnIndex(Telephony.Mms.Part.CONTENT_TYPE)
+                val nameIdx = c.getColumnIndex(Telephony.Mms.Part.NAME)
+                while (c.moveToNext()) {
+                    val ct = c.getString(ctIdx) ?: continue
+                    if (ct.startsWith("image/") || ct.startsWith("video/") ||
+                        ct == "application/smil" || ct.startsWith("text/")) continue
+                    val name = c.getString(nameIdx) ?: "file"
+                    result.add(Pair("content://mms/part/${c.getLong(idIdx)}", name))
+                }
+            }
+        } catch (_: Exception) {}
+        return result
     }
 
     // ── Send ──────────────────────────────────────────────────────────────────

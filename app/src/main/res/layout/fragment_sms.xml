@@ -25,18 +25,18 @@
                         android:paddingHorizontal="10dp" android:paddingVertical="4dp"
                         android:layout_marginStart="10dp"
                         android:clickable="true" android:focusable="true"/>
-                    <ImageButton android:id="@+id/btnMoreOptions"
-                        android:layout_width="36dp" android:layout_height="36dp"
-                        android:layout_marginStart="6dp"
-                        android:src="@drawable/ic_more_vert"
-                        android:tint="@color/muted"
-                        android:background="?attr/selectableItemBackground"
-                        android:contentDescription="More options"
-                        android:padding="6dp"/>
                 </LinearLayout>
                 <TextView android:id="@+id/tvUnread" android:textSize="12sp" android:textColor="@color/muted"
                     android:layout_width="wrap_content" android:layout_height="wrap_content"/>
             </LinearLayout>
+            <!-- 3-dots at the very right of the header -->
+            <ImageButton android:id="@+id/btnMoreOptions"
+                android:layout_width="40dp" android:layout_height="40dp"
+                android:src="@drawable/ic_more_vert"
+                android:tint="@color/muted"
+                android:background="?attr/selectableItemBackground"
+                android:contentDescription="More options"
+                android:padding="8dp"/>
         </LinearLayout>
 
         <!-- Search bar -->

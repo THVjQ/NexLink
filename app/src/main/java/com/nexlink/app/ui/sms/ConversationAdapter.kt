@@ -7,6 +7,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.nexlink.app.R
+import com.nexlink.app.db.ChatCustomizationStore
 import com.nexlink.app.db.Conversation
 import com.nexlink.app.db.CryptoStore
 import com.nexlink.app.db.PinStore
@@ -27,13 +28,14 @@ class ConversationAdapter(
     fun setData(data: List<Conversation>) { items = data; notifyDataSetChanged() }
 
     inner class VH(v: View) : RecyclerView.ViewHolder(v) {
-        val avatar:  TextView   = v.findViewById(R.id.tvAvatar)
-        val name:    TextView   = v.findViewById(R.id.tvName)
-        val preview: TextView   = v.findViewById(R.id.tvPreview)
-        val time:    TextView   = v.findViewById(R.id.tvTime)
-        val badge:   TextView   = v.findViewById(R.id.tvBadge)
-        val lock:    ImageView  = v.findViewById(R.id.ivLock)
-        val pin:     ImageView  = v.findViewById(R.id.ivPin)
+        val avatar:      TextView   = v.findViewById(R.id.tvAvatar)
+        val avatarPhoto: ImageView  = v.findViewById(R.id.ivAvatarPhoto)
+        val name:        TextView   = v.findViewById(R.id.tvName)
+        val preview:     TextView   = v.findViewById(R.id.tvPreview)
+        val time:        TextView   = v.findViewById(R.id.tvTime)
+        val badge:       TextView   = v.findViewById(R.id.tvBadge)
+        val lock:        ImageView  = v.findViewById(R.id.ivLock)
+        val pin:         ImageView  = v.findViewById(R.id.ivPin)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
@@ -47,8 +49,25 @@ class ConversationAdapter(
         val initials = c.contactName.split(" ").take(2)
             .joinToString("") { it.take(1).uppercase() }.ifBlank { c.address.take(2) }
 
-        h.avatar.background.mutate().setTint(AvatarColors.colorFor(initials))
-        h.avatar.text  = initials
+        // Show custom photo icon if set, otherwise fall back to coloured initials
+        val iconUri = ChatCustomizationStore.getIcon(ctx, c.address)
+        if (!iconUri.isNullOrEmpty()) {
+            h.avatarPhoto.visibility = View.VISIBLE
+            h.avatar.visibility = View.INVISIBLE
+            try {
+                h.avatarPhoto.setImageURI(android.net.Uri.parse(iconUri))
+            } catch (_: Exception) {
+                h.avatarPhoto.visibility = View.GONE
+                h.avatar.visibility = View.VISIBLE
+                h.avatar.background.mutate().setTint(AvatarColors.colorFor(initials))
+                h.avatar.text = initials
+            }
+        } else {
+            h.avatarPhoto.visibility = View.GONE
+            h.avatar.visibility = View.VISIBLE
+            h.avatar.background.mutate().setTint(AvatarColors.colorFor(initials))
+            h.avatar.text = initials
+        }
         h.name.text    = c.contactName.ifBlank { c.address }
         h.preview.text = c.lastMessage
         h.time.text    = formatTime(c.timestamp)

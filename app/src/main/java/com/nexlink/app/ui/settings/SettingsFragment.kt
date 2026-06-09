@@ -261,6 +261,7 @@ class SettingsFragment : Fragment() {
 
     private fun showQrContactDialog() {
         val ctx = requireContext()
+        val prefs = ctx.getSharedPreferences("nx_qr_contact", android.content.Context.MODE_PRIVATE)
         val dialogView = layoutInflater.inflate(com.nexlink.app.R.layout.dialog_qr_contact, null)
         val etFirst = dialogView.findViewById<android.widget.EditText>(com.nexlink.app.R.id.etFirstName)
         val etLast  = dialogView.findViewById<android.widget.EditText>(com.nexlink.app.R.id.etLastName)
@@ -269,9 +270,23 @@ class SettingsFragment : Fragment() {
         val btnGen  = dialogView.findViewById<com.google.android.material.button.MaterialButton>(com.nexlink.app.R.id.btnGenerateQr)
         val ivQr    = dialogView.findViewById<android.widget.ImageView>(com.nexlink.app.R.id.ivQrCode)
 
+        // Restore previously saved values
+        etFirst.setText(prefs.getString("first", ""))
+        etLast.setText(prefs.getString("last", ""))
+        etPhone.setText(prefs.getString("phone", ""))
+        etEmail.setText(prefs.getString("email", ""))
+
         val dialog = AlertDialog.Builder(ctx).setView(dialogView).create()
 
         btnGen.setOnClickListener {
+            // Persist entries so they're remembered next time
+            prefs.edit()
+                .putString("first", etFirst.text.toString().trim())
+                .putString("last",  etLast.text.toString().trim())
+                .putString("phone", etPhone.text.toString().trim())
+                .putString("email", etEmail.text.toString().trim())
+                .apply()
+
             val vcard = buildString {
                 appendLine("BEGIN:VCARD"); appendLine("VERSION:3.0")
                 val name = "${etFirst.text} ${etLast.text}".trim()

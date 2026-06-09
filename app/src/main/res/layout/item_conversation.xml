@@ -5,16 +5,24 @@
     android:paddingHorizontal="16dp" android:paddingVertical="12dp"
     android:gravity="center_vertical">
 
-    <!-- Circle avatar -->
-    <TextView android:id="@+id/tvAvatar"
-        android:layout_width="52dp" android:layout_height="52dp"
-        android:background="@drawable/bg_avatar"
-        android:gravity="center"
-        android:textColor="#ffffff"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:layout_marginEnd="14dp"
-        android:fontFamily="sans-serif-medium"/>
+    <!-- Circle avatar (initials fallback + optional photo overlay) -->
+    <FrameLayout android:layout_width="52dp" android:layout_height="52dp"
+        android:layout_marginEnd="14dp">
+        <TextView android:id="@+id/tvAvatar"
+            android:layout_width="52dp" android:layout_height="52dp"
+            android:background="@drawable/bg_avatar"
+            android:gravity="center"
+            android:textColor="#ffffff"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif-medium"/>
+        <ImageView android:id="@+id/ivAvatarPhoto"
+            android:layout_width="52dp" android:layout_height="52dp"
+            android:background="@drawable/bg_avatar"
+            android:scaleType="centerCrop"
+            android:visibility="gone"
+            android:contentDescription="Contact photo"/>
+    </FrameLayout>
 
     <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
         android:layout_weight="1" android:orientation="vertical">
@@ -39,7 +47,7 @@
                 android:contentDescription="Encrypted"/>
             <ImageView
                 android:id="@+id/ivPin"
-                android:layout_width="12dp" android:layout_height="12dp"
+                android:layout_width="18dp" android:layout_height="18dp"
                 android:src="@drawable/ic_pin"
                 android:layout_marginStart="4dp"
                 android:layout_marginEnd="4dp"

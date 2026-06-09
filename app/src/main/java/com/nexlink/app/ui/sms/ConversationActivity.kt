@@ -28,7 +28,9 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexlink.app.R
 import com.nexlink.app.databinding.ActivityConversationBinding
@@ -109,9 +111,20 @@ class ConversationActivity : AppCompatActivity() {
         ActivityResultContracts.GetContent()
     ) { uri ->
         uri?.let {
+            contentResolver.takePersistableUriPermission(it, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
             ChatCustomizationStore.setWallpaper(this, address, it.toString())
             applyCustomWallpaper()
             Toast.makeText(this, "Wallpaper set", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private val chatIconLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            try { contentResolver.takePersistableUriPermission(it, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+            ChatCustomizationStore.setIcon(this, address, it.toString())
+            Toast.makeText(this, "Chat icon updated", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -122,11 +135,14 @@ class ConversationActivity : AppCompatActivity() {
         b = ActivityConversationBinding.inflate(layoutInflater)
         setContentView(b.root)
 
-        // Apply bottom padding for keyboard / navigation bars
-        ViewCompat.setOnApplyWindowInsetsListener(b.root) { v, insets ->
-            val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-            val navBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
-            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, maxOf(imeBottom, navBottom))
+        // Edge-to-edge: apply status-bar top inset + keyboard bottom inset to the main content pane only.
+        // Targeting contentLayout (not the DrawerLayout root) keeps the drawer panel unaffected.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        ViewCompat.setOnApplyWindowInsetsListener(b.contentLayout) { v, insets ->
+            val sys    = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val ime    = insets.getInsets(WindowInsetsCompat.Type.ime())
+            val bottom = maxOf(ime.bottom, sys.bottom)
+            v.setPadding(0, sys.top, 0, bottom)
             insets
         }
 
@@ -282,37 +298,98 @@ class ConversationActivity : AppCompatActivity() {
             }.start()
         }
 
-        // Custom Icon picker
-        b.rowCustomIcon.setOnClickListener { showIconPickerDialog() }
+        // Custom Icon — photo from gallery
+        b.rowCustomIcon.setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("Chat icon")
+                .setItems(arrayOf("Choose from gallery", "Remove icon")) { _, which ->
+                    if (which == 0) chatIconLauncher.launch("image/*")
+                    else { ChatCustomizationStore.setIcon(this, address, ""); Toast.makeText(this, "Icon removed", Toast.LENGTH_SHORT).show() }
+                }
+                .show()
+        }
 
         // Custom Wallpaper picker
         b.rowCustomWallpaper.setOnClickListener {
-            wallpaperLauncher.launch("image/*")
+            AlertDialog.Builder(this)
+                .setTitle("Chat wallpaper")
+                .setItems(arrayOf("Choose from gallery", "Remove wallpaper")) { _, which ->
+                    if (which == 0) wallpaperLauncher.launch("image/*")
+                    else { ChatCustomizationStore.clearWallpaper(this, address); b.recycler.background = null; Toast.makeText(this, "Wallpaper removed", Toast.LENGTH_SHORT).show() }
+                }
+                .show()
         }
 
-        // Search messages in drawer
+        // Search messages: filter shown inside main recycler, results visible behind semi-transparent drawer
         b.etDrawerSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
             override fun onTextChanged(s: CharSequence?, st: Int, before: Int, c: Int) {}
             override fun afterTextChanged(s: Editable?) {
-                val query = s?.toString()?.trim() ?: ""
-                adapter.setSearchFilter(query)
+                adapter.setSearchFilter(s?.toString()?.trim() ?: "")
             }
         })
+
+        // Load media/files into drawer recycler
+        loadDrawerMedia()
+        b.tabMedia.setOnClickListener { loadDrawerMedia() }
+        b.tabFiles.setOnClickListener { loadDrawerFiles() }
     }
 
-    private fun showIconPickerDialog() {
-        val emojis = arrayOf("😀", "👤", "🐱", "🐶", "🌟", "🎮", "🎵", "📱", "💼", "🏠", "❤️", "🔥")
-        AlertDialog.Builder(this)
-            .setTitle("Choose icon")
-            .setItems(emojis) { _, i ->
-                ChatCustomizationStore.setIcon(this, address, emojis[i])
-                Toast.makeText(this, "Icon set to ${emojis[i]}", Toast.LENGTH_SHORT).show()
+    private enum class DrawerTab { MEDIA, FILES }
+    private var drawerTab = DrawerTab.MEDIA
+
+    private fun setDrawerTab(tab: DrawerTab) {
+        drawerTab = tab
+        val accent = resources.getColor(R.color.accent, null)
+        val muted  = resources.getColor(R.color.muted, null)
+        b.tabMedia.setTextColor(if (tab == DrawerTab.MEDIA) accent else muted)
+        b.tabMedia.setBackgroundResource(if (tab == DrawerTab.MEDIA) R.drawable.bg_card_selected else R.drawable.bg_card_unselected)
+        b.tabFiles.setTextColor(if (tab == DrawerTab.FILES) accent else muted)
+        b.tabFiles.setBackgroundResource(if (tab == DrawerTab.FILES) R.drawable.bg_card_selected else R.drawable.bg_card_unselected)
+    }
+
+    private fun loadDrawerMedia() {
+        setDrawerTab(DrawerTab.MEDIA)
+        if (threadId <= 0) { b.drawerRecycler.adapter = null; return }
+        Thread {
+            val uris = SmsHelper.getMediaUrisForThread(this, threadId)
+            runOnUiThread {
+                if (uris.isEmpty()) {
+                    b.drawerRecycler.adapter = null
+                    return@runOnUiThread
+                }
+                b.drawerRecycler.layoutManager = GridLayoutManager(this, 3)
+                b.drawerRecycler.adapter = DrawerMediaAdapter(uris) { uri ->
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                        setDataAndType(android.net.Uri.parse(uri), "image/*")
+                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    try { startActivity(intent) } catch (_: Exception) {}
+                }
             }
-            .setNegativeButton("Clear") { _, _ ->
-                ChatCustomizationStore.setIcon(this, address, "")
+        }.start()
+    }
+
+    private fun loadDrawerFiles() {
+        setDrawerTab(DrawerTab.FILES)
+        if (threadId <= 0) { b.drawerRecycler.adapter = null; return }
+        Thread {
+            val files = SmsHelper.getFilesForThread(this, threadId)
+            runOnUiThread {
+                if (files.isEmpty()) {
+                    b.drawerRecycler.adapter = null
+                    return@runOnUiThread
+                }
+                b.drawerRecycler.layoutManager = LinearLayoutManager(this)
+                b.drawerRecycler.adapter = DrawerFileAdapter(files) { pair ->
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                        setDataAndType(android.net.Uri.parse(pair.first), pair.second)
+                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    try { startActivity(intent) } catch (_: Exception) {}
+                }
             }
-            .show()
+        }.start()
     }
 
     override fun onResume() {

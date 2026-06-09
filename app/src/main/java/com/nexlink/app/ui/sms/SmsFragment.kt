@@ -240,7 +240,7 @@ class SmsFragment : Fragment() {
                 RecycleBinStore.add(ctx, conv)
                 Thread {
                     SmsHelper.deleteThread(ctx, conv.threadId)
-                    loadConversations()
+                    activity?.runOnUiThread { loadConversations() }
                 }.start()
             }
             .setNegativeButton("Cancel", null)
@@ -332,8 +332,8 @@ class SmsFragment : Fragment() {
         cats.forEach { cat ->
             val chip = android.widget.TextView(ctx).apply {
                 text = cat.name
-                textSize = 12f
-                setPadding(28, 10, 28, 10)
+                textSize = 18f
+                setPadding(40.dpToPx(ctx), 14.dpToPx(ctx), 40.dpToPx(ctx), 14.dpToPx(ctx))
                 val isActive = cat.id == activeCategoryId
                 setBackgroundResource(if (isActive) R.drawable.bg_card_selected else R.drawable.bg_card_unselected)
                 setTextColor(if (isActive) resources.getColor(R.color.accent, null)

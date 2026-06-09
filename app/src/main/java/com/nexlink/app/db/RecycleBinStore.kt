@@ -30,10 +30,12 @@ object RecycleBinStore {
         save(ctx, getAll(ctx).filter { it.threadId != threadId })
     }
 
+    private val EXPIRY_MS = 30L * 24 * 60 * 60 * 1000  // 30 days
+
     fun getAll(ctx: Context): List<DeletedConversation> {
         val json = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null)
             ?: return emptyList()
-        return try {
+        val all = try {
             val arr = JSONArray(json)
             (0 until arr.length()).map { i ->
                 val o = arr.getJSONObject(i)
@@ -42,6 +44,10 @@ object RecycleBinStore {
                     o.getLong("timestamp"), o.getLong("deletedAt"))
             }
         } catch (_: Exception) { emptyList() }
+        val cutoff = System.currentTimeMillis() - EXPIRY_MS
+        val active = all.filter { it.deletedAt >= cutoff }
+        if (active.size != all.size) save(ctx, active)  // prune expired items
+        return active
     }
 
     fun clear(ctx: Context) = save(ctx, emptyList())
