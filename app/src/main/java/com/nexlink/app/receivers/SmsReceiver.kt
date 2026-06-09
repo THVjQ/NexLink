@@ -11,6 +11,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.net.Uri
 import android.provider.Telephony
+import android.provider.Telephony.Mms
 import android.telephony.SmsManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -259,6 +260,31 @@ class MmsSentReceiver : BroadcastReceiver() {
     }
 }
 
+/** Handles "Mark as Read" taps from the notification shade. */
+class NotificationMarkReadReceiver : BroadcastReceiver() {
+    override fun onReceive(ctx: Context, intent: Intent) {
+        val sender   = intent.getStringExtra("address") ?: return
+        val threadId = intent.getLongExtra("thread_id", 0L)
+        if (threadId > 0) {
+            try {
+                ctx.contentResolver.update(
+                    Telephony.Sms.CONTENT_URI,
+                    android.content.ContentValues().apply { put(Telephony.Sms.READ, 1) },
+                    "${Telephony.Sms.THREAD_ID} = ? AND ${Telephony.Sms.READ} = 0",
+                    arrayOf(threadId.toString())
+                )
+                ctx.contentResolver.update(
+                    Telephony.Mms.CONTENT_URI,
+                    android.content.ContentValues().apply { put(Telephony.Mms.READ, 1) },
+                    "${Telephony.Mms.THREAD_ID} = ? AND ${Telephony.Mms.READ} = 0",
+                    arrayOf(threadId.toString())
+                )
+            } catch (_: Exception) {}
+        }
+        SmsNotifier.clearPending(ctx, sender)
+    }
+}
+
 /** Handles inline replies from the notification shade. */
 class NotificationReplyReceiver : BroadcastReceiver() {
     companion object { const val KEY_REPLY = "nexlink_reply_text" }
@@ -336,6 +362,18 @@ object SmsNotifier {
             .setAllowGeneratedReplies(true)
             .build()
 
+        // Mark as Read action
+        val markReadIntent = Intent(ctx, NotificationMarkReadReceiver::class.java).apply {
+            putExtra("address", sender)
+            putExtra("thread_id", threadId)
+        }
+        val markReadPi = PendingIntent.getBroadcast(
+            ctx, sender.hashCode() + 9001, markReadIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val markReadAction = NotificationCompat.Action.Builder(R.drawable.ic_clear, "Mark as Read", markReadPi)
+            .build()
+
         val notif = NotificationCompat.Builder(ctx, App.CH_SMS)
             .setSmallIcon(R.drawable.ic_notif_nexlink)
             .setLargeIcon(buildAvatarIcon(name))
@@ -344,6 +382,7 @@ object SmsNotifier {
             .setStyle(style)
             .setContentIntent(pi)
             .addAction(replyAction)
+            .addAction(markReadAction)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setNumber(messages.size)

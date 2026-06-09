@@ -27,6 +27,8 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
+    <!-- Needed for MediaStore writes on Android 8/9 (API 26–28) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>
 
     <!-- System -->
     <uses-permission android:name="android.permission.INTERNET"/>
@@ -205,6 +207,9 @@
 
         <!-- ── Notification inline reply ── -->
         <receiver android:name=".receivers.NotificationReplyReceiver" android:exported="false"/>
+
+        <!-- ── Notification mark-as-read ── -->
+        <receiver android:name=".receivers.NotificationMarkReadReceiver" android:exported="false"/>
 
         <!-- ── Social notification tap → open social app + mark read ── -->
         <receiver android:name=".receivers.SocialOpenReceiver" android:exported="false"/>

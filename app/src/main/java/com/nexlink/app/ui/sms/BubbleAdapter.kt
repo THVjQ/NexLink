@@ -3,11 +3,16 @@ package com.nexlink.app.ui.sms
 import android.app.Dialog
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.media.MediaPlayer
 import android.net.Uri
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.provider.MediaStore
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -297,7 +302,7 @@ class BubbleAdapter(
                 m.mediaUri?.let { showFullscreen(ctx.context, Uri.parse(it)) }
             }
         }
-        h.itemView.setOnLongClickListener { showMenu(it.context, m); true }
+        h.itemView.setOnLongClickListener { showMediaMenu(it.context, m); true }
     }
 
     private fun showFullscreen(ctx: Context, uri: Uri) {
@@ -336,6 +341,85 @@ class BubbleAdapter(
                 }
             }
             .show()
+    }
+
+    private fun showMediaMenu(ctx: Context, m: SmsMessage) {
+        val isVideo = m.mimeType?.startsWith("video/") == true
+        val opts = mutableListOf("Download", "Forward")
+        if (!isVideo) opts += "Copy image"
+        opts += "Delete"
+        AlertDialog.Builder(ctx)
+            .setItems(opts.toTypedArray()) { _, i ->
+                when (opts[i]) {
+                    "Download"   -> downloadMedia(ctx, m)
+                    "Forward"    -> onForward?.invoke(m)
+                    "Copy image" -> copyImageToClipboard(ctx, m)
+                    "Delete"     -> AlertDialog.Builder(ctx)
+                        .setMessage("Delete this message?")
+                        .setPositiveButton("Delete") { _, _ -> onDelete?.invoke(m) }
+                        .setNegativeButton("Cancel", null).show()
+                }
+            }.show()
+    }
+
+    private fun downloadMedia(ctx: Context, m: SmsMessage) {
+        val uriStr   = m.mediaUri ?: return
+        val mimeType = m.mimeType ?: "image/jpeg"
+        val isVideo  = mimeType.startsWith("video/")
+        val ext = when {
+            mimeType.contains("jpeg") || mimeType.contains("jpg") -> "jpg"
+            mimeType.contains("png")  -> "png"
+            mimeType.contains("gif")  -> "gif"
+            mimeType.contains("mp4")  -> "mp4"
+            mimeType.contains("3gp")  -> "3gp"
+            else -> mimeType.substringAfter("/").take(8)
+        }
+        Thread {
+            try {
+                val displayName = "NexLink_${System.currentTimeMillis()}.$ext"
+                val collection  = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    if (isVideo) MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                    else         MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                } else {
+                    if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                    else         MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                }
+                val cv = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        put(MediaStore.MediaColumns.RELATIVE_PATH, if (isVideo) "Movies/NexLink" else "Pictures/NexLink")
+                        put(MediaStore.MediaColumns.IS_PENDING, 1)
+                    }
+                }
+                val destUri = ctx.contentResolver.insert(collection, cv) ?: return@Thread
+                ctx.contentResolver.openInputStream(Uri.parse(uriStr))?.use { input ->
+                    ctx.contentResolver.openOutputStream(destUri)?.use { it.write(input.readBytes()) }
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ctx.contentResolver.update(destUri,
+                        ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+                }
+                Handler(Looper.getMainLooper()).post {
+                    Toast.makeText(ctx, "Saved to ${if (isVideo) "Movies" else "Pictures"}/NexLink", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Handler(Looper.getMainLooper()).post {
+                    Toast.makeText(ctx, "Download failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun copyImageToClipboard(ctx: Context, m: SmsMessage) {
+        val uri = m.mediaUri ?: return
+        try {
+            val clip = ClipData.newUri(ctx.contentResolver, "Image", Uri.parse(uri))
+            (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
+            Toast.makeText(ctx, "Image copied to clipboard", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(ctx, "Copy failed: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun loadImageAsync(iv: ImageView, uriStr: String) {
