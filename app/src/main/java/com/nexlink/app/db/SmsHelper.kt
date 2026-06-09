@@ -85,7 +85,13 @@ object SmsHelper {
             }
         } catch (_: Exception) {}
         if (list.isEmpty()) return getConversationsFallback(ctx, limit)
-        return list
+        // Deduplicate: same normalised address can appear twice when both SMS and MMS threads exist
+        val seen = mutableSetOf<String>()
+        val deduped = list.filter { conv ->
+            val norm = MmsPduBuilder.normalizeToE164(conv.address)
+            seen.add(norm)
+        }
+        return deduped
     }
 
     private fun getConversationsFallback(ctx: Context, limit: Int): List<Conversation> {

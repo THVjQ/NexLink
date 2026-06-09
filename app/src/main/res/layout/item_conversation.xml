@@ -37,6 +37,15 @@
                 android:tint="@color/muted"
                 android:visibility="gone"
                 android:contentDescription="Encrypted"/>
+            <ImageView
+                android:id="@+id/ivPin"
+                android:layout_width="12dp" android:layout_height="12dp"
+                android:src="@drawable/ic_pin"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp"
+                android:tint="@color/accent"
+                android:visibility="gone"
+                android:contentDescription="Pinned"/>
             <TextView android:id="@+id/tvTime"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:textColor="@color/muted"

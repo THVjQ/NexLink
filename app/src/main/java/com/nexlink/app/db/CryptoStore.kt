@@ -77,12 +77,12 @@ object CryptoStore {
     // ── Wire format ───────────────────────────────────────────────────────────
 
     private val KEY_EXCHANGE_PREAMBLE = """
-This message was sent automatically by NexLink to establish an end-to-end encrypted session for this conversation.
+This message was sent automatically by NexLink to establish an end-to-end encrypted session.
 
-• If you have NexLink installed, all future messages will be encrypted automatically — no action is required on your part.
+• Both parties need NexLink installed for messages to be encrypted.
 • If you do not use NexLink, please disregard this message entirely.
 
-NexLink is a private, open-source messaging app. Learn more at nexlink.app.
+Learn more at THVjQ.com.au/NexLink
 """.trimIndent()
 
     fun buildKeyExchange(pubKeyBytes: ByteArray) =

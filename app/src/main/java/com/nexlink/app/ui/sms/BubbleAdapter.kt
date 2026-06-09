@@ -40,6 +40,8 @@ class BubbleAdapter(
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     private var rows = listOf<Row>()
+    private var allMessages = listOf<SmsMessage>()
+    private var searchQuery = ""
 
     // Outgoing MMS sent optimistically before content://mms is updated by the system.
     // Cleared when a real DB message appears within 10 seconds of the optimistic timestamp.
@@ -52,6 +54,7 @@ class BubbleAdapter(
     }
 
     fun setData(msgs: List<SmsMessage>) {
+        allMessages = msgs
         // Drop optimistic entries whose real DB counterpart has appeared (same mime, outgoing, ±30 s)
         optimistic.removeAll { opt ->
             msgs.any { real ->
@@ -60,7 +63,15 @@ class BubbleAdapter(
                 kotlin.math.abs(real.timestamp - opt.timestamp) < 30_000L
             }
         }
-        applyDiff(buildRows(mergeOptimistic(msgs)))
+        val filtered = if (searchQuery.isBlank()) msgs else msgs.filter {
+            it.body.contains(searchQuery, ignoreCase = true)
+        }
+        applyDiff(buildRows(mergeOptimistic(filtered)))
+    }
+
+    fun setSearchFilter(query: String) {
+        searchQuery = query
+        setData(allMessages)
     }
 
     private fun applyDiff(newRows: List<Row>) {

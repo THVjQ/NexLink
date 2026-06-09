@@ -64,4 +64,14 @@ object NotificationPrefs {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putBoolean("rcs_enabled", v).apply()
     }
+
+    // ── Encryption master toggle ──
+    fun isEncryptionEnabled(ctx: Context): Boolean =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean("encryption_enabled", true)
+
+    fun setEncryptionEnabled(ctx: Context, enabled: Boolean) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean("encryption_enabled", enabled).apply()
+    }
 }

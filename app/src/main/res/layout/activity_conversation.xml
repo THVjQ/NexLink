@@ -1,94 +1,222 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:background="@color/bg">
+<androidx.drawerlayout.widget.DrawerLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/drawerLayout"
+    android:layout_width="match_parent" android:layout_height="match_parent">
 
-    <com.google.android.material.appbar.MaterialToolbar
-        android:id="@+id/toolbar"
-        android:layout_width="match_parent" android:layout_height="?attr/actionBarSize"
-        android:background="@color/surface"
-        android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
-        android:elevation="0dp"/>
+    <!-- Main content -->
+    <LinearLayout
+        android:layout_width="match_parent" android:layout_height="match_parent"
+        android:orientation="vertical" android:background="@color/bg">
 
-    <View android:layout_width="match_parent" android:layout_height="1dp"
-        android:background="@color/divider"/>
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent" android:layout_height="?attr/actionBarSize"
+            android:background="@color/surface"
+            android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
+            android:elevation="0dp"/>
 
-    <TextView android:id="@+id/tvSimIndicator"
-        android:layout_width="wrap_content" android:layout_height="wrap_content"
+        <View android:layout_width="match_parent" android:layout_height="1dp"
+            android:background="@color/divider"/>
+
+        <TextView android:id="@+id/tvSimIndicator"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:paddingHorizontal="10dp" android:paddingVertical="4dp"
+            android:layout_marginEnd="14dp" android:layout_marginTop="4dp" android:layout_marginBottom="2dp"
+            android:textSize="11sp" android:textColor="@color/accent"
+            android:background="@drawable/bg_card_selected"
+            android:clickable="true" android:focusable="true"
+            android:visibility="gone"/>
+
+        <!-- Shown when there are more messages above the loaded window -->
+        <TextView android:id="@+id/btnLoadEarlier"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="⬆  Load full history"
+            android:textColor="@color/accent"
+            android:textSize="13sp"
+            android:gravity="center"
+            android:paddingVertical="12dp"
+            android:background="?attr/selectableItemBackground"
+            android:visibility="gone"/>
+
+        <View android:id="@+id/dividerLoadEarlier"
+            android:layout_width="match_parent" android:layout_height="1dp"
+            android:background="@color/divider"
+            android:visibility="gone"/>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recycler"
+            android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
+            android:paddingTop="8dp" android:paddingBottom="8dp" android:clipToPadding="false"/>
+
+        <!-- Compose bar -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp" android:paddingVertical="10dp"
+            android:background="@color/surface"
+            android:gravity="center_vertical">
+
+            <ImageButton android:id="@+id/btnAttach"
+                android:layout_width="44dp" android:layout_height="44dp"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/bg_call_btn"
+                android:src="@drawable/ic_attach"
+                android:padding="10dp"
+                android:contentDescription="Attach media"/>
+
+            <EditText android:id="@+id/etInput"
+                android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                android:hint="Message" android:textColor="@color/text"
+                android:textColorHint="@color/muted"
+                android:background="@drawable/bg_input"
+                android:paddingHorizontal="16dp" android:paddingVertical="10dp"
+                android:textSize="15sp" android:maxLines="5"
+                android:inputType="textMultiLine|textCapSentences"/>
+
+            <!-- Hold to record voice message -->
+            <ImageButton android:id="@+id/btnVoice"
+                android:layout_width="44dp" android:layout_height="44dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_call_btn"
+                android:src="@drawable/ic_mic"
+                android:padding="10dp"
+                android:contentDescription="Hold to record voice"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSend"
+                style="@style/Widget.Material3.Button.Icon"
+                android:layout_width="44dp" android:layout_height="44dp"
+                android:layout_marginStart="6dp"
+                android:insetTop="0dp" android:insetBottom="0dp"
+                android:backgroundTint="@color/accent"
+                app:cornerRadius="22dp"
+                app:icon="@drawable/ic_send"
+                app:iconTint="#ffffff"
+                app:iconGravity="textStart"/>
+
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Right drawer panel -->
+    <LinearLayout
+        android:id="@+id/drawerPanel"
+        android:layout_width="280dp" android:layout_height="match_parent"
         android:layout_gravity="end"
-        android:paddingHorizontal="10dp" android:paddingVertical="4dp"
-        android:layout_marginEnd="14dp" android:layout_marginTop="4dp" android:layout_marginBottom="2dp"
-        android:textSize="11sp" android:textColor="@color/accent"
-        android:background="@drawable/bg_card_selected"
-        android:clickable="true" android:focusable="true"
-        android:visibility="gone"/>
-
-    <!-- Shown when there are more messages above the loaded window -->
-    <TextView android:id="@+id/btnLoadEarlier"
-        android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:text="⬆  Load full history"
-        android:textColor="@color/accent"
-        android:textSize="13sp"
-        android:gravity="center"
-        android:paddingVertical="12dp"
-        android:background="?attr/selectableItemBackground"
-        android:visibility="gone"/>
-
-    <View android:id="@+id/dividerLoadEarlier"
-        android:layout_width="match_parent" android:layout_height="1dp"
-        android:background="@color/divider"
-        android:visibility="gone"/>
-
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recycler"
-        android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
-        android:paddingTop="8dp" android:paddingBottom="8dp" android:clipToPadding="false"/>
-
-    <!-- Compose bar — Samsung Messages style -->
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingHorizontal="12dp" android:paddingVertical="10dp"
         android:background="@color/surface"
-        android:gravity="center_vertical">
+        android:orientation="vertical">
 
-        <ImageButton android:id="@+id/btnAttach"
-            android:layout_width="44dp" android:layout_height="44dp"
-            android:layout_marginEnd="4dp"
-            android:background="@drawable/bg_call_btn"
-            android:src="@drawable/ic_attach"
-            android:padding="10dp"
-            android:contentDescription="Attach media"/>
+        <TextView android:text="Chat Info"
+            android:textSize="16sp" android:textStyle="bold"
+            android:textColor="@color/text"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:padding="16dp"/>
 
-        <EditText android:id="@+id/etInput"
-            android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-            android:hint="Message" android:textColor="@color/text"
-            android:textColorHint="@color/muted"
-            android:background="@drawable/bg_input"
-            android:paddingHorizontal="16dp" android:paddingVertical="10dp"
-            android:textSize="15sp" android:maxLines="5"
-            android:inputType="textMultiLine|textCapSentences"/>
+        <View android:layout_width="match_parent" android:layout_height="1dp"
+            android:background="@color/divider"/>
 
-        <!-- Hold to record voice message -->
-        <ImageButton android:id="@+id/btnVoice"
-            android:layout_width="44dp" android:layout_height="44dp"
-            android:layout_marginStart="6dp"
-            android:background="@drawable/bg_call_btn"
-            android:src="@drawable/ic_mic"
-            android:padding="10dp"
-            android:contentDescription="Hold to record voice"/>
+        <!-- Search messages -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="44dp"
+            android:orientation="horizontal" android:gravity="center_vertical"
+            android:paddingHorizontal="12dp" android:paddingTop="8dp">
+            <ImageView android:layout_width="16dp" android:layout_height="16dp"
+                android:src="@drawable/ic_search" android:alpha="0.5" android:layout_marginEnd="8dp"/>
+            <EditText android:id="@+id/etDrawerSearch"
+                android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+                android:hint="Search messages" android:textColor="@color/text"
+                android:textColorHint="@color/muted" android:textSize="13sp"
+                android:background="@null" android:singleLine="true"/>
+        </LinearLayout>
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSend"
-            style="@style/Widget.Material3.Button.Icon"
-            android:layout_width="44dp" android:layout_height="44dp"
-            android:layout_marginStart="6dp"
-            android:insetTop="0dp" android:insetBottom="0dp"
-            android:backgroundTint="@color/accent"
-            app:cornerRadius="22dp"
-            app:icon="@drawable/ic_send"
-            app:iconTint="#ffffff"
-            app:iconGravity="textStart"
-            xmlns:app="http://schemas.android.com/apk/res-auto"/>
+        <View android:layout_width="match_parent" android:layout_height="1dp"
+            android:background="@color/divider" android:layout_marginTop="8dp"/>
+
+        <!-- Tabs: Media | Files -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:layout_marginTop="12dp"
+            android:paddingHorizontal="12dp">
+            <TextView android:id="@+id/tabMedia"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:text="Media"
+                android:textSize="13sp" android:textColor="@color/accent" android:textStyle="bold"
+                android:gravity="center" android:paddingVertical="8dp"
+                android:background="@drawable/bg_card_selected"/>
+            <View android:layout_width="8dp" android:layout_height="match_parent"/>
+            <TextView android:id="@+id/tabFiles"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:text="Files"
+                android:textSize="13sp" android:textColor="@color/muted"
+                android:gravity="center" android:paddingVertical="8dp"
+                android:background="@drawable/bg_card_unselected"/>
+        </LinearLayout>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/drawerRecycler"
+            android:layout_width="match_parent" android:layout_height="0dp"
+            android:layout_weight="1" android:padding="8dp"
+            android:clipToPadding="false"/>
+
+        <!-- Encryption section -->
+        <View android:layout_width="match_parent" android:layout_height="1dp"
+            android:background="@color/divider"/>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical"
+            android:paddingHorizontal="16dp" android:paddingVertical="12dp">
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:orientation="vertical">
+                <TextView android:text="Encryption"
+                    android:textColor="@color/text" android:textSize="13sp"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                <TextView android:id="@+id/tvEncryptionStatus"
+                    android:textColor="@color/muted" android:textSize="11sp"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="Not active"/>
+            </LinearLayout>
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switchChatEncryption"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        </LinearLayout>
+
+        <Button android:id="@+id/btnResendKey"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Re-send Encryption Key"
+            android:textSize="12sp"
+            android:layout_marginHorizontal="16dp" android:layout_marginBottom="8dp"
+            android:backgroundTint="@color/surface2"
+            android:textColor="@color/accent"
+            android:visibility="gone"/>
+
+        <!-- Custom chat icon and wallpaper -->
+        <View android:layout_width="match_parent" android:layout_height="1dp"
+            android:background="@color/divider"/>
+
+        <LinearLayout android:id="@+id/rowCustomIcon"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical"
+            android:paddingHorizontal="16dp" android:paddingVertical="12dp"
+            android:clickable="true" android:focusable="true"
+            android:background="?attr/selectableItemBackground">
+            <TextView android:text="Custom Icon"
+                android:textColor="@color/text" android:textSize="13sp"
+                android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"/>
+            <ImageView android:layout_width="14dp" android:layout_height="14dp"
+                android:src="@drawable/ic_chevron_right" android:tint="@color/muted"/>
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/rowCustomWallpaper"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical"
+            android:paddingHorizontal="16dp" android:paddingVertical="12dp"
+            android:clickable="true" android:focusable="true"
+            android:background="?attr/selectableItemBackground">
+            <TextView android:text="Custom Wallpaper"
+                android:textColor="@color/text" android:textSize="13sp"
+                android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"/>
+            <ImageView android:layout_width="14dp" android:layout_height="14dp"
+                android:src="@drawable/ic_chevron_right" android:tint="@color/muted"/>
+        </LinearLayout>
 
     </LinearLayout>
-</LinearLayout>
+
+</androidx.drawerlayout.widget.DrawerLayout>

@@ -82,6 +82,7 @@
             android:orientation="vertical" android:background="@drawable/bg_card" android:padding="14dp"
             android:layout_marginBottom="16dp">
 
+            <!-- RCS Chats -->
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="horizontal" android:gravity="center_vertical" android:padding="8dp">
                 <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
@@ -96,6 +97,28 @@
                 </LinearLayout>
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchRcs"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"/>
+            </LinearLayout>
+
+            <View android:layout_width="match_parent" android:layout_height="1dp"
+                android:background="@color/divider" android:layout_marginVertical="4dp"/>
+
+            <!-- End-to-End Encryption toggle -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:padding="8dp">
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical">
+                    <TextView android:text="End-to-End Encryption"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/text" android:textSize="14sp"/>
+                    <TextView android:text="Automatically encrypt messages with NexLink contacts (EC P-256 + AES-256-GCM)"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/muted" android:textSize="11sp"
+                        android:layout_marginTop="2dp"/>
+                </LinearLayout>
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchEncryption"
                     android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"/>
             </LinearLayout>
@@ -171,15 +194,26 @@
 
         </LinearLayout>
 
-        <!-- Social Platforms -->
-        <TextView android:text="SOCIAL PLATFORMS" android:textSize="11sp" android:textStyle="bold"
-            android:textColor="@color/muted" android:letterSpacing="0.09"
-            android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp" android:layout_marginTop="12dp"/>
-
+        <!-- Social Platforms (collapsible) -->
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical"
+            android:layout_marginBottom="8dp" android:layout_marginTop="12dp">
+            <TextView android:text="SOCIAL PLATFORMS" android:textSize="11sp" android:textStyle="bold"
+                android:textColor="@color/muted" android:letterSpacing="0.09"
+                android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"/>
+            <ImageButton android:id="@+id/btnToggleSocials"
+                android:layout_width="28dp" android:layout_height="28dp"
+                android:src="@drawable/ic_expand_more"
+                android:tint="@color/muted"
+                android:background="?attr/selectableItemBackground"
+                android:contentDescription="Toggle social platforms"/>
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/cardSocialPlatforms"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="vertical" android:background="@drawable/bg_card" android:padding="14dp"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="8dp"
+            android:visibility="gone">
 
             <!-- Signal -->
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -288,8 +322,8 @@
 
         </LinearLayout>
 
-        <!-- Bug Report -->
-        <TextView android:text="SUPPORT" android:textSize="11sp" android:textStyle="bold"
+        <!-- Privacy Section -->
+        <TextView android:text="PRIVACY" android:textSize="11sp" android:textStyle="bold"
             android:textColor="@color/muted" android:letterSpacing="0.09"
             android:layout_width="wrap_content" android:layout_height="wrap_content"
             android:layout_marginTop="8dp" android:layout_marginBottom="8dp"/>
@@ -297,7 +331,85 @@
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="vertical" android:background="@drawable/bg_card" android:padding="14dp"
             android:layout_marginBottom="16dp">
-            <TextView android:text="Found a bug? Tap below to send a report by email."
+
+            <!-- Blocked Numbers row -->
+            <LinearLayout android:id="@+id/rowBlockedNumbers"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:padding="8dp"
+                android:clickable="true" android:focusable="true"
+                android:background="?attr/selectableItemBackground">
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical">
+                    <TextView android:text="Blocked Numbers"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/text" android:textSize="14sp"/>
+                    <TextView android:id="@+id/tvBlockedCount"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/muted" android:textSize="11sp"
+                        android:layout_marginTop="2dp" android:text="No blocked numbers"/>
+                </LinearLayout>
+                <ImageView android:layout_width="16dp" android:layout_height="16dp"
+                    android:src="@drawable/ic_chevron_right" android:tint="@color/muted"/>
+            </LinearLayout>
+
+            <View android:layout_width="match_parent" android:layout_height="1dp"
+                android:background="@color/divider" android:layout_marginVertical="4dp"/>
+
+            <!-- Recycle Bin row -->
+            <LinearLayout android:id="@+id/rowRecycleBin"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:padding="8dp"
+                android:clickable="true" android:focusable="true"
+                android:background="?attr/selectableItemBackground">
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical">
+                    <TextView android:text="Recycle Bin"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/text" android:textSize="14sp"/>
+                    <TextView android:id="@+id/tvRecycleBinCount"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/muted" android:textSize="11sp"
+                        android:layout_marginTop="2dp" android:text="Empty"/>
+                </LinearLayout>
+                <ImageView android:layout_width="16dp" android:layout_height="16dp"
+                    android:src="@drawable/ic_chevron_right" android:tint="@color/muted"/>
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Bug Report / Support -->
+        <TextView android:text="SUPPORT" android:textSize="11sp" android:textStyle="bold"
+            android:textColor="@color/muted" android:letterSpacing="0.09"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:layout_marginBottom="8dp"/>
+
+        <!-- Share Contact (QR) row -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:background="@drawable/bg_card" android:padding="14dp"
+            android:layout_marginBottom="16dp">
+            <LinearLayout android:id="@+id/rowShareContact"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:padding="8dp"
+                android:clickable="true" android:focusable="true"
+                android:background="?attr/selectableItemBackground">
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical">
+                    <TextView android:text="Share My Contact (QR)"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/text" android:textSize="14sp"/>
+                    <TextView android:text="Generate a QR code with your contact details"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/muted" android:textSize="11sp" android:layout_marginTop="2dp"/>
+                </LinearLayout>
+                <ImageView android:layout_width="16dp" android:layout_height="16dp"
+                    android:src="@drawable/ic_chevron_right" android:tint="@color/muted"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:background="@drawable/bg_card" android:padding="14dp"
+            android:layout_marginBottom="16dp">
+            <TextView android:text="Found a bug? Tap below to open a GitHub issue."
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:textColor="@color/muted" android:textSize="13sp"
                 android:layout_marginBottom="10dp"/>

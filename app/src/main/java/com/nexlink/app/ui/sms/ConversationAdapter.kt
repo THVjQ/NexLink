@@ -9,6 +9,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.nexlink.app.R
 import com.nexlink.app.db.Conversation
 import com.nexlink.app.db.CryptoStore
+import com.nexlink.app.db.PinStore
 import com.nexlink.app.db.ReadTracker
 import com.nexlink.app.util.AvatarColors
 import java.text.SimpleDateFormat
@@ -32,6 +33,7 @@ class ConversationAdapter(
         val time:    TextView   = v.findViewById(R.id.tvTime)
         val badge:   TextView   = v.findViewById(R.id.tvBadge)
         val lock:    ImageView  = v.findViewById(R.id.ivLock)
+        val pin:     ImageView  = v.findViewById(R.id.ivPin)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
@@ -52,6 +54,7 @@ class ConversationAdapter(
         h.time.text    = formatTime(c.timestamp)
         h.lock.visibility = if (CryptoStore.getSessionKey(h.itemView.context, c.address) != null)
             View.VISIBLE else View.GONE
+        h.pin.visibility = if (PinStore.isPinned(ctx, c.threadId)) View.VISIBLE else View.GONE
 
         // Treat as read if system says 0 unread OR user locally viewed it
         val effectivelyRead = c.unreadCount == 0 ||

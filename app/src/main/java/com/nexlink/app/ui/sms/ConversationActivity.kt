@@ -13,6 +13,9 @@ import android.provider.Settings
 import android.os.Handler
 import android.os.Looper
 import android.provider.Telephony
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
@@ -29,6 +32,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexlink.app.R
 import com.nexlink.app.databinding.ActivityConversationBinding
+import com.nexlink.app.db.ChatCustomizationStore
 import com.nexlink.app.db.CryptoStore
 import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.ReadTracker
@@ -62,7 +66,7 @@ class ConversationActivity : AppCompatActivity() {
     private val debounceHandler = Handler(Looper.getMainLooper())
     private val debounceLoad = Runnable { loadMessages() }
 
-    // Debounced: rapid-fire DB notifications (e.g. during a batch insert) collapse to one reload
+    // Debounced: rapid-fire DB notifications collapse to one reload
     private fun scheduleLoad() {
         debounceHandler.removeCallbacks(debounceLoad)
         debounceHandler.postDelayed(debounceLoad, 150)
@@ -101,6 +105,16 @@ class ConversationActivity : AppCompatActivity() {
         ActivityResultContracts.GetContent()
     ) { uri -> uri?.let { sendAttachment(it, contentResolver.getType(it) ?: "application/octet-stream") } }
 
+    private val wallpaperLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            ChatCustomizationStore.setWallpaper(this, address, it.toString())
+            applyCustomWallpaper()
+            Toast.makeText(this, "Wallpaper set", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -108,9 +122,7 @@ class ConversationActivity : AppCompatActivity() {
         b = ActivityConversationBinding.inflate(layoutInflater)
         setContentView(b.root)
 
-        // On Android 15+, edge-to-edge is enforced so adjustResize no longer works.
-        // Apply bottom padding equal to the keyboard (IME) height so the compose bar
-        // always stays visible above the keyboard.
+        // Apply bottom padding for keyboard / navigation bars
         ViewCompat.setOnApplyWindowInsetsListener(b.root) { v, insets ->
             val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
             val navBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
@@ -134,7 +146,7 @@ class ConversationActivity : AppCompatActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         b.toolbar.setNavigationOnClickListener { finish() }
 
-        if (!isGroup && address.isNotEmpty()) {
+        if (!isGroup && address.isNotEmpty() && NotificationPrefs.isEncryptionEnabled(this)) {
             Thread {
                 val hasSession = CryptoStore.getSessionKey(this, address) != null
                 if (hasSession) {
@@ -205,6 +217,12 @@ class ConversationActivity : AppCompatActivity() {
         // Pre-fill forwarded message if any
         intent.getStringExtra("forward_text")?.let { b.etInput.setText(it) }
 
+        // Apply custom wallpaper if set
+        applyCustomWallpaper()
+
+        // Setup drawer
+        setupDrawer()
+
         loadMessages()
         if (threadId > 0) {
             SmsHelper.markReadByThread(this, threadId)
@@ -213,6 +231,88 @@ class ConversationActivity : AppCompatActivity() {
         }
         ReadTracker.markRead(this, address)
         SmsNotifier.clearPending(this, address)
+    }
+
+    private fun applyCustomWallpaper() {
+        val wpUri = ChatCustomizationStore.getWallpaper(this, address)
+        if (wpUri != null) {
+            try {
+                b.recycler.background = android.graphics.drawable.BitmapDrawable(
+                    resources,
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P)
+                        android.graphics.ImageDecoder.decodeBitmap(
+                            android.graphics.ImageDecoder.createSource(contentResolver, android.net.Uri.parse(wpUri)))
+                    else @Suppress("DEPRECATION")
+                    android.provider.MediaStore.Images.Media.getBitmap(contentResolver, android.net.Uri.parse(wpUri))
+                )
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun setupDrawer() {
+        // Encryption status in drawer
+        Thread {
+            val hasSession = CryptoStore.getSessionKey(this, address) != null
+            runOnUiThread {
+                b.switchChatEncryption.isChecked = hasSession && NotificationPrefs.isEncryptionEnabled(this)
+                b.tvEncryptionStatus.text = if (hasSession) "End-to-end encrypted" else "Not active"
+                b.btnResendKey.visibility = if (hasSession) View.VISIBLE else View.GONE
+            }
+        }.start()
+
+        b.switchChatEncryption.setOnCheckedChangeListener { _, isChecked ->
+            if (!isChecked) {
+                AlertDialog.Builder(this)
+                    .setTitle("Disable Encryption for this chat?")
+                    .setMessage("Messages to this contact will no longer be encrypted.")
+                    .setPositiveButton("Disable") { _, _ ->
+                        // Per-chat override: just track locally (doesn't affect global pref)
+                        Toast.makeText(this, "Encryption disabled for this chat", Toast.LENGTH_SHORT).show()
+                    }
+                    .setNegativeButton("Cancel") { _, _ -> b.switchChatEncryption.isChecked = true }
+                    .show()
+            }
+        }
+
+        b.btnResendKey.setOnClickListener {
+            Thread {
+                val pub = CryptoStore.getPublicKeyBytes(this)
+                SmsHelper.sendSms(this, address, CryptoStore.buildKeyExchange(pub), -1)
+                runOnUiThread { Toast.makeText(this, "Key exchange sent", Toast.LENGTH_SHORT).show() }
+            }.start()
+        }
+
+        // Custom Icon picker
+        b.rowCustomIcon.setOnClickListener { showIconPickerDialog() }
+
+        // Custom Wallpaper picker
+        b.rowCustomWallpaper.setOnClickListener {
+            wallpaperLauncher.launch("image/*")
+        }
+
+        // Search messages in drawer
+        b.etDrawerSearch.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+            override fun onTextChanged(s: CharSequence?, st: Int, before: Int, c: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                val query = s?.toString()?.trim() ?: ""
+                adapter.setSearchFilter(query)
+            }
+        })
+    }
+
+    private fun showIconPickerDialog() {
+        val emojis = arrayOf("😀", "👤", "🐱", "🐶", "🌟", "🎮", "🎵", "📱", "💼", "🏠", "❤️", "🔥")
+        AlertDialog.Builder(this)
+            .setTitle("Choose icon")
+            .setItems(emojis) { _, i ->
+                ChatCustomizationStore.setIcon(this, address, emojis[i])
+                Toast.makeText(this, "Icon set to ${emojis[i]}", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Clear") { _, _ ->
+                ChatCustomizationStore.setIcon(this, address, "")
+            }
+            .show()
     }
 
     override fun onResume() {
@@ -231,7 +331,7 @@ class ConversationActivity : AppCompatActivity() {
 
     override fun onDestroy() { super.onDestroy(); cancelRecording() }
 
-    // ── Options menu (delete conversation) ───────────────────────────────────
+    // ── Options menu ─────────────────────────────────────────────────────────
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_conversation, menu)
@@ -249,6 +349,10 @@ class ConversationActivity : AppCompatActivity() {
                 ActivityCompat.requestPermissions(this,
                     arrayOf(Manifest.permission.CALL_PHONE), 200)
             }
+            return true
+        }
+        if (item.itemId == R.id.action_chat_info) {
+            b.drawerLayout.openDrawer(Gravity.END)
             return true
         }
         if (item.itemId == R.id.action_delete_conversation) {
@@ -326,7 +430,8 @@ class ConversationActivity : AppCompatActivity() {
                     if (threadId == 0L && resolvedTid > 0L) threadId = resolvedTid
                 } else {
                     val sessionKey = CryptoStore.getSessionKey(this, address)
-                    val outgoing = if (sessionKey != null) CryptoStore.encrypt(text, sessionKey) else text
+                    val encEnabled = NotificationPrefs.isEncryptionEnabled(this)
+                    val outgoing = if (sessionKey != null && encEnabled) CryptoStore.encrypt(text, sessionKey) else text
                     SmsHelper.sendSms(this, address, outgoing, selectedSimId)
                 }
                 runOnUiThread { loadMessages() }
@@ -371,7 +476,6 @@ class ConversationActivity : AppCompatActivity() {
         if (address.isEmpty()) return
         if (!requireDefaultSmsApp()) return
 
-        // Add an optimistic outgoing bubble immediately — visible before content://mms updates
         val optimisticMsg = SmsMessage(
             id          = -(System.currentTimeMillis()),
             threadId    = threadId,
@@ -483,7 +587,6 @@ class ConversationActivity : AppCompatActivity() {
         if (!file.exists() || file.length() < 500) { file.delete(); return }
         if (!requireDefaultSmsApp()) { file.delete(); return }
 
-        // Optimistic bubble — show immediately; keep file so play button works
         val audioUri = android.net.Uri.fromFile(file)
         val optimisticVoice = com.nexlink.app.db.SmsMessage(
             id         = -System.currentTimeMillis(),
@@ -503,8 +606,6 @@ class ConversationActivity : AppCompatActivity() {
             try {
                 SentMmsStore.save(this, optimisticVoice)
                 SmsHelper.sendVoiceMms(this, address, file, selectedSimId)
-                // Keep file in cache so the optimistic play button still works;
-                // OS will evict it when cache needs space
                 runOnUiThread { loadMessages() }
             } catch (e: SecurityException) {
                 file.delete()

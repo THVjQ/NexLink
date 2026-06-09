@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:padding="24dp" android:gravity="center">
+
+    <TextView android:text="Share Contact" android:textSize="18sp" android:textStyle="bold"
+        android:textColor="@color/text" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"/>
+
+    <EditText android:id="@+id/etFirstName" android:hint="First Name"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:inputType="textPersonName" android:layout_marginBottom="8dp"/>
+    <EditText android:id="@+id/etLastName" android:hint="Last Name"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:inputType="textPersonName" android:layout_marginBottom="8dp"/>
+    <EditText android:id="@+id/etPhone" android:hint="Phone Number"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:inputType="phone" android:layout_marginBottom="8dp"/>
+    <EditText android:id="@+id/etEmail" android:hint="Email"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:inputType="textEmailAddress" android:layout_marginBottom="16dp"/>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnGenerateQr"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="Generate QR Code"
+        android:backgroundTint="@color/accent"
+        android:layout_marginBottom="12dp"/>
+
+    <ImageView android:id="@+id/ivQrCode"
+        android:layout_width="240dp" android:layout_height="240dp"
+        android:visibility="gone"
+        android:contentDescription="QR Code"/>
+
+</LinearLayout>

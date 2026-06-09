@@ -3,6 +3,7 @@ package com.nexlink.app
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import com.nexlink.app.db.NotificationStore
 
 class App : Application() {
     companion object {
@@ -12,6 +13,7 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        NotificationStore.load(applicationContext)
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
             NotificationChannel(CH_SMS, "SMS Messages", NotificationManager.IMPORTANCE_HIGH)

@@ -20,7 +20,11 @@ import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexlink.app.R
 import com.nexlink.app.databinding.FragmentSmsBinding
+import com.nexlink.app.db.BlockStore
+import com.nexlink.app.db.CategoryStore
 import com.nexlink.app.db.Conversation
+import com.nexlink.app.db.PinStore
+import com.nexlink.app.db.RecycleBinStore
 import com.nexlink.app.db.SmsHelper
 
 class SmsFragment : Fragment() {
@@ -30,6 +34,7 @@ class SmsFragment : Fragment() {
     private lateinit var adapter: ConversationAdapter
     private var allConversations = listOf<Conversation>()
     private var filterUnreadOnly = false
+    private var activeCategoryId: String? = null
 
     private val smsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) { loadConversations() }
@@ -44,7 +49,7 @@ class SmsFragment : Fragment() {
 
         adapter = ConversationAdapter(
             onClick     = { conv -> openConversation(conv) },
-            onLongClick = { conv -> confirmDeleteConversation(conv) }
+            onLongClick = { conv -> showConversationOptions(conv) }
         )
         b.recycler.layoutManager = LinearLayoutManager(requireContext())
         b.recycler.adapter = adapter
@@ -74,7 +79,9 @@ class SmsFragment : Fragment() {
         }
 
         b.fabNewChat.setOnClickListener { showNewChatMenu() }
+        b.btnMoreOptions.setOnClickListener { showCategoryMenu() }
 
+        refreshCategoryChips()
         loadConversations()
     }
 
@@ -113,12 +120,18 @@ class SmsFragment : Fragment() {
                 b.swipe.isRefreshing = false
                 val unread = convs.sumOf { it.unreadCount }
                 b.tvUnread.text = if (unread > 0) "$unread unread" else "${convs.size} threads"
+                refreshCategoryChips()
             }
         }.start()
     }
 
     private fun filterConversations(query: String) {
         var result = allConversations
+
+        // Filter blocked numbers
+        val blocked = BlockStore.blockedSet(requireContext())
+        result = result.filter { conv -> !blocked.contains(conv.address.replace("\\s".toRegex(), "")) }
+
         if (filterUnreadOnly) {
             val ctx = requireContext()
             result = result.filter { conv ->
@@ -134,6 +147,20 @@ class SmsFragment : Fragment() {
                 it.lastMessage.lowercase().contains(q)
             }
         }
+
+        // Category filter
+        val catId = activeCategoryId
+        if (catId != null) {
+            val cat = CategoryStore.getAll(requireContext()).find { it.id == catId }
+            if (cat != null) result = result.filter { it.threadId in cat.threadIds }
+        }
+
+        // Sort pinned first, then by timestamp descending
+        val pinned = PinStore.pinnedSet(requireContext())
+        result = result.sortedWith(compareByDescending<Conversation> {
+            it.threadId.toString() in pinned
+        }.thenByDescending { it.timestamp })
+
         adapter.setData(result)
     }
 
@@ -146,19 +173,187 @@ class SmsFragment : Fragment() {
         })
     }
 
+    private fun showConversationOptions(conv: Conversation) {
+        val ctx = requireContext()
+        val isPinned = PinStore.isPinned(ctx, conv.threadId)
+        val pinLabel = if (isPinned) "Unpin" else "Pin"
+        val isBlocked = BlockStore.isBlocked(ctx, conv.address)
+        val blockLabel = if (isBlocked) "Unblock" else "Block"
+
+        val cats = CategoryStore.getAll(ctx)
+        val options = if (cats.isNotEmpty())
+            arrayOf(pinLabel, blockLabel, "Add to category", "Delete")
+        else
+            arrayOf(pinLabel, blockLabel, "Delete")
+
+        AlertDialog.Builder(ctx)
+            .setItems(options) { _, which ->
+                when {
+                    which == 0 -> {
+                        if (isPinned) PinStore.unpin(ctx, conv.threadId)
+                        else PinStore.pin(ctx, conv.threadId)
+                        loadConversations()
+                    }
+                    which == 1 -> {
+                        if (isBlocked) {
+                            BlockStore.unblock(ctx, conv.address)
+                            loadConversations()
+                        } else {
+                            AlertDialog.Builder(ctx)
+                                .setTitle("Block ${conv.contactName.ifBlank { conv.address }}?")
+                                .setMessage("You won't receive messages from this number.")
+                                .setPositiveButton("Block") { _, _ ->
+                                    BlockStore.block(ctx, conv.address)
+                                    loadConversations()
+                                }
+                                .setNegativeButton("Cancel", null).show()
+                        }
+                    }
+                    which == 2 && cats.isNotEmpty() -> {
+                        showCategoryAssignDialog(conv, cats)
+                    }
+                    else -> confirmDeleteConversation(conv)
+                }
+            }
+            .show()
+    }
+
+    private fun showCategoryAssignDialog(conv: Conversation, cats: List<com.nexlink.app.db.ChatCategory>) {
+        val ctx = requireContext()
+        val names = cats.map { it.name }.toTypedArray()
+        AlertDialog.Builder(ctx)
+            .setTitle("Add to category")
+            .setItems(names) { _, i ->
+                CategoryStore.assignThread(ctx, cats[i].id, conv.threadId)
+                Toast.makeText(ctx, "Added to ${cats[i].name}", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     private fun confirmDeleteConversation(conv: Conversation) {
-        AlertDialog.Builder(requireContext())
+        val ctx = requireContext()
+        AlertDialog.Builder(ctx)
             .setTitle("Delete conversation")
             .setMessage("Delete conversation with ${conv.contactName.ifBlank { conv.address }}?")
             .setPositiveButton("Delete") { _, _ ->
+                RecycleBinStore.add(ctx, conv)
                 Thread {
-                    SmsHelper.deleteThread(requireContext(), conv.threadId)
+                    SmsHelper.deleteThread(ctx, conv.threadId)
                     loadConversations()
                 }.start()
             }
             .setNegativeButton("Cancel", null)
             .show()
     }
+
+    // ── Category management ───────────────────────────────────────────────────
+
+    private fun showCategoryMenu() {
+        val ctx = requireContext()
+        val cats = CategoryStore.getAll(ctx)
+        val editOption = if (cats.isNotEmpty()) arrayOf("Edit categories") else emptyArray()
+        val items = arrayOf("New category") + cats.map { it.name }.toTypedArray() + editOption
+        AlertDialog.Builder(ctx)
+            .setTitle("Categories")
+            .setItems(items) { _, which ->
+                when {
+                    which == 0 -> showNewCategoryDialog()
+                    which <= cats.size -> {
+                        val cat = cats[which - 1]
+                        activeCategoryId = if (activeCategoryId == cat.id) null else cat.id
+                        refreshCategoryChips()
+                        filterConversations(b.etSearch.text?.toString() ?: "")
+                    }
+                    else -> showEditCategoriesDialog()
+                }
+            }
+            .show()
+    }
+
+    private fun showNewCategoryDialog() {
+        val ctx = requireContext()
+        val input = android.widget.EditText(ctx).apply {
+            hint = "Category name"
+            setPadding(48, 24, 48, 24)
+        }
+        AlertDialog.Builder(ctx)
+            .setTitle("New category")
+            .setView(input)
+            .setPositiveButton("Create") { _, _ ->
+                val name = input.text.toString().trim()
+                if (name.isNotEmpty()) {
+                    CategoryStore.addCategory(ctx, name)
+                    refreshCategoryChips()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showEditCategoriesDialog() {
+        val ctx = requireContext()
+        val cats = CategoryStore.getAll(ctx)
+        if (cats.isEmpty()) return
+        val names = cats.map { it.name }.toTypedArray()
+        AlertDialog.Builder(ctx)
+            .setTitle("Edit categories")
+            .setItems(names) { _, i ->
+                val cat = cats[i]
+                AlertDialog.Builder(ctx)
+                    .setTitle(cat.name)
+                    .setItems(arrayOf("Rename", "Delete")) { _, which ->
+                        if (which == 0) {
+                            val input = android.widget.EditText(ctx).apply { setText(cat.name); setPadding(48, 24, 48, 24) }
+                            AlertDialog.Builder(ctx).setTitle("Rename")
+                                .setView(input)
+                                .setPositiveButton("OK") { _, _ ->
+                                    CategoryStore.renameCategory(ctx, cat.id, input.text.toString().trim())
+                                    refreshCategoryChips()
+                                }
+                                .setNegativeButton("Cancel", null).show()
+                        } else {
+                            if (activeCategoryId == cat.id) activeCategoryId = null
+                            CategoryStore.deleteCategory(ctx, cat.id)
+                            refreshCategoryChips()
+                            filterConversations(b.etSearch.text?.toString() ?: "")
+                        }
+                    }
+                    .show()
+            }
+            .show()
+    }
+
+    private fun refreshCategoryChips() {
+        val ctx = context ?: return
+        val cats = CategoryStore.getAll(ctx)
+        b.scrollCategories.visibility = if (cats.isEmpty()) View.GONE else View.VISIBLE
+        b.chipBar.removeAllViews()
+        cats.forEach { cat ->
+            val chip = android.widget.TextView(ctx).apply {
+                text = cat.name
+                textSize = 12f
+                setPadding(28, 10, 28, 10)
+                val isActive = cat.id == activeCategoryId
+                setBackgroundResource(if (isActive) R.drawable.bg_card_selected else R.drawable.bg_card_unselected)
+                setTextColor(if (isActive) resources.getColor(R.color.accent, null)
+                             else resources.getColor(R.color.muted, null))
+                setOnClickListener {
+                    activeCategoryId = if (activeCategoryId == cat.id) null else cat.id
+                    refreshCategoryChips()
+                    filterConversations(b.etSearch.text?.toString() ?: "")
+                }
+            }
+            val params = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { marginEnd = 8.dpToPx(ctx) }
+            b.chipBar.addView(chip, params)
+        }
+    }
+
+    private fun Int.dpToPx(ctx: android.content.Context) =
+        (this * ctx.resources.displayMetrics.density).toInt()
 
     // ── FAB — new chat / new group ─────────────────────────────────────────────
 
