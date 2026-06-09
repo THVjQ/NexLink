@@ -1,35 +1,111 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content">
+
+<LinearLayout
     android:layout_width="match_parent" android:layout_height="wrap_content"
-    android:orientation="vertical" android:padding="24dp" android:gravity="center">
+    android:orientation="vertical" android:padding="20dp" android:gravity="center_horizontal">
 
-    <TextView android:text="Share Contact" android:textSize="18sp" android:textStyle="bold"
-        android:textColor="@color/text" android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"/>
-
-    <EditText android:id="@+id/etFirstName" android:hint="First Name"
-        android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:inputType="textPersonName" android:layout_marginBottom="8dp"/>
-    <EditText android:id="@+id/etLastName" android:hint="Last Name"
-        android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:inputType="textPersonName" android:layout_marginBottom="8dp"/>
-    <EditText android:id="@+id/etPhone" android:hint="Phone Number"
-        android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:inputType="phone" android:layout_marginBottom="8dp"/>
-    <EditText android:id="@+id/etEmail" android:hint="Email"
-        android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:inputType="textEmailAddress" android:layout_marginBottom="16dp"/>
-
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnGenerateQr"
-        android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:text="Generate QR Code"
-        android:backgroundTint="@color/accent"
+    <!-- Title -->
+    <TextView android:text="Share Contact"
+        android:textSize="18sp" android:textStyle="bold" android:textColor="@color/text"
+        android:layout_width="wrap_content" android:layout_height="wrap_content"
         android:layout_marginBottom="12dp"/>
 
+    <!-- Navigation row -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical"
+        android:layout_marginBottom="12dp">
+
+        <ImageButton android:id="@+id/btnPrev"
+            android:layout_width="36dp" android:layout_height="36dp"
+            android:src="@drawable/ic_chevron_right"
+            android:rotation="180"
+            android:background="@drawable/bg_action_btn"
+            android:contentDescription="Previous"/>
+
+        <TextView android:id="@+id/tvContactIndex"
+            android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:gravity="center"
+            android:textColor="@color/muted" android:textSize="13sp"
+            android:text="1 / 1"/>
+
+        <ImageButton android:id="@+id/btnNext"
+            android:layout_width="36dp" android:layout_height="36dp"
+            android:src="@drawable/ic_chevron_right"
+            android:background="@drawable/bg_action_btn"
+            android:contentDescription="Next"/>
+
+        <ImageButton android:id="@+id/btnAddContact"
+            android:layout_width="36dp" android:layout_height="36dp"
+            android:src="@drawable/ic_add"
+            android:background="@drawable/bg_action_btn"
+            android:layout_marginStart="8dp"
+            android:contentDescription="Add contact"/>
+    </LinearLayout>
+
+    <!-- QR Code -->
     <ImageView android:id="@+id/ivQrCode"
         android:layout_width="240dp" android:layout_height="240dp"
-        android:visibility="gone"
+        android:layout_marginBottom="16dp"
         android:contentDescription="QR Code"/>
 
+    <!-- Details collapsible toggle -->
+    <LinearLayout android:id="@+id/rowDetails"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical"
+        android:padding="8dp" android:layout_marginBottom="2dp"
+        android:background="@drawable/bg_card">
+
+        <TextView android:id="@+id/tvDetailsToggle"
+            android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="Details"
+            android:textColor="@color/text" android:textSize="14sp"/>
+
+        <ImageView android:id="@+id/ivDetailsArrow"
+            android:layout_width="20dp" android:layout_height="20dp"
+            android:src="@drawable/ic_expand_more"
+            android:tint="@color/muted"
+            android:contentDescription="Toggle"/>
+    </LinearLayout>
+
+    <!-- Collapsible details section -->
+    <LinearLayout android:id="@+id/layoutDetails"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:visibility="gone"
+        android:layout_marginTop="4dp">
+
+        <EditText android:id="@+id/etFirstName" android:hint="First Name"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:inputType="textPersonName" android:layout_marginBottom="8dp"/>
+
+        <EditText android:id="@+id/etLastName" android:hint="Last Name"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:inputType="textPersonName" android:layout_marginBottom="8dp"/>
+
+        <EditText android:id="@+id/etPhone" android:hint="Phone Number"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:inputType="phone" android:layout_marginBottom="8dp"/>
+
+        <EditText android:id="@+id/etEmail" android:hint="Email"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:inputType="textEmailAddress" android:layout_marginBottom="12dp"/>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button android:id="@+id/btnSaveContact"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:text="Save"
+                android:backgroundTint="@color/accent"
+                android:layout_marginEnd="8dp"/>
+
+            <Button android:id="@+id/btnDeleteContact"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:text="Delete"
+                android:backgroundTint="#CC4444"/>
+        </LinearLayout>
+    </LinearLayout>
+
 </LinearLayout>
+</ScrollView>

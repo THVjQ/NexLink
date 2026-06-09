@@ -38,6 +38,7 @@ import com.nexlink.app.db.ChatCustomizationStore
 import com.nexlink.app.db.CryptoStore
 import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.ReadTracker
+import com.nexlink.app.db.RecycleBinStore
 import com.nexlink.app.db.SentMmsStore
 import com.nexlink.app.db.SimInfo
 import com.nexlink.app.db.SmsHelper
@@ -58,6 +59,7 @@ class ConversationActivity : AppCompatActivity() {
 
     private var sims        = listOf<SimInfo>()
     private var selectedSimId = -1
+    private var encryptionListenerActive = false
 
     private var mediaRecorder: MediaRecorder? = null
     private var audioFile: File? = null
@@ -178,13 +180,15 @@ class ConversationActivity : AppCompatActivity() {
         adapter = BubbleAdapter(
             isGroup   = isGroup,
             onForward = { msg -> showForwardPicker(msg) },
-            onDelete  = { id, isMms ->
+            onDelete  = { msg ->
+                RecycleBinStore.addMessage(this, msg)
                 Thread {
-                    SmsHelper.deleteMessage(this, id, isMms)
+                    SmsHelper.deleteMessage(this, msg.id, msg.isMms)
                     loadMessages()
                 }.start()
             }
         )
+        adapter.isRcsConversation = NotificationPrefs.isRcsEnabled(this)
         b.recycler.layoutManager = LinearLayoutManager(this).apply { stackFromEnd = true }
         b.recycler.adapter = adapter
         b.btnLoadEarlier.visibility = View.GONE
@@ -273,20 +277,29 @@ class ConversationActivity : AppCompatActivity() {
                 b.switchChatEncryption.isChecked = hasSession && NotificationPrefs.isEncryptionEnabled(this)
                 b.tvEncryptionStatus.text = if (hasSession) "End-to-end encrypted" else "Not active"
                 b.btnResendKey.visibility = if (hasSession) View.VISIBLE else View.GONE
+                encryptionListenerActive = true
             }
         }.start()
 
         b.switchChatEncryption.setOnCheckedChangeListener { _, isChecked ->
+            if (!encryptionListenerActive) return@setOnCheckedChangeListener
             if (!isChecked) {
                 AlertDialog.Builder(this)
                     .setTitle("Disable Encryption for this chat?")
                     .setMessage("Messages to this contact will no longer be encrypted.")
                     .setPositiveButton("Disable") { _, _ ->
-                        // Per-chat override: just track locally (doesn't affect global pref)
                         Toast.makeText(this, "Encryption disabled for this chat", Toast.LENGTH_SHORT).show()
                     }
                     .setNegativeButton("Cancel") { _, _ -> b.switchChatEncryption.isChecked = true }
                     .show()
+            } else {
+                CryptoStore.clearSentKey(this, address)
+                Thread {
+                    val pub = CryptoStore.getPublicKeyBytes(this)
+                    SmsHelper.sendSms(this, address, CryptoStore.buildKeyExchange(pub), -1)
+                    CryptoStore.markKeySent(this, address)
+                    runOnUiThread { Toast.makeText(this, "Key exchange sent", Toast.LENGTH_SHORT).show() }
+                }.start()
             }
         }
 

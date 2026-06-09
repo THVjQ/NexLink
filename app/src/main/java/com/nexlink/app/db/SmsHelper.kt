@@ -31,7 +31,9 @@ data class SmsMessage(
     val isMms: Boolean = false,
     val isVoice: Boolean = false,
     val mediaUri: String? = null,
-    val mimeType: String? = null
+    val mimeType: String? = null,
+    /** Telephony.Sms.STATUS: -1=none, 0=complete/delivered, 32=pending, 64=failed */
+    val deliveryStatus: Int = -1
 )
 
 data class SimInfo(val subscriptionId: Int, val displayName: String, val slotIndex: Int, val number: String? = null)
@@ -182,19 +184,21 @@ object SmsHelper {
     private fun getSmsMessagesByThread(ctx: Context, threadId: Long): List<SmsMessage> {
         val list = mutableListOf<SmsMessage>()
         val proj = arrayOf(Telephony.Sms._ID, Telephony.Sms.THREAD_ID, Telephony.Sms.ADDRESS,
-                           Telephony.Sms.BODY, Telephony.Sms.DATE, Telephony.Sms.TYPE)
+                           Telephony.Sms.BODY, Telephony.Sms.DATE, Telephony.Sms.TYPE,
+                           Telephony.Sms.STATUS)
         try {
             ctx.contentResolver.query(Telephony.Sms.CONTENT_URI, proj,
                 "${Telephony.Sms.THREAD_ID} = ?", arrayOf(threadId.toString()),
                 "${Telephony.Sms.DATE} ASC")?.use { c ->
                 while (c.moveToNext()) {
                     list += SmsMessage(
-                        id         = c.getLong(0),
-                        threadId   = c.getLong(1),
-                        address    = c.getString(2) ?: "",
-                        body       = c.getString(3) ?: "",
-                        timestamp  = c.getLong(4),
-                        isIncoming = c.getInt(5) == Telephony.Sms.MESSAGE_TYPE_INBOX
+                        id             = c.getLong(0),
+                        threadId       = c.getLong(1),
+                        address        = c.getString(2) ?: "",
+                        body           = c.getString(3) ?: "",
+                        timestamp      = c.getLong(4),
+                        isIncoming     = c.getInt(5) == Telephony.Sms.MESSAGE_TYPE_INBOX,
+                        deliveryStatus = c.getInt(6)
                     )
                 }
             }

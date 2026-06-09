@@ -219,9 +219,10 @@ class SettingsFragment : Fragment() {
                 .show()
             return
         }
-        val fmt = SimpleDateFormat("d MMM yyyy", Locale.getDefault())
+        val now = System.currentTimeMillis()
         val names = deleted.map { d ->
-            "${d.contactName.ifBlank { d.address }} — deleted ${fmt.format(Date(d.deletedAt))}"
+            val daysLeft = (30 - ((now - d.deletedAt) / 86_400_000)).coerceAtLeast(0)
+            "${d.contactName.ifBlank { d.address }} — $daysLeft day${if (daysLeft == 1L) "" else "s"} left"
         }.toTypedArray()
         AlertDialog.Builder(ctx)
             .setTitle("Recycle Bin")
@@ -231,7 +232,6 @@ class SettingsFragment : Fragment() {
                     .setTitle(d.contactName.ifBlank { d.address })
                     .setItems(arrayOf("Restore", "Delete permanently")) { _, which ->
                         if (which == 0) {
-                            // Restore: just remove from recycle bin; the thread may still exist in SMS DB
                             RecycleBinStore.remove(ctx, d.threadId)
                             refreshRecycleBinCount()
                             Toast.makeText(ctx, "Conversation restored", Toast.LENGTH_SHORT).show()
@@ -261,42 +261,31 @@ class SettingsFragment : Fragment() {
 
     private fun showQrContactDialog() {
         val ctx = requireContext()
-        val prefs = ctx.getSharedPreferences("nx_qr_contact", android.content.Context.MODE_PRIVATE)
         val dialogView = layoutInflater.inflate(com.nexlink.app.R.layout.dialog_qr_contact, null)
-        val etFirst = dialogView.findViewById<android.widget.EditText>(com.nexlink.app.R.id.etFirstName)
-        val etLast  = dialogView.findViewById<android.widget.EditText>(com.nexlink.app.R.id.etLastName)
-        val etPhone = dialogView.findViewById<android.widget.EditText>(com.nexlink.app.R.id.etPhone)
-        val etEmail = dialogView.findViewById<android.widget.EditText>(com.nexlink.app.R.id.etEmail)
-        val btnGen  = dialogView.findViewById<com.google.android.material.button.MaterialButton>(com.nexlink.app.R.id.btnGenerateQr)
-        val ivQr    = dialogView.findViewById<android.widget.ImageView>(com.nexlink.app.R.id.ivQrCode)
-
-        // Restore previously saved values
-        etFirst.setText(prefs.getString("first", ""))
-        etLast.setText(prefs.getString("last", ""))
-        etPhone.setText(prefs.getString("phone", ""))
-        etEmail.setText(prefs.getString("email", ""))
-
         val dialog = AlertDialog.Builder(ctx).setView(dialogView).create()
 
-        btnGen.setOnClickListener {
-            // Persist entries so they're remembered next time
-            prefs.edit()
-                .putString("first", etFirst.text.toString().trim())
-                .putString("last",  etLast.text.toString().trim())
-                .putString("phone", etPhone.text.toString().trim())
-                .putString("email", etEmail.text.toString().trim())
-                .apply()
+        val ivQr         = dialogView.findViewById<android.widget.ImageView>(com.nexlink.app.R.id.ivQrCode)
+        val tvIndex      = dialogView.findViewById<android.widget.TextView>(com.nexlink.app.R.id.tvContactIndex)
+        val btnPrev      = dialogView.findViewById<android.widget.ImageButton>(com.nexlink.app.R.id.btnPrev)
+        val btnNext      = dialogView.findViewById<android.widget.ImageButton>(com.nexlink.app.R.id.btnNext)
+        val btnAdd       = dialogView.findViewById<android.widget.ImageButton>(com.nexlink.app.R.id.btnAddContact)
+        val rowDetails   = dialogView.findViewById<android.view.View>(com.nexlink.app.R.id.rowDetails)
+        val ivToggleArrow= dialogView.findViewById<android.widget.ImageView>(com.nexlink.app.R.id.ivDetailsArrow)
+        val layoutDetails= dialogView.findViewById<android.view.View>(com.nexlink.app.R.id.layoutDetails)
+        val etFirst      = dialogView.findViewById<android.widget.EditText>(com.nexlink.app.R.id.etFirstName)
+        val etLast       = dialogView.findViewById<android.widget.EditText>(com.nexlink.app.R.id.etLastName)
+        val etPhone      = dialogView.findViewById<android.widget.EditText>(com.nexlink.app.R.id.etPhone)
+        val etEmail      = dialogView.findViewById<android.widget.EditText>(com.nexlink.app.R.id.etEmail)
+        val btnSave      = dialogView.findViewById<android.widget.Button>(com.nexlink.app.R.id.btnSaveContact)
+        val btnDelete    = dialogView.findViewById<android.widget.Button>(com.nexlink.app.R.id.btnDeleteContact)
 
-            val vcard = buildString {
-                appendLine("BEGIN:VCARD"); appendLine("VERSION:3.0")
-                val name = "${etFirst.text} ${etLast.text}".trim()
-                if (name.isNotEmpty()) appendLine("FN:$name")
-                val phone = etPhone.text.toString().trim()
-                if (phone.isNotEmpty()) appendLine("TEL:$phone")
-                val email = etEmail.text.toString().trim()
-                if (email.isNotEmpty()) appendLine("EMAIL:$email")
-                appendLine("END:VCARD")
-            }
+        // Load contacts list from prefs (JSON array), migrating legacy single-contact prefs
+        val prefs = ctx.getSharedPreferences("nx_qr_contact", android.content.Context.MODE_PRIVATE)
+        val contacts = loadQrContacts(prefs).toMutableList()
+        if (contacts.isEmpty()) contacts.add(mapOf("first" to "", "last" to "", "phone" to "", "email" to ""))
+        var currentIndex = 0
+
+        fun generateQr(vcard: String) {
             try {
                 val writer = com.google.zxing.qrcode.QRCodeWriter()
                 val matrix = writer.encode(vcard, com.google.zxing.BarcodeFormat.QR_CODE, 512, 512)
@@ -304,13 +293,113 @@ class SettingsFragment : Fragment() {
                 for (x in 0 until 512) for (y in 0 until 512)
                     bmp.setPixel(x, y, if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
                 ivQr.setImageBitmap(bmp)
-                ivQr.visibility = android.view.View.VISIBLE
             } catch (e: Exception) {
-                Toast.makeText(ctx, "Failed to generate QR: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, "QR error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
 
+        fun buildVcard(c: Map<String, String>) = buildString {
+            appendLine("BEGIN:VCARD"); appendLine("VERSION:3.0")
+            val name = "${c["first"].orEmpty()} ${c["last"].orEmpty()}".trim()
+            if (name.isNotEmpty()) appendLine("FN:$name")
+            val phone = c["phone"].orEmpty()
+            if (phone.isNotEmpty()) appendLine("TEL:$phone")
+            val email = c["email"].orEmpty()
+            if (email.isNotEmpty()) appendLine("EMAIL:$email")
+            appendLine("END:VCARD")
+        }
+
+        fun refresh() {
+            val c = contacts[currentIndex]
+            tvIndex.text = "${currentIndex + 1} / ${contacts.size}"
+            btnPrev.isEnabled = currentIndex > 0
+            btnNext.isEnabled = currentIndex < contacts.size - 1
+            etFirst.setText(c["first"].orEmpty())
+            etLast.setText(c["last"].orEmpty())
+            etPhone.setText(c["phone"].orEmpty())
+            etEmail.setText(c["email"].orEmpty())
+            generateQr(buildVcard(c))
+        }
+
+        btnPrev.setOnClickListener { if (currentIndex > 0) { currentIndex--; refresh() } }
+        btnNext.setOnClickListener { if (currentIndex < contacts.size - 1) { currentIndex++; refresh() } }
+        btnAdd.setOnClickListener {
+            contacts.add(mapOf("first" to "", "last" to "", "phone" to "", "email" to ""))
+            currentIndex = contacts.size - 1
+            saveQrContacts(prefs, contacts)
+            refresh()
+        }
+
+        var detailsVisible = false
+        rowDetails.setOnClickListener {
+            detailsVisible = !detailsVisible
+            layoutDetails.visibility = if (detailsVisible) android.view.View.VISIBLE else android.view.View.GONE
+            ivToggleArrow.setImageResource(
+                if (detailsVisible) com.nexlink.app.R.drawable.ic_expand_less
+                else com.nexlink.app.R.drawable.ic_expand_more
+            )
+        }
+
+        btnSave.setOnClickListener {
+            val updated = mapOf(
+                "first" to etFirst.text.toString().trim(),
+                "last"  to etLast.text.toString().trim(),
+                "phone" to etPhone.text.toString().trim(),
+                "email" to etEmail.text.toString().trim()
+            )
+            contacts[currentIndex] = updated
+            saveQrContacts(prefs, contacts)
+            generateQr(buildVcard(updated))
+            Toast.makeText(ctx, "Contact saved", Toast.LENGTH_SHORT).show()
+        }
+
+        btnDelete.setOnClickListener {
+            if (contacts.size == 1) {
+                contacts[0] = mapOf("first" to "", "last" to "", "phone" to "", "email" to "")
+            } else {
+                contacts.removeAt(currentIndex)
+                if (currentIndex >= contacts.size) currentIndex = contacts.size - 1
+            }
+            saveQrContacts(prefs, contacts)
+            refresh()
+        }
+
+        refresh()
         dialog.show()
+    }
+
+    private fun loadQrContacts(prefs: android.content.SharedPreferences): List<Map<String, String>> {
+        val json = prefs.getString("contacts_list", null)
+        if (json != null) {
+            return try {
+                val arr = org.json.JSONArray(json)
+                (0 until arr.length()).map { i ->
+                    val o = arr.getJSONObject(i)
+                    mapOf("first" to o.optString("first"), "last" to o.optString("last"),
+                          "phone" to o.optString("phone"), "email" to o.optString("email"))
+                }
+            } catch (_: Exception) { emptyList() }
+        }
+        // Migrate legacy single-contact prefs
+        val first = prefs.getString("first", "").orEmpty()
+        val last  = prefs.getString("last",  "").orEmpty()
+        val phone = prefs.getString("phone", "").orEmpty()
+        val email = prefs.getString("email", "").orEmpty()
+        if (first.isNotEmpty() || phone.isNotEmpty()) {
+            return listOf(mapOf("first" to first, "last" to last, "phone" to phone, "email" to email))
+        }
+        return emptyList()
+    }
+
+    private fun saveQrContacts(prefs: android.content.SharedPreferences, contacts: List<Map<String, String>>) {
+        val arr = org.json.JSONArray()
+        contacts.forEach { c ->
+            arr.put(org.json.JSONObject().apply {
+                put("first", c["first"].orEmpty()); put("last",  c["last"].orEmpty())
+                put("phone", c["phone"].orEmpty()); put("email", c["email"].orEmpty())
+            })
+        }
+        prefs.edit().putString("contacts_list", arr.toString()).apply()
     }
 
     private fun updatePermissionStatus() {

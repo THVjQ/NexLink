@@ -74,6 +74,9 @@ object CryptoStore {
     fun markKeySent(ctx: Context, address: String) =
         prefs(ctx).edit().putBoolean(PFX_SENT + norm(address), true).apply()
 
+    fun clearSentKey(ctx: Context, address: String) =
+        prefs(ctx).edit().remove(PFX_SENT + norm(address)).apply()
+
     // ── Wire format ───────────────────────────────────────────────────────────
 
     private val KEY_EXCHANGE_PREAMBLE = """

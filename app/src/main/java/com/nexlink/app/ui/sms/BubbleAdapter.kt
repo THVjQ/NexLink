@@ -36,8 +36,10 @@ private sealed class Row {
 class BubbleAdapter(
     private val isGroup: Boolean = false,
     private val onForward: ((SmsMessage) -> Unit)? = null,
-    private val onDelete: ((id: Long, isMms: Boolean) -> Unit)? = null
+    private val onDelete: ((SmsMessage) -> Unit)? = null
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+
+    var isRcsConversation: Boolean = false
 
     private var rows = listOf<Row>()
     private var allMessages = listOf<SmsMessage>()
@@ -211,8 +213,9 @@ class BubbleAdapter(
         if (iv == null || m.isIncoming) { iv?.visibility = View.GONE; return }
         iv.visibility = View.VISIBLE
         val (drawable, tint) = when {
-            m.id < 0 -> Pair(R.drawable.ic_status_pending,   0x80FFFFFF.toInt())  // clock, dim white
-            else     -> Pair(R.drawable.ic_status_sent,      0xAAFFFFFF.toInt())  // single tick, white
+            m.id < 0                                   -> Pair(R.drawable.ic_status_pending,   0x80FFFFFF.toInt())
+            isRcsConversation && m.deliveryStatus == 0 -> Pair(R.drawable.ic_status_delivered, 0xAAFFFFFF.toInt())
+            else                                       -> Pair(R.drawable.ic_status_sent,      0xAAFFFFFF.toInt())
         }
         iv.setImageResource(drawable)
         iv.imageTintList = ColorStateList.valueOf(tint)
@@ -308,7 +311,7 @@ class BubbleAdapter(
                     "Delete message" -> {
                         AlertDialog.Builder(ctx)
                             .setMessage("Delete this message?")
-                            .setPositiveButton("Delete") { _, _ -> onDelete?.invoke(m.id, m.isMms) }
+                            .setPositiveButton("Delete") { _, _ -> onDelete?.invoke(m) }
                             .setNegativeButton("Cancel", null)
                             .show()
                     }

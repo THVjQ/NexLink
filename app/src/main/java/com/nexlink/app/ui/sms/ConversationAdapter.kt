@@ -10,6 +10,7 @@ import com.nexlink.app.R
 import com.nexlink.app.db.ChatCustomizationStore
 import com.nexlink.app.db.Conversation
 import com.nexlink.app.db.CryptoStore
+import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.PinStore
 import com.nexlink.app.db.ReadTracker
 import com.nexlink.app.util.AvatarColors
@@ -36,6 +37,7 @@ class ConversationAdapter(
         val badge:       TextView   = v.findViewById(R.id.tvBadge)
         val lock:        ImageView  = v.findViewById(R.id.ivLock)
         val pin:         ImageView  = v.findViewById(R.id.ivPin)
+        val rcs:         ImageView  = v.findViewById(R.id.ivRcs)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
@@ -74,6 +76,7 @@ class ConversationAdapter(
         h.lock.visibility = if (CryptoStore.getSessionKey(h.itemView.context, c.address) != null)
             View.VISIBLE else View.GONE
         h.pin.visibility = if (PinStore.isPinned(ctx, c.threadId)) View.VISIBLE else View.GONE
+        h.rcs.visibility = if (NotificationPrefs.isRcsEnabled(ctx)) View.VISIBLE else View.GONE
 
         // Treat as read if system says 0 unread OR user locally viewed it
         val effectivelyRead = c.unreadCount == 0 ||

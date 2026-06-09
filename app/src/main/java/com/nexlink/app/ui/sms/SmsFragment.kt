@@ -203,6 +203,7 @@ class SmsFragment : Fragment() {
                                 .setTitle("Block ${conv.contactName.ifBlank { conv.address }}?")
                                 .setMessage("You won't receive messages from this number.")
                                 .setPositiveButton("Block") { _, _ ->
+                                    RecycleBinStore.add(ctx, conv)
                                     BlockStore.block(ctx, conv.address)
                                     loadConversations()
                                 }
@@ -332,8 +333,8 @@ class SmsFragment : Fragment() {
         cats.forEach { cat ->
             val chip = android.widget.TextView(ctx).apply {
                 text = cat.name
-                textSize = 18f
-                setPadding(40.dpToPx(ctx), 14.dpToPx(ctx), 40.dpToPx(ctx), 14.dpToPx(ctx))
+                textSize = 14f
+                setPadding(28.dpToPx(ctx), 10.dpToPx(ctx), 28.dpToPx(ctx), 10.dpToPx(ctx))
                 val isActive = cat.id == activeCategoryId
                 setBackgroundResource(if (isActive) R.drawable.bg_card_selected else R.drawable.bg_card_unselected)
                 setTextColor(if (isActive) resources.getColor(R.color.accent, null)
