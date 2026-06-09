@@ -234,6 +234,24 @@ class BubbleAdapter(
         h.time.text   = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(m.timestamp))
         bindSender(h.sender, m)
         bindStatus(h.status, m)
+        // File attachment (non-image, non-video, non-voice MMS) → tap to open
+        val isFileMms = m.isMms && m.mediaUri != null && !m.isVoice &&
+            m.mimeType?.startsWith("image/") == false &&
+            m.mimeType?.startsWith("video/") == false
+        if (isFileMms) {
+            h.bubble.setOnClickListener {
+                try {
+                    ctx.startActivity(Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(Uri.parse(m.mediaUri), m.mimeType ?: "*/*")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    })
+                } catch (_: Exception) {
+                    Toast.makeText(ctx, "No app to open this file", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } else {
+            h.bubble.setOnClickListener(null)
+        }
         if (m.isVoice && m.mediaUri != null) {
             h.btnPlay?.setOnClickListener { btn -> playAudio(btn.context, m.mediaUri) }
             h.tvTranscript?.visibility = View.GONE

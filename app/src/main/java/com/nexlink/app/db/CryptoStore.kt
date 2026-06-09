@@ -85,7 +85,8 @@ This message was sent automatically by NexLink to establish an end-to-end encryp
 • Both parties need NexLink installed for messages to be encrypted.
 • If you do not use NexLink, please disregard this message entirely.
 
-Learn more at THVjQ.com.au/NexLink
+Learn more at
+THVjQ.com.au/NexLink
 """.trimIndent()
 
     fun buildKeyExchange(pubKeyBytes: ByteArray) =

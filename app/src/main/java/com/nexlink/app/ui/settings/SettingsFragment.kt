@@ -4,16 +4,24 @@ import android.Manifest
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
+import android.text.SpannableStringBuilder
+import android.text.style.StyleSpan
 import android.view.*
+import android.widget.ArrayAdapter
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import com.nexlink.app.R
 import com.nexlink.app.databinding.FragmentSettingsBinding
 import com.nexlink.app.db.BlockStore
+import com.nexlink.app.db.DeletedConversation
+import com.nexlink.app.db.DeletedMessage
 import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.RecycleBinStore
 import com.nexlink.app.services.NexLinkNotificationListener
@@ -22,6 +30,12 @@ import java.util.Date
 import java.util.Locale
 
 class SettingsFragment : Fragment() {
+
+    private sealed class BinEntry {
+        abstract val deletedAt: Long
+        data class Conv(val d: DeletedConversation) : BinEntry() { override val deletedAt get() = d.deletedAt }
+        data class Msg(val d: DeletedMessage)       : BinEntry() { override val deletedAt get() = d.deletedAt }
+    }
 
     private var _b: FragmentSettingsBinding? = null
     private val b get() = _b!!
@@ -175,8 +189,18 @@ class SettingsFragment : Fragment() {
 
     private fun refreshRecycleBinCount() {
         val ctx = context ?: return
-        val count = RecycleBinStore.getAll(ctx).size
-        b.tvRecycleBinCount.text = if (count == 0) "Empty" else "$count deleted conversation${if (count != 1) "s" else ""}"
+        val convCount = RecycleBinStore.getAll(ctx).size
+        val msgCount  = RecycleBinStore.getMessages(ctx).size
+        val total = convCount + msgCount
+        b.tvRecycleBinCount.text = when {
+            total == 0   -> "Empty"
+            convCount > 0 && msgCount > 0 ->
+                "$convCount chat${if (convCount != 1) "s" else ""}, $msgCount message${if (msgCount != 1) "s" else ""}"
+            convCount > 0 ->
+                "$convCount deleted chat${if (convCount != 1) "s" else ""}"
+            else ->
+                "$msgCount deleted message${if (msgCount != 1) "s" else ""}"
+        }
     }
 
     private fun showBlockedNumbersDialog() {
@@ -210,8 +234,9 @@ class SettingsFragment : Fragment() {
 
     private fun showRecycleBinDialog() {
         val ctx = requireContext()
-        val deleted = RecycleBinStore.getAll(ctx)
-        if (deleted.isEmpty()) {
+        val convs = RecycleBinStore.getAll(ctx)
+        val msgs  = RecycleBinStore.getMessages(ctx)
+        if (convs.isEmpty() && msgs.isEmpty()) {
             AlertDialog.Builder(ctx)
                 .setTitle("Recycle Bin")
                 .setMessage("The recycle bin is empty.")
@@ -219,41 +244,112 @@ class SettingsFragment : Fragment() {
                 .show()
             return
         }
+
         val now = System.currentTimeMillis()
-        val names = deleted.map { d ->
-            val daysLeft = (30 - ((now - d.deletedAt) / 86_400_000)).coerceAtLeast(0)
-            "${d.contactName.ifBlank { d.address }} — $daysLeft day${if (daysLeft == 1L) "" else "s"} left"
-        }.toTypedArray()
+
+        val entries: List<BinEntry> = (convs.map { BinEntry.Conv(it) } + msgs.map { BinEntry.Msg(it) })
+            .sortedByDescending { it.deletedAt }
+
+        fun daysLeft(at: Long) = (30 - ((now - at) / 86_400_000)).coerceAtLeast(0)
+
+        val adapter = object : ArrayAdapter<BinEntry>(ctx, 0, entries) {
+            override fun getView(pos: Int, convertView: View?, parent: android.view.ViewGroup): View {
+                val entry = getItem(pos)!!
+                val container = convertView as? android.widget.LinearLayout
+                    ?: android.widget.LinearLayout(ctx).apply {
+                        orientation = android.widget.LinearLayout.VERTICAL
+                        setPadding(48, 24, 48, 24)
+                    }
+                container.removeAllViews()
+
+                fun tv(text: CharSequence, sizeSp: Float, colorId: Int) = TextView(ctx).apply {
+                    this.text = text; textSize = sizeSp
+                    setTextColor(resources.getColor(colorId, null))
+                }
+
+                when (entry) {
+                    is BinEntry.Conv -> {
+                        val d = entry.d
+                        val title = SpannableStringBuilder("💬 ${d.contactName.ifBlank { d.address }}").apply {
+                            setSpan(StyleSpan(Typeface.BOLD), 0, length, 0)
+                        }
+                        container.addView(tv(title, 14f, R.color.text))
+                        if (d.lastMessage.isNotBlank())
+                            container.addView(tv(d.lastMessage.take(80), 12f, R.color.muted))
+                        container.addView(tv("${daysLeft(d.deletedAt)} days left · conversation", 11f, R.color.accent))
+                    }
+                    is BinEntry.Msg -> {
+                        val d = entry.d
+                        val title = SpannableStringBuilder("✉ ${d.address}").apply {
+                            setSpan(StyleSpan(Typeface.BOLD), 0, length, 0)
+                        }
+                        container.addView(tv(title, 14f, R.color.text))
+                        val preview = d.body.trim().take(80).ifBlank { "(media)" }
+                        container.addView(tv(preview, 12f, R.color.muted))
+                        container.addView(tv("${daysLeft(d.deletedAt)} days left · message", 11f, R.color.accent))
+                    }
+                }
+                return container
+            }
+        }
+
         AlertDialog.Builder(ctx)
             .setTitle("Recycle Bin")
-            .setItems(names) { _, i ->
-                val d = deleted[i]
-                AlertDialog.Builder(ctx)
-                    .setTitle(d.contactName.ifBlank { d.address })
-                    .setItems(arrayOf("Restore", "Delete permanently")) { _, which ->
-                        if (which == 0) {
-                            RecycleBinStore.remove(ctx, d.threadId)
-                            refreshRecycleBinCount()
-                            Toast.makeText(ctx, "Conversation restored", Toast.LENGTH_SHORT).show()
-                        } else {
-                            RecycleBinStore.remove(ctx, d.threadId)
-                            refreshRecycleBinCount()
-                            Toast.makeText(ctx, "Permanently deleted", Toast.LENGTH_SHORT).show()
-                        }
+            .setAdapter(adapter) { _, i ->
+                when (val entry = entries[i]) {
+                    is BinEntry.Conv -> {
+                        val d = entry.d
+                        AlertDialog.Builder(ctx)
+                            .setTitle(d.contactName.ifBlank { d.address })
+                            .setMessage("Conversation with ${d.lastMessage.take(60).ifBlank { "(no preview)" }}")
+                            .setPositiveButton("Restore") { _, _ ->
+                                RecycleBinStore.remove(ctx, d.threadId)
+                                refreshRecycleBinCount()
+                                Toast.makeText(ctx, "Conversation restored", Toast.LENGTH_SHORT).show()
+                            }
+                            .setNeutralButton("Delete permanently") { _, _ ->
+                                RecycleBinStore.remove(ctx, d.threadId)
+                                refreshRecycleBinCount()
+                                Toast.makeText(ctx, "Permanently deleted", Toast.LENGTH_SHORT).show()
+                            }
+                            .setNegativeButton("Cancel", null).show()
                     }
-                    .setNegativeButton("Cancel", null)
-                    .show()
+                    is BinEntry.Msg -> {
+                        val d = entry.d
+                        AlertDialog.Builder(ctx)
+                            .setTitle("Message from ${d.address}")
+                            .setMessage(d.body.take(200).ifBlank { "(media attachment)" })
+                            .setNeutralButton("Delete permanently") { _, _ ->
+                                val remaining = RecycleBinStore.getMessages(ctx).filter { it.id != d.id }
+                                ctx.getSharedPreferences("nx_recycle_bin", android.content.Context.MODE_PRIVATE)
+                                    .edit()
+                                    .putString("deleted_msgs", org.json.JSONArray().apply {
+                                        remaining.forEach { m ->
+                                            put(org.json.JSONObject().apply {
+                                                put("id", m.id); put("threadId", m.threadId)
+                                                put("address", m.address); put("body", m.body)
+                                                put("timestamp", m.timestamp); put("isMms", m.isMms)
+                                                put("deletedAt", m.deletedAt)
+                                            })
+                                        }
+                                    }.toString())
+                                    .apply()
+                                refreshRecycleBinCount()
+                                Toast.makeText(ctx, "Message permanently deleted", Toast.LENGTH_SHORT).show()
+                            }
+                            .setNegativeButton("Cancel", null).show()
+                    }
+                }
             }
             .setNeutralButton("Clear all") { _, _ ->
                 AlertDialog.Builder(ctx)
                     .setTitle("Clear recycle bin?")
-                    .setMessage("All deleted conversations will be permanently removed.")
+                    .setMessage("All items will be permanently removed.")
                     .setPositiveButton("Clear") { _, _ ->
                         RecycleBinStore.clear(ctx)
                         refreshRecycleBinCount()
                     }
-                    .setNegativeButton("Cancel", null)
-                    .show()
+                    .setNegativeButton("Cancel", null).show()
             }
             .setNegativeButton("Close", null)
             .show()
@@ -265,6 +361,7 @@ class SettingsFragment : Fragment() {
         val dialog = AlertDialog.Builder(ctx).setView(dialogView).create()
 
         val ivQr         = dialogView.findViewById<android.widget.ImageView>(com.nexlink.app.R.id.ivQrCode)
+        val tvQrTitle    = dialogView.findViewById<android.widget.TextView>(com.nexlink.app.R.id.tvQrTitle)
         val tvIndex      = dialogView.findViewById<android.widget.TextView>(com.nexlink.app.R.id.tvContactIndex)
         val btnPrev      = dialogView.findViewById<android.widget.ImageButton>(com.nexlink.app.R.id.btnPrev)
         val btnNext      = dialogView.findViewById<android.widget.ImageButton>(com.nexlink.app.R.id.btnNext)
@@ -272,6 +369,7 @@ class SettingsFragment : Fragment() {
         val rowDetails   = dialogView.findViewById<android.view.View>(com.nexlink.app.R.id.rowDetails)
         val ivToggleArrow= dialogView.findViewById<android.widget.ImageView>(com.nexlink.app.R.id.ivDetailsArrow)
         val layoutDetails= dialogView.findViewById<android.view.View>(com.nexlink.app.R.id.layoutDetails)
+        val etTitle      = dialogView.findViewById<android.widget.EditText>(com.nexlink.app.R.id.etTitle)
         val etFirst      = dialogView.findViewById<android.widget.EditText>(com.nexlink.app.R.id.etFirstName)
         val etLast       = dialogView.findViewById<android.widget.EditText>(com.nexlink.app.R.id.etLastName)
         val etPhone      = dialogView.findViewById<android.widget.EditText>(com.nexlink.app.R.id.etPhone)
@@ -279,10 +377,10 @@ class SettingsFragment : Fragment() {
         val btnSave      = dialogView.findViewById<android.widget.Button>(com.nexlink.app.R.id.btnSaveContact)
         val btnDelete    = dialogView.findViewById<android.widget.Button>(com.nexlink.app.R.id.btnDeleteContact)
 
-        // Load contacts list from prefs (JSON array), migrating legacy single-contact prefs
         val prefs = ctx.getSharedPreferences("nx_qr_contact", android.content.Context.MODE_PRIVATE)
+        val emptyContact = mapOf("title" to "", "first" to "", "last" to "", "phone" to "", "email" to "")
         val contacts = loadQrContacts(prefs).toMutableList()
-        if (contacts.isEmpty()) contacts.add(mapOf("first" to "", "last" to "", "phone" to "", "email" to ""))
+        if (contacts.isEmpty()) contacts.add(emptyContact)
         var currentIndex = 0
 
         fun generateQr(vcard: String) {
@@ -314,6 +412,10 @@ class SettingsFragment : Fragment() {
             tvIndex.text = "${currentIndex + 1} / ${contacts.size}"
             btnPrev.isEnabled = currentIndex > 0
             btnNext.isEnabled = currentIndex < contacts.size - 1
+            val title = c["title"].orEmpty()
+            tvQrTitle.text = title
+            tvQrTitle.visibility = if (title.isNotEmpty()) android.view.View.VISIBLE else android.view.View.GONE
+            etTitle.setText(title)
             etFirst.setText(c["first"].orEmpty())
             etLast.setText(c["last"].orEmpty())
             etPhone.setText(c["phone"].orEmpty())
@@ -324,7 +426,7 @@ class SettingsFragment : Fragment() {
         btnPrev.setOnClickListener { if (currentIndex > 0) { currentIndex--; refresh() } }
         btnNext.setOnClickListener { if (currentIndex < contacts.size - 1) { currentIndex++; refresh() } }
         btnAdd.setOnClickListener {
-            contacts.add(mapOf("first" to "", "last" to "", "phone" to "", "email" to ""))
+            contacts.add(emptyContact.toMutableMap())
             currentIndex = contacts.size - 1
             saveQrContacts(prefs, contacts)
             refresh()
@@ -342,6 +444,7 @@ class SettingsFragment : Fragment() {
 
         btnSave.setOnClickListener {
             val updated = mapOf(
+                "title" to etTitle.text.toString().trim(),
                 "first" to etFirst.text.toString().trim(),
                 "last"  to etLast.text.toString().trim(),
                 "phone" to etPhone.text.toString().trim(),
@@ -349,13 +452,16 @@ class SettingsFragment : Fragment() {
             )
             contacts[currentIndex] = updated
             saveQrContacts(prefs, contacts)
+            val title = updated["title"].orEmpty()
+            tvQrTitle.text = title
+            tvQrTitle.visibility = if (title.isNotEmpty()) android.view.View.VISIBLE else android.view.View.GONE
             generateQr(buildVcard(updated))
             Toast.makeText(ctx, "Contact saved", Toast.LENGTH_SHORT).show()
         }
 
         btnDelete.setOnClickListener {
             if (contacts.size == 1) {
-                contacts[0] = mapOf("first" to "", "last" to "", "phone" to "", "email" to "")
+                contacts[0] = emptyContact.toMutableMap()
             } else {
                 contacts.removeAt(currentIndex)
                 if (currentIndex >= contacts.size) currentIndex = contacts.size - 1
@@ -375,8 +481,9 @@ class SettingsFragment : Fragment() {
                 val arr = org.json.JSONArray(json)
                 (0 until arr.length()).map { i ->
                     val o = arr.getJSONObject(i)
-                    mapOf("first" to o.optString("first"), "last" to o.optString("last"),
-                          "phone" to o.optString("phone"), "email" to o.optString("email"))
+                    mapOf("title" to o.optString("title"), "first" to o.optString("first"),
+                          "last"  to o.optString("last"),  "phone" to o.optString("phone"),
+                          "email" to o.optString("email"))
                 }
             } catch (_: Exception) { emptyList() }
         }
@@ -386,7 +493,7 @@ class SettingsFragment : Fragment() {
         val phone = prefs.getString("phone", "").orEmpty()
         val email = prefs.getString("email", "").orEmpty()
         if (first.isNotEmpty() || phone.isNotEmpty()) {
-            return listOf(mapOf("first" to first, "last" to last, "phone" to phone, "email" to email))
+            return listOf(mapOf("title" to "", "first" to first, "last" to last, "phone" to phone, "email" to email))
         }
         return emptyList()
     }
@@ -395,8 +502,9 @@ class SettingsFragment : Fragment() {
         val arr = org.json.JSONArray()
         contacts.forEach { c ->
             arr.put(org.json.JSONObject().apply {
-                put("first", c["first"].orEmpty()); put("last",  c["last"].orEmpty())
-                put("phone", c["phone"].orEmpty()); put("email", c["email"].orEmpty())
+                put("title", c["title"].orEmpty()); put("first", c["first"].orEmpty())
+                put("last",  c["last"].orEmpty());  put("phone", c["phone"].orEmpty())
+                put("email", c["email"].orEmpty())
             })
         }
         prefs.edit().putString("contacts_list", arr.toString()).apply()
