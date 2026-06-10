@@ -1,14 +1,14 @@
 package com.nexlink.wear.tile
 
-import android.content.Intent
-import androidx.wear.tiles.ActionBuilders
-import androidx.wear.tiles.DeviceParametersBuilders
-import androidx.wear.tiles.LayoutElementBuilders
+import androidx.wear.protolayout.ActionBuilders
+import androidx.wear.protolayout.DimensionBuilders
+import androidx.wear.protolayout.LayoutElementBuilders
+import androidx.wear.protolayout.ModifiersBuilders
+import androidx.wear.protolayout.TimelineBuilders
 import androidx.wear.tiles.RequestBuilders
 import androidx.wear.tiles.ResourceBuilders
 import androidx.wear.tiles.TileBuilders
 import androidx.wear.tiles.TileService
-import androidx.wear.tiles.TimelineBuilders
 import com.google.common.util.concurrent.ListenableFuture
 import com.nexlink.wear.MainActivity
 import com.nexlink.wear.data.WearDataRepository
@@ -35,7 +35,7 @@ class NexLinkTile : TileService() {
                 )
                 .build()
 
-            val clickable = ActionBuilders.Clickable.Builder()
+            val clickable = ModifiersBuilders.Clickable.Builder()
                 .setOnClick(launchAction)
                 .build()
 
@@ -49,24 +49,24 @@ class NexLinkTile : TileService() {
             val layout = LayoutElementBuilders.Layout.Builder()
                 .setRoot(
                     LayoutElementBuilders.Box.Builder()
-                        .setWidth(LayoutElementBuilders.expand())
-                        .setHeight(LayoutElementBuilders.expand())
+                        .setWidth(DimensionBuilders.expand())
+                        .setHeight(DimensionBuilders.expand())
                         .setModifiers(
-                            LayoutElementBuilders.Modifiers.Builder()
+                            ModifiersBuilders.Modifiers.Builder()
                                 .setClickable(clickable)
                                 .build()
                         )
                         .addContent(
                             LayoutElementBuilders.Column.Builder()
-                                .setWidth(LayoutElementBuilders.wrap())
-                                .setHeight(LayoutElementBuilders.wrap())
+                                .setWidth(DimensionBuilders.wrap())
+                                .setHeight(DimensionBuilders.wrap())
                                 .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
                                 .addContent(
                                     LayoutElementBuilders.Text.Builder()
                                         .setText(headerText)
                                         .setFontStyle(
                                             LayoutElementBuilders.FontStyle.Builder()
-                                                .setSize(LayoutElementBuilders.SpProp.Builder().setValue(18f).build())
+                                                .setSize(DimensionBuilders.SpProp.Builder().setValue(18f).build())
                                                 .build()
                                         )
                                         .build()
@@ -76,7 +76,7 @@ class NexLinkTile : TileService() {
                                         .setText(bodyText)
                                         .setFontStyle(
                                             LayoutElementBuilders.FontStyle.Builder()
-                                                .setSize(LayoutElementBuilders.SpProp.Builder().setValue(13f).build())
+                                                .setSize(DimensionBuilders.SpProp.Builder().setValue(13f).build())
                                                 .build()
                                         )
                                         .build()

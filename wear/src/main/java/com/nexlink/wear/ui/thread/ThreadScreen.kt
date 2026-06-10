@@ -104,9 +104,10 @@ private fun MessageBubble(msg: SmsMessage) {
                 .padding(horizontal = 8.dp, vertical = 5.dp)
         ) {
             Column {
-                if (isIncoming && msg.senderName != null) {
+                val senderName = msg.senderName
+                if (isIncoming && senderName != null) {
                     Text(
-                        text  = msg.senderName,
+                        text  = senderName,
                         color = Color(0xFF90CAF9),
                         fontSize = 9.sp
                     )
