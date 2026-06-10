@@ -7,7 +7,7 @@ import android.widget.ImageButton
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.nexlink.app.R
-import com.nexlink.app.util.AvatarColors
+import com.nexlink.shared.AvatarColors
 
 sealed class ContactListItem {
     data class Header(val letter: String) : ContactListItem()

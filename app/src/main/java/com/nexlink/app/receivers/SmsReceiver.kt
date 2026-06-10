@@ -24,6 +24,7 @@ import com.nexlink.app.db.CryptoStore
 import com.nexlink.app.db.MmsDownloader
 import com.nexlink.app.db.SmsHelper
 import com.nexlink.app.ui.sms.ConversationActivity
+import com.nexlink.app.wear.WearSync
 import java.io.File
 
 class SmsReceiver : BroadcastReceiver() {
@@ -61,6 +62,7 @@ class SmsReceiver : BroadcastReceiver() {
                             val notif = if (CryptoStore.isEncrypted(bodyStr))
                                 "🔒 Encrypted message" else bodyStr
                             SmsNotifier.notify(context, sender, notif)
+                            WearSync.pushConversations(context)
                         }
                     }
                 }
@@ -187,6 +189,7 @@ class MmsDownloadReceiver : BroadcastReceiver() {
                     Log.e("NexLink_MMS", "storePdu returned null — notifying generic")
                     SmsNotifier.notify(ctx, "Unknown", "📷 MMS received")
                 }
+                WearSync.pushConversations(ctx)
             } finally {
                 pending.finish()
             }

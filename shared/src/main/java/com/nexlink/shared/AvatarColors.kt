@@ -1,10 +1,5 @@
-package com.nexlink.app.util
+package com.nexlink.shared
 
-/**
- * Maps a key string (first character) to a deterministic avatar background color.
- * A–Z → 26-color spectrum: blue → teal → green → amber → red → pink → purple
- * 0–9 → darker 10-color variant of the same spectrum
- */
 object AvatarColors {
 
     private val ALPHA_COLORS = intArrayOf(
@@ -52,15 +47,9 @@ object AvatarColors {
     fun colorFor(key: String): Int {
         val ch = key.firstOrNull() ?: return ALPHA_COLORS[0]
         return when {
-            ch.isLetter() -> {
-                val idx = (ch.uppercaseChar() - 'A').coerceIn(0, 25)
-                ALPHA_COLORS[idx]
-            }
-            ch.isDigit() -> {
-                val idx = ch - '0'
-                DIGIT_COLORS[idx]
-            }
-            else -> ALPHA_COLORS[0]
+            ch.isLetter() -> ALPHA_COLORS[(ch.uppercaseChar() - 'A').coerceIn(0, 25)]
+            ch.isDigit()  -> DIGIT_COLORS[ch - '0']
+            else          -> ALPHA_COLORS[0]
         }
     }
 }

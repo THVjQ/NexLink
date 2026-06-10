@@ -22,7 +22,7 @@ import com.nexlink.app.R
 import com.nexlink.app.databinding.FragmentCallsBinding
 import com.nexlink.app.db.CallEntry
 import com.nexlink.app.db.CallLogHelper
-import com.nexlink.app.util.AvatarColors
+import com.nexlink.shared.AvatarColors
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date

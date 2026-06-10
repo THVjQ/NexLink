@@ -8,12 +8,12 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.nexlink.app.R
 import com.nexlink.app.db.ChatCustomizationStore
-import com.nexlink.app.db.Conversation
+import com.nexlink.shared.Conversation
 import com.nexlink.app.db.CryptoStore
 import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.PinStore
 import com.nexlink.app.db.ReadTracker
-import com.nexlink.app.util.AvatarColors
+import com.nexlink.shared.AvatarColors
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

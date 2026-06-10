@@ -40,9 +40,9 @@ import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.ReadTracker
 import com.nexlink.app.db.RecycleBinStore
 import com.nexlink.app.db.SentMmsStore
-import com.nexlink.app.db.SimInfo
+import com.nexlink.shared.SimInfo
 import com.nexlink.app.db.SmsHelper
-import com.nexlink.app.db.SmsMessage
+import com.nexlink.shared.SmsMessage
 import com.nexlink.app.receivers.SmsNotifier
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
@@ -678,7 +678,7 @@ class ConversationActivity : AppCompatActivity() {
         if (!requireDefaultSmsApp()) { file.delete(); return }
 
         val audioUri = android.net.Uri.fromFile(file)
-        val optimisticVoice = com.nexlink.app.db.SmsMessage(
+        val optimisticVoice = SmsMessage(
             id         = -System.currentTimeMillis(),
             address    = address,
             body       = "🎤 Voice message",

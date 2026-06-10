@@ -27,7 +27,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.nexlink.app.R
 import com.nexlink.app.db.AudioTranscriber
 import com.nexlink.app.db.CryptoStore
-import com.nexlink.app.db.SmsMessage
+import com.nexlink.shared.SmsMessage
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -261,8 +261,9 @@ class BubbleAdapter(
         val longClick = View.OnLongClickListener { showMenu(it.context, m, body); true }
         h.bubble.setOnLongClickListener(longClick)
         h.itemView.setOnLongClickListener(longClick)
-        if (m.isVoice && m.mediaUri != null) {
-            h.btnPlay?.setOnClickListener { btn -> playAudio(btn.context, m.mediaUri) }
+        val voiceUri = m.mediaUri
+        if (m.isVoice && voiceUri != null) {
+            h.btnPlay?.setOnClickListener { btn -> playAudio(btn.context, voiceUri) }
             h.tvTranscript?.visibility = View.GONE
             h.btnTranscript?.let { btn ->
                 btn.visibility = View.VISIBLE
@@ -271,7 +272,7 @@ class BubbleAdapter(
                 btn.setOnClickListener { v ->
                     btn.text = if (m.isIncoming) " · …" else "… · "
                     btn.isClickable = false
-                    AudioTranscriber.transcribe(v.context, m.mediaUri) { result ->
+                    AudioTranscriber.transcribe(v.context, voiceUri) { result ->
                         if (result != null) {
                             btn.visibility = View.GONE
                             h.tvTranscript?.text = "“$result”"

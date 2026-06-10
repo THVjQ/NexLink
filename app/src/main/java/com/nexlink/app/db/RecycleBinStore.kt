@@ -1,6 +1,8 @@
 package com.nexlink.app.db
 
 import android.content.Context
+import com.nexlink.shared.Conversation
+import com.nexlink.shared.SmsMessage
 import org.json.JSONArray
 import org.json.JSONObject
 

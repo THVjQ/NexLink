@@ -22,7 +22,7 @@ import com.nexlink.app.R
 import com.nexlink.app.databinding.FragmentSmsBinding
 import com.nexlink.app.db.BlockStore
 import com.nexlink.app.db.CategoryStore
-import com.nexlink.app.db.Conversation
+import com.nexlink.shared.Conversation
 import com.nexlink.app.db.PinStore
 import com.nexlink.app.db.RecycleBinStore
 import com.nexlink.app.db.SmsHelper

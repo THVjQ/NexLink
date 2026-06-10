@@ -225,6 +225,16 @@
                 android:resource="@xml/file_paths"/>
         </provider>
 
+        <!-- ── Wearable listener — receives commands from the watch ── -->
+        <service
+            android:name=".wear.WearMessageDelegate"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/nexlink" />
+            </intent-filter>
+        </service>
+
         <!-- ── Social notification listener ── -->
         <service android:name=".services.NexLinkNotificationListener"
             android:exported="true"
