@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Samsung One UI dark palette (used in night mode) -->
+    <color name="bg">#000000</color>
+    <color name="surface">#1c1c1e</color>
+    <color name="surface2">#2c2c2e</color>
+    <color name="surface3">#3a3a3c</color>
+    <color name="accent">#0178FF</color>
+    <color name="accent2">#4ca3ff</color>
+    <color name="text">#ffffff</color>
+    <color name="text2">#ebebf5</color>
+    <color name="muted">#8e8e93</color>
+    <color name="divider">#38383a</color>
+</resources>

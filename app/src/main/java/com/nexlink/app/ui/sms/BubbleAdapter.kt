@@ -217,13 +217,15 @@ class BubbleAdapter(
     private fun bindStatus(iv: ImageView?, m: SmsMessage) {
         if (iv == null || m.isIncoming) { iv?.visibility = View.GONE; return }
         iv.visibility = View.VISIBLE
-        val (drawable, tint) = when {
-            m.id < 0                                   -> Pair(R.drawable.ic_status_pending,   0x80FFFFFF.toInt())
-            isRcsConversation && m.deliveryStatus == 0 -> Pair(R.drawable.ic_status_delivered, 0xAAFFFFFF.toInt())
-            else                                       -> Pair(R.drawable.ic_status_sent,      0xAAFFFFFF.toInt())
+        // RCS read receipt: deliveryStatus==32 reused as "seen by recipient" → blue double tick
+        val (drawable, applyTint, tint) = when {
+            m.id < 0                                    -> Triple(R.drawable.ic_status_pending,   true,  0x80FFFFFF.toInt())
+            isRcsConversation && m.deliveryStatus == 32 -> Triple(R.drawable.ic_status_read,      false, 0)
+            isRcsConversation && m.deliveryStatus == 0  -> Triple(R.drawable.ic_status_delivered, true,  0xAAFFFFFF.toInt())
+            else                                        -> Triple(R.drawable.ic_status_sent,      true,  0xAAFFFFFF.toInt())
         }
         iv.setImageResource(drawable)
-        iv.imageTintList = ColorStateList.valueOf(tint)
+        iv.imageTintList = if (applyTint) ColorStateList.valueOf(tint) else null
     }
 
     private fun decryptBody(ctx: Context, m: SmsMessage): String {

@@ -14,6 +14,7 @@ import com.nexlink.app.R
 import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.NotificationStore
 import com.nexlink.app.db.SocialNotification
+import com.nexlink.app.receivers.SmsNotifier
 
 class NexLinkNotificationListener : NotificationListenerService() {
 
@@ -163,7 +164,7 @@ class NexLinkNotificationListener : NotificationListenerService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         NotificationCompat.Builder(ctx, App.CH_SOCIAL)
-            .setSmallIcon(R.drawable.ic_notif_nexlink)
+            .setSmallIcon(SmsNotifier.notifIconRes(ctx))
             .setLargeIcon(buildCompositeIcon(n.platform))
             .setContentTitle("${n.platform} · ${n.sender}")
             .setContentText(n.text)

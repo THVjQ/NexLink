@@ -23,6 +23,7 @@ import com.nexlink.app.databinding.FragmentSmsBinding
 import com.nexlink.app.db.BlockStore
 import com.nexlink.app.db.CategoryStore
 import com.nexlink.shared.Conversation
+import com.nexlink.app.db.GroupNameStore
 import com.nexlink.app.db.PinStore
 import com.nexlink.app.db.RecycleBinStore
 import com.nexlink.app.db.SmsHelper
@@ -165,9 +166,13 @@ class SmsFragment : Fragment() {
     }
 
     private fun openConversation(conv: Conversation) {
-        startActivity(Intent(requireContext(), ConversationActivity::class.java).apply {
+        val ctx = requireContext()
+        val displayName = if (conv.participants.size > 1)
+            GroupNameStore.getName(ctx, conv.participants) ?: conv.contactName
+        else conv.contactName
+        startActivity(Intent(ctx, ConversationActivity::class.java).apply {
             putExtra("address", conv.address)
-            putExtra("contact_name", conv.contactName)
+            putExtra("contact_name", displayName)
             putExtra("thread_id", conv.threadId)
             putStringArrayListExtra("participants", ArrayList(conv.participants))
         })
@@ -401,14 +406,28 @@ class SmsFragment : Fragment() {
                                 Toast.makeText(ctx, "Select at least 2 contacts for a group", Toast.LENGTH_SHORT).show()
                                 return@setPositiveButton
                             }
-                            val participants = selected.map { it.second }
-                            val groupName   = selected.joinToString(", ") { it.first.split(" ").first() }
-                            startActivity(Intent(ctx, ConversationActivity::class.java).apply {
-                                putExtra("address", participants.first())
-                                putExtra("contact_name", groupName)
-                                putExtra("thread_id", 0L)
-                                putStringArrayListExtra("participants", ArrayList(participants))
-                            })
+                            val participants  = selected.map { it.second }
+                            val defaultName   = selected.joinToString(", ") { it.first.split(" ").first() }
+                            val nameInput = android.widget.EditText(ctx).apply {
+                                hint = "Group name"
+                                setText(defaultName)
+                                setPadding(48, 24, 48, 24)
+                            }
+                            AlertDialog.Builder(ctx)
+                                .setTitle("Name your group")
+                                .setView(nameInput)
+                                .setPositiveButton("Start") { _, _ ->
+                                    val groupName = nameInput.text.toString().trim().ifEmpty { defaultName }
+                                    GroupNameStore.setName(ctx, participants, groupName)
+                                    startActivity(Intent(ctx, ConversationActivity::class.java).apply {
+                                        putExtra("address", participants.first())
+                                        putExtra("contact_name", groupName)
+                                        putExtra("thread_id", 0L)
+                                        putStringArrayListExtra("participants", ArrayList(participants))
+                                    })
+                                }
+                                .setNegativeButton("Cancel", null)
+                                .show()
                         }
                         .setNegativeButton("Cancel", null)
                         .show()

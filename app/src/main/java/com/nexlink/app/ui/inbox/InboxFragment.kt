@@ -8,6 +8,7 @@ import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexlink.app.R
 import com.nexlink.app.databinding.FragmentInboxBinding
+import com.nexlink.app.db.DeepLinkHelper
 import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.NotificationStore
 import com.nexlink.app.db.SocialNotification
@@ -57,6 +58,13 @@ class InboxFragment : Fragment() {
                 else selectedPlatforms.add(platform)
                 updateCardVisuals()
                 applyFilter(NotificationStore.notifications.value.orEmpty())
+            }
+
+            // Long-press card → open the social app directly
+            entry.card.setOnLongClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                DeepLinkHelper.openPlatform(requireContext(), platform)
+                true
             }
 
             // Tap mute bell → toggle mute for this platform

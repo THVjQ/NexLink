@@ -15,6 +15,7 @@ import android.widget.ArrayAdapter
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.nexlink.app.R
@@ -22,6 +23,7 @@ import com.nexlink.app.databinding.FragmentSettingsBinding
 import com.nexlink.app.db.BlockStore
 import com.nexlink.app.db.DeletedConversation
 import com.nexlink.app.db.DeletedMessage
+import com.nexlink.app.db.IconPrefs
 import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.RecycleBinStore
 import com.nexlink.app.services.NexLinkNotificationListener
@@ -151,6 +153,15 @@ class SettingsFragment : Fragment() {
 
         // Share Contact (QR)
         b.rowShareContact.setOnClickListener { showQrContactDialog() }
+
+        // Appearance — Dark Mode
+        refreshDarkModeLabel()
+        b.rowDarkMode.setOnClickListener { showDarkModeDialog() }
+
+        // Appearance — App Icon
+        refreshIconLabels()
+        b.rowAppIcon.setOnClickListener { showAppIconDialog() }
+        b.rowNotifIcon.setOnClickListener { showNotifIconDialog() }
     }
 
     override fun onResume() {
@@ -158,6 +169,8 @@ class SettingsFragment : Fragment() {
         updatePermissionStatus()
         refreshBlockedCount()
         refreshRecycleBinCount()
+        refreshDarkModeLabel()
+        refreshIconLabels()
 
         // Refresh all switch states in case they were changed externally
         val ctx = context ?: return
@@ -237,19 +250,37 @@ class SettingsFragment : Fragment() {
         val convs = RecycleBinStore.getAll(ctx)
         val msgs  = RecycleBinStore.getMessages(ctx)
         if (convs.isEmpty() && msgs.isEmpty()) {
-            AlertDialog.Builder(ctx)
-                .setTitle("Recycle Bin")
-                .setMessage("The recycle bin is empty.")
-                .setPositiveButton("OK", null)
-                .show()
+            AlertDialog.Builder(ctx).setTitle("Recycle Bin").setMessage("The recycle bin is empty.")
+                .setPositiveButton("OK", null).show()
             return
         }
+        // Top-level section chooser
+        val sectionLabels = buildList {
+            add("All (${convs.size + msgs.size})")
+            if (convs.isNotEmpty()) add("Chats (${convs.size})")
+            if (msgs.isNotEmpty()) add("Messages (${msgs.size})")
+        }
+        AlertDialog.Builder(ctx).setTitle("Recycle Bin")
+            .setItems(sectionLabels.toTypedArray()) { _, which ->
+                val filtered: List<BinEntry> = when (which) {
+                    1 -> if (convs.isNotEmpty()) convs.map { BinEntry.Conv(it) } else msgs.map { BinEntry.Msg(it) }
+                    2 -> msgs.map { BinEntry.Msg(it) }
+                    else -> (convs.map { BinEntry.Conv(it) } + msgs.map { BinEntry.Msg(it) })
+                        .sortedByDescending { it.deletedAt }
+                }
+                showBinSection(ctx, filtered)
+            }
+            .setNeutralButton("Clear all") { _, _ ->
+                AlertDialog.Builder(ctx).setTitle("Clear recycle bin?")
+                    .setMessage("All items will be permanently removed.")
+                    .setPositiveButton("Clear") { _, _ -> RecycleBinStore.clear(ctx); refreshRecycleBinCount() }
+                    .setNegativeButton("Cancel", null).show()
+            }
+            .setNegativeButton("Close", null).show()
+    }
 
+    private fun showBinSection(ctx: android.content.Context, entries: List<BinEntry>) {
         val now = System.currentTimeMillis()
-
-        val entries: List<BinEntry> = (convs.map { BinEntry.Conv(it) } + msgs.map { BinEntry.Msg(it) })
-            .sortedByDescending { it.deletedAt }
-
         fun daysLeft(at: Long) = (30 - ((now - at) / 86_400_000)).coerceAtLeast(0)
 
         val adapter = object : ArrayAdapter<BinEntry>(ctx, 0, entries) {
@@ -261,12 +292,10 @@ class SettingsFragment : Fragment() {
                         setPadding(48, 24, 48, 24)
                     }
                 container.removeAllViews()
-
                 fun tv(text: CharSequence, sizeSp: Float, colorId: Int) = TextView(ctx).apply {
                     this.text = text; textSize = sizeSp
                     setTextColor(resources.getColor(colorId, null))
                 }
-
                 when (entry) {
                     is BinEntry.Conv -> {
                         val d = entry.d
@@ -276,7 +305,7 @@ class SettingsFragment : Fragment() {
                         container.addView(tv(title, 14f, R.color.text))
                         if (d.lastMessage.isNotBlank())
                             container.addView(tv(d.lastMessage.take(80), 12f, R.color.muted))
-                        container.addView(tv("${daysLeft(d.deletedAt)} days left · conversation", 11f, R.color.accent))
+                        container.addView(tv("${daysLeft(d.deletedAt)} days left · chat", 11f, R.color.accent))
                     }
                     is BinEntry.Msg -> {
                         val d = entry.d
@@ -284,46 +313,38 @@ class SettingsFragment : Fragment() {
                             setSpan(StyleSpan(Typeface.BOLD), 0, length, 0)
                         }
                         container.addView(tv(title, 14f, R.color.text))
-                        val preview = d.body.trim().take(80).ifBlank { "(media)" }
-                        container.addView(tv(preview, 12f, R.color.muted))
+                        container.addView(tv(d.body.trim().take(80).ifBlank { "(media)" }, 12f, R.color.muted))
                         container.addView(tv("${daysLeft(d.deletedAt)} days left · message", 11f, R.color.accent))
                     }
                 }
                 return container
             }
         }
-
-        AlertDialog.Builder(ctx)
-            .setTitle("Recycle Bin")
+        AlertDialog.Builder(ctx).setTitle("Recycle Bin")
             .setAdapter(adapter) { _, i ->
                 when (val entry = entries[i]) {
                     is BinEntry.Conv -> {
                         val d = entry.d
-                        AlertDialog.Builder(ctx)
-                            .setTitle(d.contactName.ifBlank { d.address })
-                            .setMessage("Conversation with ${d.lastMessage.take(60).ifBlank { "(no preview)" }}")
+                        AlertDialog.Builder(ctx).setTitle(d.contactName.ifBlank { d.address })
+                            .setMessage("Last message: ${d.lastMessage.take(60).ifBlank { "(none)" }}")
                             .setPositiveButton("Restore") { _, _ ->
-                                RecycleBinStore.remove(ctx, d.threadId)
-                                refreshRecycleBinCount()
+                                RecycleBinStore.remove(ctx, d.threadId); refreshRecycleBinCount()
                                 Toast.makeText(ctx, "Conversation restored", Toast.LENGTH_SHORT).show()
                             }
                             .setNeutralButton("Delete permanently") { _, _ ->
-                                RecycleBinStore.remove(ctx, d.threadId)
-                                refreshRecycleBinCount()
+                                RecycleBinStore.remove(ctx, d.threadId); refreshRecycleBinCount()
                                 Toast.makeText(ctx, "Permanently deleted", Toast.LENGTH_SHORT).show()
                             }
                             .setNegativeButton("Cancel", null).show()
                     }
                     is BinEntry.Msg -> {
                         val d = entry.d
-                        AlertDialog.Builder(ctx)
-                            .setTitle("Message from ${d.address}")
+                        AlertDialog.Builder(ctx).setTitle("Message from ${d.address}")
                             .setMessage(d.body.take(200).ifBlank { "(media attachment)" })
                             .setNeutralButton("Delete permanently") { _, _ ->
                                 val remaining = RecycleBinStore.getMessages(ctx).filter { it.id != d.id }
                                 ctx.getSharedPreferences("nx_recycle_bin", android.content.Context.MODE_PRIVATE)
-                                    .edit()
-                                    .putString("deleted_msgs", org.json.JSONArray().apply {
+                                    .edit().putString("deleted_msgs", org.json.JSONArray().apply {
                                         remaining.forEach { m ->
                                             put(org.json.JSONObject().apply {
                                                 put("id", m.id); put("threadId", m.threadId)
@@ -332,8 +353,7 @@ class SettingsFragment : Fragment() {
                                                 put("deletedAt", m.deletedAt)
                                             })
                                         }
-                                    }.toString())
-                                    .apply()
+                                    }.toString()).apply()
                                 refreshRecycleBinCount()
                                 Toast.makeText(ctx, "Message permanently deleted", Toast.LENGTH_SHORT).show()
                             }
@@ -341,18 +361,7 @@ class SettingsFragment : Fragment() {
                     }
                 }
             }
-            .setNeutralButton("Clear all") { _, _ ->
-                AlertDialog.Builder(ctx)
-                    .setTitle("Clear recycle bin?")
-                    .setMessage("All items will be permanently removed.")
-                    .setPositiveButton("Clear") { _, _ ->
-                        RecycleBinStore.clear(ctx)
-                        refreshRecycleBinCount()
-                    }
-                    .setNegativeButton("Cancel", null).show()
-            }
-            .setNegativeButton("Close", null)
-            .show()
+            .setNegativeButton("Close", null).show()
     }
 
     private fun showQrContactDialog() {
@@ -524,6 +533,96 @@ class SettingsFragment : Fragment() {
         ) ?: ""
         val listenerComp = ComponentName(ctx, NexLinkNotificationListener::class.java).flattenToString()
         b.statusNotif.text = if (listenerComp in enabledListeners) "Granted ✓" else "Not granted — tap button below"
+    }
+
+    // ── Dark mode ─────────────────────────────────────────────────────────────
+
+    private fun refreshDarkModeLabel() {
+        val ctx = context ?: return
+        b.tvDarkModeValue.text = when (NotificationPrefs.getDarkMode(ctx)) {
+            1    -> "Light"
+            2    -> "Dark"
+            else -> "System default"
+        }
+    }
+
+    private fun showDarkModeDialog() {
+        val ctx = requireContext()
+        val options = arrayOf("System default", "Light", "Dark")
+        val current = NotificationPrefs.getDarkMode(ctx)
+        AlertDialog.Builder(ctx).setTitle("Dark Mode")
+            .setSingleChoiceItems(options, current) { dlg, which ->
+                NotificationPrefs.setDarkMode(ctx, which)
+                AppCompatDelegate.setDefaultNightMode(when (which) {
+                    1    -> AppCompatDelegate.MODE_NIGHT_NO
+                    2    -> AppCompatDelegate.MODE_NIGHT_YES
+                    else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+                })
+                refreshDarkModeLabel()
+                dlg.dismiss()
+            }
+            .setNegativeButton("Cancel", null).show()
+    }
+
+    // ── Icon settings ─────────────────────────────────────────────────────────
+
+    private val iconNames = arrayOf(
+        "Default", "Design 1", "Design 2", "Design 3", "Design 4", "Design 5",
+        "Design 6", "Design 7", "Design 8", "Design 9", "Design 10"
+    )
+
+    private fun refreshIconLabels() {
+        val ctx = context ?: return
+        b.tvAppIconValue.text   = iconNames[IconPrefs.getAppIconIndex(ctx)]
+        b.tvNotifIconValue.text = iconNames[IconPrefs.getNotifIconIndex(ctx)]
+    }
+
+    private fun showAppIconDialog() {
+        val ctx = requireContext()
+        val current = IconPrefs.getAppIconIndex(ctx)
+        AlertDialog.Builder(ctx).setTitle("App Icon")
+            .setSingleChoiceItems(iconNames, current) { dlg, which ->
+                IconPrefs.setAppIconIndex(ctx, which)
+                switchAppIcon(ctx, which)
+                refreshIconLabels()
+                // Auto-select matching notification icon as default pairing
+                if (IconPrefs.getNotifIconIndex(ctx) == 0 || IconPrefs.getNotifIconIndex(ctx) == current) {
+                    IconPrefs.setNotifIconIndex(ctx, which)
+                }
+                refreshIconLabels()
+                dlg.dismiss()
+                Toast.makeText(ctx, "Icon changed — may take a moment to update on home screen", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null).show()
+    }
+
+    private fun showNotifIconDialog() {
+        val ctx = requireContext()
+        val current = IconPrefs.getNotifIconIndex(ctx)
+        AlertDialog.Builder(ctx).setTitle("Notification Icon")
+            .setSingleChoiceItems(iconNames, current) { dlg, which ->
+                IconPrefs.setNotifIconIndex(ctx, which)
+                refreshIconLabels()
+                dlg.dismiss()
+            }
+            .setNegativeButton("Cancel", null).show()
+    }
+
+    private fun switchAppIcon(ctx: android.content.Context, index: Int) {
+        val pm = ctx.packageManager
+        val pkg = ctx.packageName
+        val allAliases = listOf(".MainActivityDefault") +
+            (1..10).map { ".MainActivityIcon$it" }
+        val target = if (index == 0) ".MainActivityDefault" else ".MainActivityIcon$index"
+        allAliases.forEach { alias ->
+            val comp = ComponentName(pkg, pkg + alias)
+            val state = if (alias == target)
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+            else
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+            try { pm.setComponentEnabledSetting(comp, state, PackageManager.DONT_KILL_APP) }
+            catch (_: Exception) {}
+        }
     }
 
     override fun onDestroyView() { super.onDestroyView(); _b = null }

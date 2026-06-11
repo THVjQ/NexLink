@@ -9,12 +9,14 @@ import android.provider.Settings
 import android.provider.Telephony
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
+import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.services.NexLinkNotificationListener
 import com.nexlink.app.databinding.ActivityMainBinding
 import com.nexlink.app.ui.calls.CallsFragment
@@ -45,6 +47,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        applyDarkMode()
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -72,7 +75,24 @@ class MainActivity : AppCompatActivity() {
                 else -> false
             }
         }
-        binding.bottomNav.selectedItemId = R.id.nav_sms
+
+        val startNav = intent.getIntExtra("navigate_to", R.id.nav_sms)
+        binding.bottomNav.selectedItemId = startNav
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val navTo = intent.getIntExtra("navigate_to", -1)
+        if (navTo != -1) binding.bottomNav.selectedItemId = navTo
+    }
+
+    private fun applyDarkMode() {
+        val mode = NotificationPrefs.getDarkMode(applicationContext)
+        AppCompatDelegate.setDefaultNightMode(when (mode) {
+            1    -> AppCompatDelegate.MODE_NIGHT_NO
+            2    -> AppCompatDelegate.MODE_NIGHT_YES
+            else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+        })
     }
 
     private fun loadFragment(f: Fragment) {
@@ -107,9 +127,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun promptDefaultSmsApp() {
-        // Already default — never prompt
         if (Telephony.Sms.getDefaultSmsPackage(this) == packageName) return
-        // Only show once — if dismissed or set, don't keep nagging
         val prefs = getSharedPreferences("nexlink_prefs", MODE_PRIVATE)
         if (prefs.getBoolean("sms_prompt_shown", false)) return
         prefs.edit().putBoolean("sms_prompt_shown", true).apply()
@@ -118,10 +136,19 @@ class MainActivity : AppCompatActivity() {
             .setTitle("Set NexLink as Default SMS App")
             .setMessage("To receive SMS notifications and see new messages here, set NexLink as your default SMS app.")
             .setPositiveButton("Set as Default") { _, _ ->
-                startActivity(
-                    Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT)
-                        .putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
-                )
+                try {
+                    startActivity(
+                        Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT)
+                            .putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                } catch (_: Exception) {
+                    startActivity(
+                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = android.net.Uri.fromParts("package", packageName, null)
+                        }
+                    )
+                }
             }
             .setNegativeButton("Not Now", null)
             .show()

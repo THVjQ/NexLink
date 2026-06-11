@@ -74,4 +74,13 @@ object NotificationPrefs {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putBoolean("encryption_enabled", enabled).apply()
     }
+
+    // ── Dark mode: 0=system, 1=light, 2=dark ──
+    fun getDarkMode(ctx: Context): Int =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("dark_mode", 0)
+
+    fun setDarkMode(ctx: Context, mode: Int) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putInt("dark_mode", mode).apply()
+    }
 }

@@ -36,6 +36,7 @@ import com.nexlink.app.R
 import com.nexlink.app.databinding.ActivityConversationBinding
 import com.nexlink.app.db.ChatCustomizationStore
 import com.nexlink.app.db.CryptoStore
+import com.nexlink.app.db.GroupNameStore
 import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.ReadTracker
 import com.nexlink.app.db.RecycleBinStore
@@ -257,15 +258,20 @@ class ConversationActivity : AppCompatActivity() {
         val wpUri = ChatCustomizationStore.getWallpaper(this, address)
         if (wpUri != null) {
             try {
-                b.recycler.background = android.graphics.drawable.BitmapDrawable(
-                    resources,
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P)
-                        android.graphics.ImageDecoder.decodeBitmap(
-                            android.graphics.ImageDecoder.createSource(contentResolver, android.net.Uri.parse(wpUri)))
-                    else @Suppress("DEPRECATION")
+                val bmp = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P)
+                    android.graphics.ImageDecoder.decodeBitmap(
+                        android.graphics.ImageDecoder.createSource(contentResolver, android.net.Uri.parse(wpUri)))
+                else @Suppress("DEPRECATION")
                     android.provider.MediaStore.Images.Media.getBitmap(contentResolver, android.net.Uri.parse(wpUri))
-                )
+                val drawable = android.graphics.drawable.BitmapDrawable(resources, bmp)
+                // Extend wallpaper all the way to the top behind the toolbar
+                b.contentLayout.background = drawable
+                b.recycler.background = null
+                b.toolbar.setBackgroundColor(0xCC000000.toInt())
             } catch (_: Exception) {}
+        } else {
+            b.contentLayout.setBackgroundColor(getColor(com.nexlink.app.R.color.bg))
+            b.toolbar.setBackgroundColor(getColor(com.nexlink.app.R.color.surface))
         }
     }
 
@@ -328,7 +334,13 @@ class ConversationActivity : AppCompatActivity() {
                 .setTitle("Chat wallpaper")
                 .setItems(arrayOf("Choose from gallery", "Remove wallpaper")) { _, which ->
                     if (which == 0) wallpaperLauncher.launch("image/*")
-                    else { ChatCustomizationStore.clearWallpaper(this, address); b.recycler.background = null; Toast.makeText(this, "Wallpaper removed", Toast.LENGTH_SHORT).show() }
+                    else {
+                        ChatCustomizationStore.clearWallpaper(this, address)
+                        b.recycler.background = null
+                        b.contentLayout.setBackgroundColor(getColor(com.nexlink.app.R.color.bg))
+                        b.toolbar.setBackgroundColor(getColor(com.nexlink.app.R.color.surface))
+                        Toast.makeText(this, "Wallpaper removed", Toast.LENGTH_SHORT).show()
+                    }
                 }
                 .show()
         }
@@ -443,6 +455,24 @@ class ConversationActivity : AppCompatActivity() {
         }
         if (item.itemId == R.id.action_chat_info) {
             b.drawerLayout.openDrawer(Gravity.END)
+            return true
+        }
+        if (item.itemId == R.id.action_rename_group && isGroup) {
+            val input = android.widget.EditText(this).apply {
+                hint = "Group name"
+                setText(supportActionBar?.title?.toString() ?: "")
+                setPadding(48, 24, 48, 24)
+            }
+            AlertDialog.Builder(this)
+                .setTitle("Rename group")
+                .setView(input)
+                .setPositiveButton("Save") { _, _ ->
+                    val newName = input.text.toString().trim().ifEmpty { return@setPositiveButton }
+                    GroupNameStore.setName(this, participants, newName)
+                    supportActionBar?.title = newName
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
             return true
         }
         if (item.itemId == R.id.action_delete_conversation) {

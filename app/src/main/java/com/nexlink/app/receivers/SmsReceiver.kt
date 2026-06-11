@@ -21,6 +21,7 @@ import com.google.android.mms.pdu_alt.PduParser
 import com.nexlink.app.App
 import com.nexlink.app.R
 import com.nexlink.app.db.CryptoStore
+import com.nexlink.app.db.IconPrefs
 import com.nexlink.app.db.MmsDownloader
 import com.nexlink.app.db.SmsHelper
 import com.nexlink.app.ui.sms.ConversationActivity
@@ -44,16 +45,14 @@ class SmsReceiver : BroadcastReceiver() {
                     when {
                         CryptoStore.isKeyExchange(bodyStr) -> {
                             // Peer has NexLink — store their public key and establish a session.
-                            // Auto-reply with our public key if we haven't sent it yet.
+                            // Always reply with our key (peer may have reinstalled or rotated keys).
                             val peerPub = CryptoStore.parseKeyExchange(bodyStr)
                             if (peerPub != null) {
                                 CryptoStore.storePeerKey(context, sender, peerPub)
-                                if (!CryptoStore.hasSentKey(context, sender)) {
-                                    CryptoStore.markKeySent(context, sender)
-                                    val ourPub = CryptoStore.getPublicKeyBytes(context)
-                                    SmsHelper.sendSms(context, sender,
-                                        CryptoStore.buildKeyExchange(ourPub), -1)
-                                }
+                                CryptoStore.markKeySent(context, sender)
+                                val ourPub = CryptoStore.getPublicKeyBytes(context)
+                                SmsHelper.sendSms(context, sender,
+                                    CryptoStore.buildKeyExchange(ourPub), -1)
                             }
                             // Key exchange messages are internal — not shown to the user
                         }
@@ -378,7 +377,7 @@ object SmsNotifier {
             .build()
 
         val notif = NotificationCompat.Builder(ctx, App.CH_SMS)
-            .setSmallIcon(R.drawable.ic_notif_nexlink)
+            .setSmallIcon(notifIconRes(ctx))
             .setLargeIcon(buildAvatarIcon(name))
             .setContentTitle(name)
             .setContentText(contentText)
@@ -409,13 +408,27 @@ object SmsNotifier {
         val nm = ctx.getSystemService(NotificationManager::class.java)
         // Show a brief "Replied" notification then auto-cancel
         val notif = NotificationCompat.Builder(ctx, App.CH_SMS)
-            .setSmallIcon(R.drawable.ic_notif_nexlink)
+            .setSmallIcon(notifIconRes(ctx))
             .setContentTitle(name)
             .setContentText("You: $replyText")
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .build()
         nm.notify(sender.hashCode(), notif)
+    }
+
+    fun notifIconRes(ctx: Context): Int = when (IconPrefs.getNotifIconIndex(ctx)) {
+        1  -> R.drawable.ic_notif_custom_1
+        2  -> R.drawable.ic_notif_custom_2
+        3  -> R.drawable.ic_notif_custom_3
+        4  -> R.drawable.ic_notif_custom_4
+        5  -> R.drawable.ic_notif_custom_5
+        6  -> R.drawable.ic_notif_custom_6
+        7  -> R.drawable.ic_notif_custom_7
+        8  -> R.drawable.ic_notif_custom_8
+        9  -> R.drawable.ic_notif_custom_9
+        10 -> R.drawable.ic_notif_custom_10
+        else -> R.drawable.ic_notif_nexlink
     }
 
     private fun buildAvatarIcon(name: String): Bitmap {

@@ -125,6 +125,84 @@
 
         </LinearLayout>
 
+        <!-- Appearance section -->
+        <TextView android:text="APPEARANCE" android:textSize="11sp" android:textStyle="bold"
+            android:textColor="@color/muted" android:letterSpacing="0.09"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"/>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:background="@drawable/bg_card" android:padding="14dp"
+            android:layout_marginBottom="16dp">
+
+            <!-- Dark mode -->
+            <LinearLayout android:id="@+id/rowDarkMode"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:padding="8dp"
+                android:clickable="true" android:focusable="true"
+                android:background="?attr/selectableItemBackground">
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical">
+                    <TextView android:text="Dark Mode"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/text" android:textSize="14sp"/>
+                    <TextView android:id="@+id/tvDarkModeValue"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/muted" android:textSize="11sp"
+                        android:layout_marginTop="2dp" android:text="System default"/>
+                </LinearLayout>
+                <ImageView android:layout_width="16dp" android:layout_height="16dp"
+                    android:src="@drawable/ic_chevron_right" android:tint="@color/muted"/>
+            </LinearLayout>
+
+            <View android:layout_width="match_parent" android:layout_height="1dp"
+                android:background="@color/divider" android:layout_marginVertical="4dp"/>
+
+            <!-- App icon -->
+            <LinearLayout android:id="@+id/rowAppIcon"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:padding="8dp"
+                android:clickable="true" android:focusable="true"
+                android:background="?attr/selectableItemBackground">
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical">
+                    <TextView android:text="App Icon"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/text" android:textSize="14sp"/>
+                    <TextView android:id="@+id/tvAppIconValue"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/muted" android:textSize="11sp"
+                        android:layout_marginTop="2dp" android:text="Default"/>
+                </LinearLayout>
+                <ImageView android:layout_width="16dp" android:layout_height="16dp"
+                    android:src="@drawable/ic_chevron_right" android:tint="@color/muted"/>
+            </LinearLayout>
+
+            <View android:layout_width="match_parent" android:layout_height="1dp"
+                android:background="@color/divider" android:layout_marginVertical="4dp"/>
+
+            <!-- Notification icon -->
+            <LinearLayout android:id="@+id/rowNotifIcon"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:padding="8dp"
+                android:clickable="true" android:focusable="true"
+                android:background="?attr/selectableItemBackground">
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical">
+                    <TextView android:text="Notification Icon"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/text" android:textSize="14sp"/>
+                    <TextView android:id="@+id/tvNotifIconValue"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/muted" android:textSize="11sp"
+                        android:layout_marginTop="2dp" android:text="Default"/>
+                </LinearLayout>
+                <ImageView android:layout_width="16dp" android:layout_height="16dp"
+                    android:src="@drawable/ic_chevron_right" android:tint="@color/muted"/>
+            </LinearLayout>
+
+        </LinearLayout>
+
         <!-- Notification behaviour -->
         <TextView android:text="NOTIFICATIONS" android:textSize="11sp" android:textStyle="bold"
             android:textColor="@color/muted" android:letterSpacing="0.09"
