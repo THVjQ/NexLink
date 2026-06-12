@@ -213,8 +213,11 @@ object SmsHelper {
                     if (ct == "application/smil") continue
                     val partUri = "content://mms/part/${c.getLong(1)}"
                     if (ct.startsWith("text/")) {
-                        if (!textPartMap.containsKey(mid))
-                            textPartMap[mid] = MmsPart(partUri, ct, c.getString(3), c.getString(4) ?: "")
+                        if (!textPartMap.containsKey(mid)) {
+                            val inline = c.getString(4)?.takeIf { it.isNotBlank() }
+                                ?: readTextFromUri(ctx, Uri.parse(partUri))
+                            textPartMap[mid] = MmsPart(partUri, ct, c.getString(3), inline)
+                        }
                     } else if (!mediaPartMap.containsKey(mid)) {
                         mediaPartMap[mid] = MmsPart(partUri, ct, c.getString(3))
                     }
@@ -276,6 +279,10 @@ object SmsHelper {
         } catch (_: Exception) {}
         return result
     }
+
+    private fun readTextFromUri(ctx: Context, uri: Uri): String = try {
+        ctx.contentResolver.openInputStream(uri)?.use { it.reader().readText().trim() } ?: ""
+    } catch (_: Exception) { "" }
 
     private fun getMmsSenderAddress(ctx: Context, mmsId: Long): String? {
         ctx.contentResolver.query(Uri.parse("content://mms/$mmsId/addr"),

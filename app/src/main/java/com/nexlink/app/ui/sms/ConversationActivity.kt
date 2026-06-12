@@ -238,6 +238,17 @@ class ConversationActivity : AppCompatActivity() {
         // Pre-fill forwarded message if any
         intent.getStringExtra("forward_text")?.let { b.etInput.setText(it) }
 
+        // Handle shared content from other apps
+        intent.getStringExtra("share_text")?.let {
+            b.etInput.setText(it)
+            b.etInput.setSelection(it.length)
+        }
+        val shareUri  = intent.getStringExtra("share_uri")
+        val shareMime = intent.getStringExtra("share_mime")
+        if (shareUri != null && shareMime != null) {
+            b.recycler.post { sendAttachment(Uri.parse(shareUri), shareMime) }
+        }
+
         // Apply custom wallpaper if set
         applyCustomWallpaper()
 
