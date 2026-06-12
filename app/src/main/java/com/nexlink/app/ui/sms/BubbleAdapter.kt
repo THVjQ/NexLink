@@ -7,21 +7,26 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.graphics.drawable.ColorDrawable
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.PopupWindow
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.nexlink.app.R
@@ -326,29 +331,53 @@ class BubbleAdapter(
     }
 
     private fun showMenu(ctx: Context, m: SmsMessage, displayBody: String = m.body) {
-        val opts = mutableListOf<String>()
-        if (displayBody.isNotBlank()) opts += "Copy text"
-        opts += "Forward"
-        opts += "Delete message"
-        AlertDialog.Builder(ctx)
-            .setItems(opts.toTypedArray()) { _, i ->
-                when (opts[i]) {
-                    "Copy text" -> {
-                        val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        cm.setPrimaryClip(ClipData.newPlainText("msg", displayBody))
-                        Toast.makeText(ctx, "Copied", Toast.LENGTH_SHORT).show()
-                    }
-                    "Forward" -> onForward?.invoke(m)
-                    "Delete message" -> {
-                        AlertDialog.Builder(ctx)
-                            .setMessage("Delete this message?")
-                            .setPositiveButton("Delete") { _, _ -> onDelete?.invoke(m) }
-                            .setNegativeButton("Cancel", null)
-                            .show()
-                    }
-                }
+        data class MenuItem(val labelRes: String, val iconRes: Int, val action: () -> Unit)
+
+        val items = buildList {
+            if (displayBody.isNotBlank()) add(MenuItem("Copy text", R.drawable.ic_edit) {
+                val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("msg", displayBody))
+                Toast.makeText(ctx, "Copied", Toast.LENGTH_SHORT).show()
+            })
+            add(MenuItem("Forward", R.drawable.ic_open_in_app) { onForward?.invoke(m) })
+            add(MenuItem("Delete", R.drawable.ic_delete) {
+                AlertDialog.Builder(ctx)
+                    .setMessage("Delete this message?")
+                    .setPositiveButton("Delete") { _, _ -> onDelete?.invoke(m) }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            })
+        }
+
+        val inflater = LayoutInflater.from(ctx)
+        val root = inflater.inflate(R.layout.popup_message_menu, null) as LinearLayout
+
+        items.forEachIndexed { i, item ->
+            val row = inflater.inflate(R.layout.item_popup_menu, root, false)
+            row.findViewById<ImageView>(R.id.menuIcon).setImageResource(item.iconRes)
+            row.findViewById<TextView>(R.id.menuLabel).text = item.labelRes
+            if (i == items.lastIndex) {
+                val red = ContextCompat.getColor(ctx, android.R.color.holo_red_light)
+                row.findViewById<ImageView>(R.id.menuIcon).imageTintList = ColorStateList.valueOf(red)
+                row.findViewById<TextView>(R.id.menuLabel).setTextColor(red)
             }
-            .show()
+            root.addView(row)
+        }
+
+        val popup = PopupWindow(root,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            true)
+        popup.setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
+        popup.elevation = 16f
+        popup.isOutsideTouchable = true
+
+        // Wire clicks after popup is set up so dismiss works
+        items.forEachIndexed { i, item ->
+            (root.getChildAt(i) as View).setOnClickListener { popup.dismiss(); item.action() }
+        }
+
+        popup.showAtLocation(root, Gravity.CENTER, 0, 0)
     }
 
     private fun showMediaMenu(ctx: Context, m: SmsMessage) {
