@@ -24,6 +24,7 @@ import com.nexlink.app.db.BlockStore
 import com.nexlink.app.db.CategoryStore
 import com.nexlink.shared.Conversation
 import com.nexlink.app.db.GroupNameStore
+import com.nexlink.app.ui.contacts.Contact
 import com.nexlink.app.db.PinStore
 import com.nexlink.app.db.RecycleBinStore
 import com.nexlink.app.db.SmsHelper
@@ -162,7 +163,12 @@ class SmsFragment : Fragment() {
             it.threadId.toString() in pinned
         }.thenByDescending { it.timestamp })
 
-        adapter.setData(result)
+        val ctx = requireContext()
+        val renamed = result.map { conv ->
+            val custom = GroupNameStore.getName(ctx, conv.participants)
+            if (custom != null) conv.copy(contactName = custom) else conv
+        }
+        adapter.setData(renamed)
     }
 
     private fun openConversation(conv: Conversation) {
@@ -382,16 +388,54 @@ class SmsFragment : Fragment() {
                     Toast.makeText(ctx, "No contacts found", Toast.LENGTH_SHORT).show()
                     return@runOnUiThread
                 }
-                val names = contacts.map { "${it.first}\n${it.second}" }.toTypedArray()
+                val names = contacts.map { c ->
+                    if (c.numbers.size > 1) "${c.name}\n${c.number}  +${c.numbers.size - 1} more"
+                    else "${c.name}\n${c.number}"
+                }.toTypedArray()
                 if (!multiSelect) {
                     AlertDialog.Builder(ctx)
                         .setTitle("New message")
-                        .setItems(names) { _, i ->
-                            val (name, number) = contacts[i]
-                            startActivity(Intent(ctx, ConversationActivity::class.java).apply {
-                                putExtra("address", number)
-                                putExtra("contact_name", name)
-                            })
+                        .setItems(arrayOf("✏  Enter a number…") + names) { _, i ->
+                            if (i == 0) {
+                                val et = android.widget.EditText(ctx).apply {
+                                    hint = "Phone number"
+                                    inputType = android.text.InputType.TYPE_CLASS_PHONE
+                                    setPadding(48, 24, 48, 24)
+                                }
+                                AlertDialog.Builder(ctx)
+                                    .setTitle("Enter phone number")
+                                    .setView(et)
+                                    .setPositiveButton("Message") { _, _ ->
+                                        val number = et.text.toString().trim()
+                                        if (number.isNotEmpty()) {
+                                            startActivity(Intent(ctx, ConversationActivity::class.java).apply {
+                                                putExtra("address", number)
+                                                putExtra("contact_name", number)
+                                            })
+                                        }
+                                    }
+                                    .setNegativeButton("Cancel", null)
+                                    .show()
+                            } else {
+                                val contact = contacts[i - 1]
+                                if (contact.numbers.size <= 1) {
+                                    startActivity(Intent(ctx, ConversationActivity::class.java).apply {
+                                        putExtra("address", contact.number)
+                                        putExtra("contact_name", contact.name)
+                                    })
+                                } else {
+                                    AlertDialog.Builder(ctx)
+                                        .setTitle("Message ${contact.name}")
+                                        .setItems(contact.numbers.toTypedArray()) { _, ni ->
+                                            startActivity(Intent(ctx, ConversationActivity::class.java).apply {
+                                                putExtra("address", contact.numbers[ni])
+                                                putExtra("contact_name", contact.name)
+                                            })
+                                        }
+                                        .setNegativeButton("Cancel", null)
+                                        .show()
+                                }
+                            }
                         }
                         .setNegativeButton("Cancel", null)
                         .show()
@@ -406,8 +450,8 @@ class SmsFragment : Fragment() {
                                 Toast.makeText(ctx, "Select at least 2 contacts for a group", Toast.LENGTH_SHORT).show()
                                 return@setPositiveButton
                             }
-                            val participants  = selected.map { it.second }
-                            val defaultName   = selected.joinToString(", ") { it.first.split(" ").first() }
+                            val participants = selected.map { it.number }
+                            val defaultName  = selected.joinToString(", ") { it.name.split(" ").first() }
                             val nameInput = android.widget.EditText(ctx).apply {
                                 hint = "Group name"
                                 setText(defaultName)
@@ -436,25 +480,31 @@ class SmsFragment : Fragment() {
         }.start()
     }
 
-    private fun loadContactsForPicker(ctx: android.content.Context): List<Pair<String, String>> {
-        val list = mutableListOf<Pair<String, String>>()
-        val proj = arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-                           ContactsContract.CommonDataKinds.Phone.NUMBER)
+    private fun loadContactsForPicker(ctx: android.content.Context): List<Contact> {
+        val proj = arrayOf(
+            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+            ContactsContract.CommonDataKinds.Phone.NUMBER,
+            ContactsContract.CommonDataKinds.Phone.LOOKUP_KEY
+        )
+        val grouped = linkedMapOf<String, Pair<String, MutableList<String>>>()
         try {
-            ctx.contentResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                proj, null, null, "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} ASC")
-                ?.use { c ->
-                    val seen = mutableSetOf<String>()
-                    while (c.moveToNext()) {
-                        val name = c.getString(0) ?: continue
-                        val num  = c.getString(1)?.replace("\\s".toRegex(), "") ?: continue
-                        if (num in seen) continue
-                        seen += num
-                        list += Pair(name, num)
-                    }
+            ctx.contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                proj, null, null,
+                "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} ASC"
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    val name = c.getString(0) ?: continue
+                    val num  = c.getString(1)?.replace("\\s".toRegex(), "") ?: continue
+                    val key  = c.getString(2)?.takeIf { it.isNotBlank() } ?: num
+                    val entry = grouped.getOrPut(key) { Pair(name, mutableListOf()) }
+                    if (num !in entry.second) entry.second.add(num)
                 }
+            }
         } catch (_: Exception) {}
-        return list
+        return grouped.entries.map { (key, pair) ->
+            Contact(pair.first, pair.second.first(), pair.second, key)
+        }
     }
 
     override fun onDestroyView() { super.onDestroyView(); _b = null }

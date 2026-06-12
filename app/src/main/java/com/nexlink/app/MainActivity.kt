@@ -17,6 +17,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import com.nexlink.app.db.NotificationPrefs
+import com.nexlink.app.db.NotificationStore
 import com.nexlink.app.services.NexLinkNotificationListener
 import com.nexlink.app.databinding.ActivityMainBinding
 import com.nexlink.app.ui.calls.CallsFragment
@@ -76,14 +77,25 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        handleSocialNotifTap(intent)
         val startNav = intent.getIntExtra("navigate_to", R.id.nav_sms)
         binding.bottomNav.selectedItemId = startNav
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
+        handleSocialNotifTap(intent)
         val navTo = intent.getIntExtra("navigate_to", -1)
         if (navTo != -1) binding.bottomNav.selectedItemId = navTo
+    }
+
+    private fun handleSocialNotifTap(intent: Intent) {
+        val platform = intent.getStringExtra("social_platform") ?: return
+        val sender   = intent.getStringExtra("social_sender")   ?: ""
+        val key      = intent.getStringExtra("social_key")      ?: ""
+        NotificationStore.markRead(platform, sender)
+        NexLinkNotificationListener.popContentIntent(key)
     }
 
     private fun applyDarkMode() {

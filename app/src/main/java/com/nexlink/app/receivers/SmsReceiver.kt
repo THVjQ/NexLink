@@ -23,6 +23,7 @@ import com.nexlink.app.R
 import com.nexlink.app.db.CryptoStore
 import com.nexlink.app.db.IconPrefs
 import com.nexlink.app.db.MmsDownloader
+import com.nexlink.app.db.MmsPduResult
 import com.nexlink.app.db.SmsHelper
 import com.nexlink.app.ui.sms.ConversationActivity
 import com.nexlink.app.wear.WearSync
@@ -181,9 +182,9 @@ class MmsDownloadReceiver : BroadcastReceiver() {
         val pending = goAsync()
         Thread {
             try {
-                val sender = MmsDownloader.storeRawPdu(ctx, pduBytes)
-                if (sender != null) {
-                    SmsNotifier.notify(ctx, sender, "📷 MMS")
+                val result = MmsDownloader.storeRawPdu(ctx, pduBytes)
+                if (result != null) {
+                    SmsNotifier.notify(ctx, result.sender ?: "Unknown", result.notifText)
                 } else {
                     Log.e("NexLink_MMS", "storePdu returned null — notifying generic")
                     SmsNotifier.notify(ctx, "Unknown", "📷 MMS received")

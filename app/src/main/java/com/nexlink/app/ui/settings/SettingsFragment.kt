@@ -571,51 +571,130 @@ class SettingsFragment : Fragment() {
         "Design 6", "Design 7", "Design 8", "Design 9", "Design 10"
     )
 
+    private val appIconDrawables = intArrayOf(
+        R.mipmap.ic_launcher,
+        R.mipmap.ic_launcher_1, R.mipmap.ic_launcher_2, R.mipmap.ic_launcher_3,
+        R.mipmap.ic_launcher_4, R.mipmap.ic_launcher_5, R.mipmap.ic_launcher_6,
+        R.mipmap.ic_launcher_7, R.mipmap.ic_launcher_8, R.mipmap.ic_launcher_9,
+        R.mipmap.ic_launcher_10
+    )
+
+    private val notifIconDrawables = intArrayOf(
+        R.drawable.ic_notif_nexlink,
+        R.drawable.ic_notif_custom_1, R.drawable.ic_notif_custom_2, R.drawable.ic_notif_custom_3,
+        R.drawable.ic_notif_custom_4, R.drawable.ic_notif_custom_5, R.drawable.ic_notif_custom_6,
+        R.drawable.ic_notif_custom_7, R.drawable.ic_notif_custom_8, R.drawable.ic_notif_custom_9,
+        R.drawable.ic_notif_custom_10
+    )
+
     private fun refreshIconLabels() {
         val ctx = context ?: return
         b.tvAppIconValue.text   = iconNames[IconPrefs.getAppIconIndex(ctx)]
         b.tvNotifIconValue.text = iconNames[IconPrefs.getNotifIconIndex(ctx)]
     }
 
+    private fun showIconPickerDialog(
+        title: String,
+        drawables: IntArray,
+        current: Int,
+        onSelect: (Int) -> Unit
+    ) {
+        val ctx = requireContext()
+        val dp = ctx.resources.displayMetrics.density
+        fun Int.px() = (this * dp).toInt()
+
+        val grid = android.widget.GridView(ctx).apply {
+            numColumns = 3
+            setPadding(8.px(), 8.px(), 8.px(), 8.px())
+            horizontalSpacing = 4.px()
+            verticalSpacing = 4.px()
+        }
+
+        var dialog: AlertDialog? = null
+
+        val adapter = object : android.widget.BaseAdapter() {
+            override fun getCount() = drawables.size
+            override fun getItem(i: Int) = drawables[i]
+            override fun getItemId(i: Int) = i.toLong()
+            override fun getView(pos: Int, cv: View?, parent: ViewGroup): View {
+                val cell = android.widget.LinearLayout(ctx).apply {
+                    orientation = android.widget.LinearLayout.VERTICAL
+                    gravity = android.view.Gravity.CENTER
+                    setPadding(8.px(), 12.px(), 8.px(), 8.px())
+                    if (pos == current) {
+                        background = android.graphics.drawable.GradientDrawable().apply {
+                            cornerRadius = 12f * dp
+                            setStroke((2f * dp).toInt(), ContextCompat.getColor(ctx, R.color.accent))
+                            setColor(ContextCompat.getColor(ctx, R.color.surface2))
+                        }
+                    }
+                }
+                val iv = android.widget.ImageView(ctx).apply {
+                    layoutParams = android.widget.LinearLayout.LayoutParams(52.px(), 52.px())
+                    scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                    try { setImageResource(drawables[pos]) } catch (_: Exception) {}
+                }
+                val tv = android.widget.TextView(ctx).apply {
+                    text = iconNames[pos]
+                    textSize = 11f
+                    gravity = android.view.Gravity.CENTER
+                    setTextColor(ContextCompat.getColor(ctx, if (pos == current) R.color.accent else R.color.text2))
+                    setPadding(0, 4.px(), 0, 0)
+                }
+                cell.addView(iv)
+                cell.addView(tv)
+                return cell
+            }
+        }
+
+        grid.adapter = adapter
+
+        dialog = AlertDialog.Builder(ctx)
+            .setTitle(title)
+            .setView(grid)
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        grid.setOnItemClickListener { _, _, pos, _ ->
+            onSelect(pos)
+            dialog?.dismiss()
+        }
+
+        dialog.show()
+    }
+
     private fun showAppIconDialog() {
         val ctx = requireContext()
         val current = IconPrefs.getAppIconIndex(ctx)
-        AlertDialog.Builder(ctx).setTitle("App Icon")
-            .setSingleChoiceItems(iconNames, current) { dlg, which ->
-                IconPrefs.setAppIconIndex(ctx, which)
-                switchAppIcon(ctx, which)
-                refreshIconLabels()
-                // Auto-select matching notification icon as default pairing
-                if (IconPrefs.getNotifIconIndex(ctx) == 0 || IconPrefs.getNotifIconIndex(ctx) == current) {
-                    IconPrefs.setNotifIconIndex(ctx, which)
-                }
-                refreshIconLabels()
-                dlg.dismiss()
-                Toast.makeText(ctx, "Icon changed — may take a moment to update on home screen", Toast.LENGTH_SHORT).show()
+        showIconPickerDialog("App Icon", appIconDrawables, current) { which ->
+            IconPrefs.setAppIconIndex(ctx, which)
+            switchAppIcon(ctx, which)
+            if (IconPrefs.getNotifIconIndex(ctx) == 0 || IconPrefs.getNotifIconIndex(ctx) == current) {
+                IconPrefs.setNotifIconIndex(ctx, which)
             }
-            .setNegativeButton("Cancel", null).show()
+            refreshIconLabels()
+            Toast.makeText(ctx, "Icon changed — may take a moment to update on home screen", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun showNotifIconDialog() {
         val ctx = requireContext()
         val current = IconPrefs.getNotifIconIndex(ctx)
-        AlertDialog.Builder(ctx).setTitle("Notification Icon")
-            .setSingleChoiceItems(iconNames, current) { dlg, which ->
-                IconPrefs.setNotifIconIndex(ctx, which)
-                refreshIconLabels()
-                dlg.dismiss()
-            }
-            .setNegativeButton("Cancel", null).show()
+        showIconPickerDialog("Notification Icon", notifIconDrawables, current) { which ->
+            IconPrefs.setNotifIconIndex(ctx, which)
+            refreshIconLabels()
+        }
     }
 
     private fun switchAppIcon(ctx: android.content.Context, index: Int) {
         val pm = ctx.packageManager
-        val pkg = ctx.packageName
+        val pkg = ctx.packageName        // applicationId  = com.thvjq.nexlink
+        val ns  = "com.nexlink.app"      // namespace / class prefix
         val allAliases = listOf(".MainActivityDefault") +
             (1..10).map { ".MainActivityIcon$it" }
         val target = if (index == 0) ".MainActivityDefault" else ".MainActivityIcon$index"
         allAliases.forEach { alias ->
-            val comp = ComponentName(pkg, pkg + alias)
+            val comp = ComponentName(pkg, ns + alias)  // pkg=identity, class=namespace+name
             val state = if (alias == target)
                 PackageManager.COMPONENT_ENABLED_STATE_ENABLED
             else

@@ -457,14 +457,14 @@ class ConversationActivity : AppCompatActivity() {
             b.drawerLayout.openDrawer(Gravity.END)
             return true
         }
-        if (item.itemId == R.id.action_rename_group && isGroup) {
+        if (item.itemId == R.id.action_rename_group) {
             val input = android.widget.EditText(this).apply {
-                hint = "Group name"
+                hint = if (isGroup) "Group name" else "Chat name"
                 setText(supportActionBar?.title?.toString() ?: "")
                 setPadding(48, 24, 48, 24)
             }
             AlertDialog.Builder(this)
-                .setTitle("Rename group")
+                .setTitle(if (isGroup) "Rename group" else "Rename chat")
                 .setView(input)
                 .setPositiveButton("Save") { _, _ ->
                     val newName = input.text.toString().trim().ifEmpty { return@setPositiveButton }
@@ -543,6 +543,15 @@ class ConversationActivity : AppCompatActivity() {
         if (text.isEmpty() || address.isEmpty()) return
         if (isGroup && !requireDefaultSmsApp()) return
         b.etInput.text?.clear()
+        // Show the message immediately; the MMS stack writes to the DB asynchronously
+        if (isGroup) {
+            adapter.addOptimistic(SmsMessage(
+                id = -System.currentTimeMillis(), threadId = threadId,
+                address = address, body = text,
+                timestamp = System.currentTimeMillis(), isIncoming = false, isMms = true
+            ))
+            b.recycler.scrollToPosition(adapter.itemCount - 1)
+        }
         Thread {
             try {
                 if (isGroup) {

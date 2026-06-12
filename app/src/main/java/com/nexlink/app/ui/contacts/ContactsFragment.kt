@@ -25,7 +25,12 @@ import com.nexlink.app.databinding.FragmentContactsBinding
 import com.nexlink.app.db.DeepLinkHelper
 import com.nexlink.app.ui.sms.ConversationActivity
 
-data class Contact(val name: String, val number: String, val lookupKey: String = "")
+data class Contact(
+    val name: String,
+    val number: String,         // primary (default) number
+    val numbers: List<String>,  // all numbers (always non-empty)
+    val lookupKey: String = ""
+)
 
 class ContactsFragment : Fragment() {
 
@@ -126,25 +131,28 @@ class ContactsFragment : Fragment() {
             != PackageManager.PERMISSION_GRANTED) return
         val ctx = context ?: return
         Thread {
-            val list = mutableListOf<Contact>()
             val proj = arrayOf(
                 ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
                 ContactsContract.CommonDataKinds.Phone.NUMBER,
                 ContactsContract.CommonDataKinds.Phone.LOOKUP_KEY
             )
+            // Group by lookupKey so one person with multiple numbers appears as one row
+            val grouped = linkedMapOf<String, Pair<String, MutableList<String>>>()
             ctx.contentResolver.query(
                 ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                 proj, null, null,
                 "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} ASC"
             )?.use { c ->
-                val seen = mutableSetOf<String>()
                 while (c.moveToNext()) {
                     val name = c.getString(0) ?: continue
                     val num  = c.getString(1)?.replace("\\s".toRegex(), "") ?: continue
-                    if (num in seen) continue
-                    seen += num
-                    list += Contact(name, num, c.getString(2) ?: "")
+                    val key  = c.getString(2)?.takeIf { it.isNotBlank() } ?: num
+                    val entry = grouped.getOrPut(key) { Pair(name, mutableListOf()) }
+                    if (num !in entry.second) entry.second.add(num)
                 }
+            }
+            val list = grouped.entries.map { (key, pair) ->
+                Contact(pair.first, pair.second.first(), pair.second, key)
             }
             if (!isAdded) return@Thread
             activity?.runOnUiThread {
@@ -164,10 +172,23 @@ class ContactsFragment : Fragment() {
     }
 
     private fun openSms(c: Contact) {
-        startActivity(Intent(requireContext(), ConversationActivity::class.java).apply {
-            putExtra("address", c.number)
-            putExtra("contact_name", c.name)
-        })
+        if (c.numbers.size <= 1) {
+            startActivity(Intent(requireContext(), ConversationActivity::class.java).apply {
+                putExtra("address", c.number)
+                putExtra("contact_name", c.name)
+            })
+        } else {
+            AlertDialog.Builder(requireContext())
+                .setTitle("Message ${c.name}")
+                .setItems(c.numbers.toTypedArray()) { _, i ->
+                    startActivity(Intent(requireContext(), ConversationActivity::class.java).apply {
+                        putExtra("address", c.numbers[i])
+                        putExtra("contact_name", c.name)
+                    })
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
     }
 
     private fun editContact(c: Contact) {
@@ -206,7 +227,17 @@ class ContactsFragment : Fragment() {
         actions += {
             if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.CALL_PHONE)
                 == PackageManager.PERMISSION_GRANTED) {
-                startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:${c.number}")))
+                if (c.numbers.size <= 1) {
+                    startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:${c.number}")))
+                } else {
+                    AlertDialog.Builder(ctx)
+                        .setTitle("Call ${c.name}")
+                        .setItems(c.numbers.toTypedArray()) { _, i ->
+                            startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:${c.numbers[i]}")))
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                }
             }
         }
 

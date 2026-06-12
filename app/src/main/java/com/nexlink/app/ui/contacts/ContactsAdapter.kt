@@ -97,7 +97,10 @@ class ContactsAdapter(
                 h.avatar.background.mutate().setTint(AvatarColors.colorFor(initials))
                 h.avatar.text  = initials
                 h.name.text    = c.name
-                h.number.text  = formatPhone(c.number)
+                h.number.text = if (c.numbers.size > 1)
+                    "${formatPhone(c.number)}  +${c.numbers.size - 1} more"
+                else
+                    formatPhone(c.number)
                 h.btnSms.setOnClickListener  { onSms(c) }
                 h.btnCall.setOnClickListener { onCall(c) }
                 h.itemView.setOnClickListener { onSms(c) }

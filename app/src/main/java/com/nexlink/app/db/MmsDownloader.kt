@@ -17,15 +17,16 @@ import java.net.URL
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
+data class MmsPduResult(val sender: String?, val notifText: String)
+
 object MmsDownloader {
     private const val TAG = "NexLink_MMS"
 
     /**
-     * Parses and stores a raw MMS PDU (RetrieveConf) that was already downloaded by
-     * SmsManager.downloadMultimediaMessage().  Returns the sender address or null on error.
+     * Parses and stores a raw MMS PDU. Returns sender + notification text, or null on error.
      * May be called from any thread.
      */
-    fun storeRawPdu(ctx: Context, pduBytes: ByteArray): String? = storePdu(ctx, pduBytes, -1)
+    fun storeRawPdu(ctx: Context, pduBytes: ByteArray): MmsPduResult? = storePdu(ctx, pduBytes, -1)
 
     /**
      * Downloads the MMS PDU from contentLocation and stores it in content://mms.
@@ -39,7 +40,7 @@ object MmsDownloader {
             return null
         }
         android.util.Log.d(TAG, "MmsDownloader: downloaded ${pduBytes.size}B")
-        return storePdu(ctx, pduBytes, subId)
+        return storePdu(ctx, pduBytes, subId)?.sender
     }
 
     // ── Network fetch ──────────────────────────────────────────────────────────
@@ -130,7 +131,7 @@ object MmsDownloader {
 
     // ── PDU store ──────────────────────────────────────────────────────────────
 
-    private fun storePdu(ctx: Context, pduBytes: ByteArray, subId: Int): String? {
+    private fun storePdu(ctx: Context, pduBytes: ByteArray, subId: Int): MmsPduResult? {
         return try {
             val pdu = PduParser(pduBytes, true).parse()
             if (pdu !is RetrieveConf) {
@@ -146,15 +147,55 @@ object MmsDownloader {
                 put(Telephony.Mms.SEEN, 0)
             }, null, null)
 
-            // Extract sender — strip /TYPE=PLMN suffix that carriers append
-            pdu.from?.textString
+            val sender = pdu.from?.textString
                 ?.let { String(it, Charsets.UTF_8) }
                 ?.substringBefore("/TYPE=")
                 ?.trim()
                 ?.ifBlank { null }
+
+            MmsPduResult(sender, extractNotifText(pdu))
         } catch (e: Exception) {
             android.util.Log.e(TAG, "MmsDownloader: store failed: ${e.message}")
             null
+        }
+    }
+
+    private fun extractNotifText(pdu: RetrieveConf): String {
+        val body = pdu.body ?: return "📷 MMS"
+        var hasImage = false; var hasVideo = false; var hasAudio = false; var hasFile = false
+        var textContent: String? = null
+        for (i in 0 until body.partsNum) {
+            val part = body.getPart(i) ?: continue
+            val typeBs = part.contentType ?: continue
+            val type = String(typeBs, Charsets.ISO_8859_1).lowercase().substringBefore(";").trim()
+            when {
+                type == "application/smil" -> {}
+                type.startsWith("text/") -> {
+                    if (textContent == null && part.data != null)
+                        textContent = String(part.data, Charsets.UTF_8).trim().ifBlank { null }
+                }
+                type.startsWith("image/") -> hasImage = true
+                type.startsWith("video/") -> hasVideo = true
+                type.startsWith("audio/") -> hasAudio = true
+                else -> hasFile = true
+            }
+        }
+        return when {
+            textContent != null -> {
+                val prefix = when {
+                    hasImage -> "📷 "
+                    hasVideo -> "🎬 "
+                    hasAudio -> "🎵 "
+                    hasFile  -> "📎 "
+                    else     -> ""
+                }
+                "$prefix${textContent.take(100)}"
+            }
+            hasVideo -> "🎬 Video"
+            hasAudio -> "🎵 Audio message"
+            hasImage -> "📷 Photo"
+            hasFile  -> "📎 File"
+            else     -> "MMS"
         }
     }
 }

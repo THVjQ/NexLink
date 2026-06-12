@@ -153,13 +153,17 @@ class NexLinkNotificationListener : NotificationListenerService() {
 
     private fun postNexLinkNotification(n: SocialNotification) {
         val ctx = applicationContext
-        // Tap opens the social app's exact conversation and marks the thread read.
-        val pi = PendingIntent.getBroadcast(
+        // Use getActivity so Android grants the activity-start on notification tap directly,
+        // avoiding background-activity-start restrictions on Android 10+.
+        val pi = PendingIntent.getActivity(
             ctx, n.id.hashCode(),
-            Intent(ctx, com.nexlink.app.receivers.SocialOpenReceiver::class.java).apply {
-                putExtra("platform",         n.platform)
-                putExtra("sender",           n.sender)
-                putExtra("notification_key", n.id)
+            Intent(ctx, com.nexlink.app.MainActivity::class.java).apply {
+                putExtra("navigate_to",    com.nexlink.app.R.id.nav_inbox)
+                putExtra("social_platform", n.platform)
+                putExtra("social_sender",   n.sender)
+                putExtra("social_key",      n.id)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
