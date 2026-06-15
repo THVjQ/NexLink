@@ -70,7 +70,6 @@ class NotificationAdapter : RecyclerView.Adapter<NotificationAdapter.VH>() {
         h.time.text = formatTime(n.timestamp)
 
         if (n.isReaction) {
-            // Show the reaction emoji in the avatar circle and label sender clearly
             val emoji = n.text.trim().take(2).ifBlank { "❤️" }
             h.avatar.text = emoji
             h.avatar.background.mutate().setTint(color and 0x00FFFFFF or 0x44000000)
@@ -84,7 +83,8 @@ class NotificationAdapter : RecyclerView.Adapter<NotificationAdapter.VH>() {
             h.avatar.background.mutate().setTint(color and 0x00FFFFFF or 0x33000000)
             h.name.text     = n.sender
             h.platform.text = n.platform
-            h.text.text     = if (thread.count > 1) "(${thread.count}) ${n.text}" else n.text
+            val preview = if (n.outgoing) "You: ${n.text}" else n.text
+            h.text.text = if (thread.count > 1) "(${thread.count}) $preview" else preview
         }
 
         // Count badge — only when there are unread messages from this sender

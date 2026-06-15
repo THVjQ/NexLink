@@ -43,7 +43,7 @@ object DeepLinkHelper {
     fun instagram(ctx: Context) = openApp(ctx, "com.instagram.android")
 
     // ── Steam: open app ──
-    fun steam(ctx: Context) = openApp(ctx, "com.valvesoftware.android.steam.communityapp")
+    fun steam(ctx: Context) = openApp(ctx, "com.valvesoftware.android.steam.community")
 
     // ── Open the right app for a given platform string ──
     fun openPlatform(ctx: Context, platform: String) {
@@ -54,7 +54,7 @@ object DeepLinkHelper {
             "Messenger" -> "com.facebook.orca"
             "Discord"   -> "com.discord"
             "Instagram" -> "com.instagram.android"
-            "Steam"     -> "com.valvesoftware.android.steam.communityapp"
+            "Steam"     -> "com.valvesoftware.android.steam.community"
             else        -> return
         }
         openApp(ctx, pkg)

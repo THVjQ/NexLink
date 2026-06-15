@@ -15,7 +15,7 @@ import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.NotificationStore
 import com.nexlink.app.db.SocialNotification
 import com.nexlink.app.receivers.SmsNotifier
-import com.nexlink.app.receivers.SocialOpenReceiver
+import com.nexlink.app.SocialOpenActivity
 
 class NexLinkNotificationListener : NotificationListenerService() {
 
@@ -155,15 +155,17 @@ class NexLinkNotificationListener : NotificationListenerService() {
     private fun postNexLinkNotification(n: SocialNotification) {
         val ctx    = applicationContext
         val notifId = "nexlink_social_${n.id}".hashCode()
-        // Route tap through SocialOpenReceiver so it can fire the social app's own contentIntent,
-        // opening the exact conversation, then cancel this notification.
-        val tapIntent = Intent(ctx, SocialOpenReceiver::class.java).apply {
+        // Route tap through SocialOpenActivity (Activity, NOT receiver).
+        // Android 12+ blocks activity starts from receivers triggered by a notification tap;
+        // an Activity is allowed to start other activities, so the social chat opens correctly.
+        val tapIntent = Intent(ctx, SocialOpenActivity::class.java).apply {
             putExtra("platform",         n.platform)
             putExtra("sender",           n.sender)
             putExtra("notification_key", n.id)
             putExtra("notif_id",         notifId)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
-        val pi = PendingIntent.getBroadcast(
+        val pi = PendingIntent.getActivity(
             ctx, notifId, tapIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )

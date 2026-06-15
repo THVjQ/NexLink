@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowContentChanged|typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
+    android:canRetrieveWindowContent="true"
+    android:notificationTimeout="200"
+    android:description="@string/accessibility_capture_description"
+    android:packageNames="org.thoughtcrime.securesms,org.telegram.messenger,org.telegram.messenger.web,com.whatsapp,com.whatsapp.w4b,com.facebook.orca,com.facebook.mlite,com.discord,com.instagram.android,com.valvesoftware.android.steam.community" />

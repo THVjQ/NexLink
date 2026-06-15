@@ -12,7 +12,8 @@ data class SocialNotification(
     val sender: String,
     val text: String,
     val timestamp: Long,
-    val isReaction: Boolean = false
+    val isReaction: Boolean = false,
+    val outgoing: Boolean = false
 )
 
 object NotificationStore {
@@ -31,7 +32,7 @@ object NotificationStore {
         "com.facebook.mlite"                                 to "Messenger",
         "com.discord"                                        to "Discord",
         "com.instagram.android"                              to "Instagram",
-        "com.valvesoftware.android.steam.communityapp"       to "Steam"
+        "com.valvesoftware.android.steam.community"           to "Steam"
     )
 
     val watchedPackages: Set<String> get() = PLATFORM_MAP.keys
@@ -53,7 +54,8 @@ object NotificationStore {
                     sender      = o.getString("sender"),
                     text        = o.getString("text"),
                     timestamp   = o.getLong("timestamp"),
-                    isReaction  = o.optBoolean("isReaction", false)
+                    isReaction  = o.optBoolean("isReaction", false),
+                    outgoing    = o.optBoolean("outgoing", false)
                 ))
             }
             notifications.postValue(list)
@@ -72,6 +74,7 @@ object NotificationStore {
                 put("text", n.text)
                 put("timestamp", n.timestamp)
                 put("isReaction", n.isReaction)
+                put("outgoing", n.outgoing)
             })
         }
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -111,7 +114,8 @@ object NotificationStore {
     fun unreadCountFor(platform: String, sender: String): Int {
         val readAt = readMap["$platform|$sender"] ?: 0L
         return notifications.value.orEmpty().count {
-            it.platform == platform && it.sender == sender && it.timestamp > readAt
+            it.platform == platform && it.sender == sender &&
+                it.timestamp > readAt && !it.outgoing
         }
     }
 }

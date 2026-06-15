@@ -54,13 +54,19 @@ class ShareActivity : AppCompatActivity() {
         val action = intent.action ?: run { finish(); return }
         val type   = intent.type  ?: ""
 
-        sharedText = if (action == Intent.ACTION_SEND && type.startsWith("text/"))
-            intent.getStringExtra(Intent.EXTRA_TEXT) else null
-        @Suppress("DEPRECATION")
-        val uri = if (action == Intent.ACTION_SEND && !type.startsWith("text/"))
-            intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) else null
-        sharedUri  = uri?.toString()
-        sharedMime = if (uri != null) type else null
+        if (action == Intent.ACTION_SEND) {
+            if (type.startsWith("text/") || type.isEmpty()) {
+                // EXTRA_TEXT first, then EXTRA_SUBJECT as fallback (some apps put URLs there)
+                sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
+                    ?: intent.getStringExtra(Intent.EXTRA_SUBJECT)?.takeIf { it.isNotBlank() }
+            }
+            if (sharedText == null) {
+                @Suppress("DEPRECATION")
+                val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+                sharedUri  = uri?.toString()
+                sharedMime = if (uri != null) type.ifEmpty { "*/*" } else null
+            }
+        }
 
         setSupportActionBar(b.toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
