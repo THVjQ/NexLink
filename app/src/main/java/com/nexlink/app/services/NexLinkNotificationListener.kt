@@ -15,6 +15,7 @@ import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.NotificationStore
 import com.nexlink.app.db.SocialNotification
 import com.nexlink.app.receivers.SmsNotifier
+import com.nexlink.app.receivers.SocialOpenReceiver
 
 class NexLinkNotificationListener : NotificationListenerService() {
 
@@ -124,7 +125,7 @@ class NexLinkNotificationListener : NotificationListenerService() {
         // Skip notifications from disabled platforms
         if (!NotificationPrefs.isPlatformEnabled(ctx, n.platform)) return
 
-        NotificationStore.add(n)
+        NotificationStore.add(n, applicationContext)
 
         // Suppress source app notification when setting is enabled
         // But if pass-through-media is on and this is a media message, don't cancel the source
@@ -152,19 +153,18 @@ class NexLinkNotificationListener : NotificationListenerService() {
     }
 
     private fun postNexLinkNotification(n: SocialNotification) {
-        val ctx = applicationContext
-        // Use getActivity so Android grants the activity-start on notification tap directly,
-        // avoiding background-activity-start restrictions on Android 10+.
-        val pi = PendingIntent.getActivity(
-            ctx, n.id.hashCode(),
-            Intent(ctx, com.nexlink.app.MainActivity::class.java).apply {
-                putExtra("navigate_to",    com.nexlink.app.R.id.nav_inbox)
-                putExtra("social_platform", n.platform)
-                putExtra("social_sender",   n.sender)
-                putExtra("social_key",      n.id)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP
-            },
+        val ctx    = applicationContext
+        val notifId = "nexlink_social_${n.id}".hashCode()
+        // Route tap through SocialOpenReceiver so it can fire the social app's own contentIntent,
+        // opening the exact conversation, then cancel this notification.
+        val tapIntent = Intent(ctx, SocialOpenReceiver::class.java).apply {
+            putExtra("platform",         n.platform)
+            putExtra("sender",           n.sender)
+            putExtra("notification_key", n.id)
+            putExtra("notif_id",         notifId)
+        }
+        val pi = PendingIntent.getBroadcast(
+            ctx, notifId, tapIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         NotificationCompat.Builder(ctx, App.CH_SOCIAL)
@@ -179,7 +179,7 @@ class NexLinkNotificationListener : NotificationListenerService() {
             .build()
             .also {
                 ctx.getSystemService(NotificationManager::class.java)
-                    .notify("nexlink_social_${n.id}".hashCode(), it)
+                    .notify(notifId, it)
             }
     }
 

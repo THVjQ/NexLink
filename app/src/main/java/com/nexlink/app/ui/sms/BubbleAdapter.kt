@@ -14,6 +14,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.text.method.LinkMovementMethod
+import android.text.util.Linkify
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -241,16 +243,38 @@ class BubbleAdapter(
 
     private fun bindMsg(h: MsgVH, m: SmsMessage) {
         val ctx = h.itemView.context
+
+        // Key exchange tokens are internal — render as a subtle system notice
+        if (CryptoStore.isKeyExchange(m.body)) {
+            h.bubble.text = "🔑 Encryption setup"
+            h.bubble.alpha = 0.55f
+            h.bubble.isClickable = false
+            h.bubble.movementMethod = null
+            h.time.text = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(m.timestamp))
+            bindSender(h.sender, m)
+            h.status?.visibility = View.GONE
+            h.btnPlay?.visibility = View.GONE
+            h.btnTranscript?.visibility = View.GONE
+            h.tvTranscript?.visibility = View.GONE
+            h.bubble.setOnLongClickListener(null)
+            h.itemView.setOnLongClickListener(null)
+            return
+        }
+
+        h.bubble.alpha = 1f
         val body = decryptBody(ctx, m)
         h.bubble.text = body
         h.time.text   = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(m.timestamp))
         bindSender(h.sender, m)
         bindStatus(h.status, m)
+
         // File attachment (non-image, non-video, non-voice MMS) → tap to open
         val isFileMms = m.isMms && m.mediaUri != null && !m.isVoice &&
             m.mimeType?.startsWith("image/") == false &&
             m.mimeType?.startsWith("video/") == false
         if (isFileMms) {
+            h.bubble.isClickable = true
+            h.bubble.movementMethod = null
             h.bubble.setOnClickListener {
                 try {
                     ctx.startActivity(Intent(Intent.ACTION_VIEW).apply {
@@ -262,9 +286,22 @@ class BubbleAdapter(
                 }
             }
         } else {
-            h.bubble.isClickable = false
+            // Make URLs and email addresses clickable — MovementMethod handles link taps;
+            // long-press falls through to h.itemView's listener below.
+            Linkify.addLinks(h.bubble, Linkify.WEB_URLS or Linkify.EMAIL_ADDRESSES)
+            val spanned = h.bubble.text as? android.text.Spanned
+            val hasLinks = spanned?.getSpans(0, spanned.length,
+                android.text.style.URLSpan::class.java)?.isNotEmpty() == true
+            if (hasLinks) {
+                h.bubble.movementMethod = LinkMovementMethod.getInstance()
+                h.bubble.isClickable = true
+            } else {
+                h.bubble.movementMethod = null
+                h.bubble.isClickable = false
+            }
         }
-        // Long-press on both bubble and item row so it fires regardless of which view consumes touch
+
+        // Long-press on both bubble and item row so it fires regardless of touch target
         val longClick = View.OnLongClickListener { showMenu(it.context, m, body); true }
         h.bubble.setOnLongClickListener(longClick)
         h.itemView.setOnLongClickListener(longClick)

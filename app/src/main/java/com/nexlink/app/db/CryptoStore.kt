@@ -79,18 +79,7 @@ object CryptoStore {
 
     // ── Wire format ───────────────────────────────────────────────────────────
 
-    private val KEY_EXCHANGE_PREAMBLE = """
-This message was sent automatically by NexLink to establish an end-to-end encrypted session.
-
-• Both parties need NexLink installed for messages to be encrypted.
-• If you do not use NexLink, please disregard this message entirely.
-
-Learn more at
-THVjQ.com.au/NexLink
-""".trimIndent()
-
-    fun buildKeyExchange(pubKeyBytes: ByteArray) =
-        "$KEY_EXCHANGE_PREAMBLE\n[NXKEY1:${b64enc(pubKeyBytes)}]"
+    fun buildKeyExchange(pubKeyBytes: ByteArray) = "[NXKEY1:${b64enc(pubKeyBytes)}]"
 
     fun parseKeyExchange(msg: String): ByteArray? {
         if (!isKeyExchange(msg)) return null

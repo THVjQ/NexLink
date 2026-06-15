@@ -1,5 +1,7 @@
 package com.nexlink.app.ui.sms
 
+import android.net.Uri
+import android.provider.ContactsContract
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -51,13 +53,13 @@ class ConversationAdapter(
         val initials = c.contactName.split(" ").take(2)
             .joinToString("") { it.take(1).uppercase() }.ifBlank { c.address.take(2) }
 
-        // Show custom photo icon if set, otherwise fall back to coloured initials
+        // Custom icon takes highest priority, then contact photo, then coloured initials
         val iconUri = ChatCustomizationStore.getIcon(ctx, c.address)
         if (!iconUri.isNullOrEmpty()) {
             h.avatarPhoto.visibility = View.VISIBLE
             h.avatar.visibility = View.INVISIBLE
             try {
-                h.avatarPhoto.setImageURI(android.net.Uri.parse(iconUri))
+                h.avatarPhoto.setImageURI(Uri.parse(iconUri))
             } catch (_: Exception) {
                 h.avatarPhoto.visibility = View.GONE
                 h.avatar.visibility = View.VISIBLE
@@ -65,10 +67,25 @@ class ConversationAdapter(
                 h.avatar.text = initials
             }
         } else {
+            // Reset to initials first so recycled views don't show stale photos
             h.avatarPhoto.visibility = View.GONE
             h.avatar.visibility = View.VISIBLE
             h.avatar.background.mutate().setTint(AvatarColors.colorFor(initials))
             h.avatar.text = initials
+            // Tag the photo view with the address to guard against RecyclerView recycling races
+            h.avatarPhoto.tag = c.address
+            Thread {
+                val photoUri = queryContactPhoto(ctx, c.address)
+                h.avatarPhoto.post {
+                    if (h.avatarPhoto.tag == c.address && photoUri != null) {
+                        try {
+                            h.avatarPhoto.setImageURI(photoUri)
+                            h.avatarPhoto.visibility = View.VISIBLE
+                            h.avatar.visibility = View.INVISIBLE
+                        } catch (_: Exception) { /* leave initials */ }
+                    }
+                }
+            }.start()
         }
         h.name.text    = c.contactName.ifBlank { c.address }
         h.preview.text = c.lastMessage
@@ -106,5 +123,20 @@ class ConversationAdapter(
             diff < 7 * 86_400_000L  -> SimpleDateFormat("EEE", Locale.getDefault()).format(Date(ms))
             else                    -> SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(ms))
         }
+    }
+
+    private fun queryContactPhoto(ctx: android.content.Context, address: String): Uri? {
+        if (address.isBlank()) return null
+        return try {
+            val lookupUri = Uri.withAppendedPath(
+                ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(address))
+            ctx.contentResolver.query(
+                lookupUri,
+                arrayOf(ContactsContract.PhoneLookup.PHOTO_THUMBNAIL_URI),
+                null, null, null
+            )?.use { c ->
+                if (c.moveToFirst()) c.getString(0)?.let { Uri.parse(it) } else null
+            }
+        } catch (_: Exception) { null }
     }
 }

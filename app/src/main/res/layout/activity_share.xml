@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="@color/bg">
+
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent" android:layout_height="?attr/actionBarSize"
+        android:background="@color/surface"
+        app:title="Share via NexLink"
+        app:titleTextColor="@color/text"/>
+
+    <TextView android:id="@+id/tvSharePreview"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:paddingHorizontal="16dp" android:paddingVertical="6dp"
+        android:textSize="12sp" android:textColor="@color/muted"
+        android:background="@color/surface"
+        android:singleLine="true" android:ellipsize="end"
+        android:visibility="gone"/>
+
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tabLayout"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:background="@color/surface"
+        app:tabGravity="fill"
+        app:tabMode="fixed"
+        app:tabSelectedTextColor="@color/accent"
+        app:tabTextColor="@color/muted"
+        app:tabIndicatorColor="@color/accent"/>
+
+    <LinearLayout android:id="@+id/searchRow"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp" android:paddingTop="8dp" android:paddingBottom="4dp">
+        <EditText android:id="@+id/etSearch"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:background="@drawable/bg_search"
+            android:hint="Search…"
+            android:textSize="14sp"
+            android:inputType="textFilter"
+            android:paddingHorizontal="14dp" android:paddingVertical="10dp"
+            android:imeOptions="actionSearch"
+            android:singleLine="true"/>
+    </LinearLayout>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recycler"
+        android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1"
+        android:padding="4dp" android:clipToPadding="false"/>
+
+</LinearLayout>

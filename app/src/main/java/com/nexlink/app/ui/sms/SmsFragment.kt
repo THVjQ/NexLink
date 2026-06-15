@@ -101,7 +101,7 @@ class SmsFragment : Fragment() {
     private fun updateFilterButton() {
         if (filterUnreadOnly) {
             b.btnFilterUnread.setBackgroundResource(R.drawable.bg_card_selected)
-            b.btnFilterUnread.setTextColor(resources.getColor(R.color.accent, null))
+            b.btnFilterUnread.setTextColor(android.graphics.Color.WHITE)
         } else {
             b.btnFilterUnread.setBackgroundResource(R.drawable.bg_card_unselected)
             b.btnFilterUnread.setTextColor(resources.getColor(R.color.muted, null))
@@ -344,15 +344,18 @@ class SmsFragment : Fragment() {
         cats.forEach { cat ->
             val chip = android.widget.TextView(ctx).apply {
                 text = cat.name
+                tag  = cat.id   // store id for visual-update without view recreation
                 textSize = 14f
                 setPadding(28.dpToPx(ctx), 10.dpToPx(ctx), 28.dpToPx(ctx), 10.dpToPx(ctx))
                 val isActive = cat.id == activeCategoryId
                 setBackgroundResource(if (isActive) R.drawable.bg_card_selected else R.drawable.bg_card_unselected)
-                setTextColor(if (isActive) resources.getColor(R.color.accent, null)
+                setTextColor(if (isActive) android.graphics.Color.WHITE
                              else resources.getColor(R.color.muted, null))
                 setOnClickListener {
                     activeCategoryId = if (activeCategoryId == cat.id) null else cat.id
-                    refreshCategoryChips()
+                    // Update visuals in-place — do NOT call refreshCategoryChips() here, as removing
+                    // and recreating views during a touch event causes the wrong chip to be activated.
+                    updateCategoryChipVisuals()
                     filterConversations(b.etSearch.text?.toString() ?: "")
                 }
             }
@@ -361,6 +364,16 @@ class SmsFragment : Fragment() {
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { marginEnd = 8.dpToPx(ctx) }
             b.chipBar.addView(chip, params)
+        }
+    }
+
+    private fun updateCategoryChipVisuals() {
+        val muted = resources.getColor(R.color.muted, null)
+        for (i in 0 until b.chipBar.childCount) {
+            val chip = b.chipBar.getChildAt(i) as? android.widget.TextView ?: continue
+            val isActive = chip.tag == activeCategoryId
+            chip.setBackgroundResource(if (isActive) R.drawable.bg_card_selected else R.drawable.bg_card_unselected)
+            chip.setTextColor(if (isActive) android.graphics.Color.WHITE else muted)
         }
     }
 

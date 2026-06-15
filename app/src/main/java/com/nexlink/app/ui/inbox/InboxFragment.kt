@@ -51,19 +51,19 @@ class InboxFragment : Fragment() {
         applyPlatformVisibility()
 
         cardMap.forEach { (platform, entry) ->
-            // Tap card body → toggle filter
+            // Tap card body → open the social app directly
             entry.card.setOnClickListener {
                 it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                DeepLinkHelper.openPlatform(requireContext(), platform)
+            }
+
+            // Long-press card → toggle filter
+            entry.card.setOnLongClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                 if (platform in selectedPlatforms) selectedPlatforms.remove(platform)
                 else selectedPlatforms.add(platform)
                 updateCardVisuals()
                 applyFilter(NotificationStore.notifications.value.orEmpty())
-            }
-
-            // Long-press card → open the social app directly
-            entry.card.setOnLongClickListener {
-                it.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                DeepLinkHelper.openPlatform(requireContext(), platform)
                 true
             }
 
@@ -97,17 +97,22 @@ class InboxFragment : Fragment() {
 
     private fun applyPlatformVisibility() {
         val ctx = context ?: return
-        // Remove all cards from grid so there are no empty holes
         b.cardGrid.removeAllViews()
-        // Re-add only enabled cards in a fixed order — GridLayout packs them gaplessly
+        val margin = (5 * resources.displayMetrics.density + 0.5f).toInt()
         val order = listOf("Signal","Telegram","WhatsApp","Messenger","Discord","Instagram","Steam")
-        order.forEach { platform ->
-            val entry = cardMap[platform] ?: return@forEach
-            if (NotificationPrefs.isPlatformEnabled(ctx, platform)) {
-                (entry.card.parent as? android.view.ViewGroup)?.removeView(entry.card)
-                entry.card.visibility = View.VISIBLE
-                b.cardGrid.addView(entry.card)
-            }
+        for (platform in order) {
+            val entry = cardMap[platform] ?: continue
+            if (!NotificationPrefs.isPlatformEnabled(ctx, platform)) continue
+            entry.card.visibility = View.VISIBLE
+            // Explicit LayoutParams so each re-added card fills its column correctly
+            val lp = android.widget.GridLayout.LayoutParams(
+                android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, android.widget.GridLayout.FILL),
+                android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, android.widget.GridLayout.FILL, 1f)
+            )
+            lp.width  = 0
+            lp.height = android.widget.GridLayout.LayoutParams.WRAP_CONTENT
+            lp.setMargins(margin, margin, margin, margin)
+            b.cardGrid.addView(entry.card, lp)
         }
     }
 

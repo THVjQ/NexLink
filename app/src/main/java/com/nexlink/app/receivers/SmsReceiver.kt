@@ -46,14 +46,17 @@ class SmsReceiver : BroadcastReceiver() {
                     when {
                         CryptoStore.isKeyExchange(bodyStr) -> {
                             // Peer has NexLink — store their public key and establish a session.
-                            // Always reply with our key (peer may have reinstalled or rotated keys).
+                            // Only reply with our key if we haven't already done so, preventing
+                            // an infinite key exchange loop between two NexLink users.
                             val peerPub = CryptoStore.parseKeyExchange(bodyStr)
                             if (peerPub != null) {
                                 CryptoStore.storePeerKey(context, sender, peerPub)
-                                CryptoStore.markKeySent(context, sender)
-                                val ourPub = CryptoStore.getPublicKeyBytes(context)
-                                SmsHelper.sendSms(context, sender,
-                                    CryptoStore.buildKeyExchange(ourPub), -1)
+                                if (!CryptoStore.hasSentKey(context, sender)) {
+                                    CryptoStore.markKeySent(context, sender)
+                                    val ourPub = CryptoStore.getPublicKeyBytes(context)
+                                    SmsHelper.sendSms(context, sender,
+                                        CryptoStore.buildKeyExchange(ourPub), -1)
+                                }
                             }
                             // Key exchange messages are internal — not shown to the user
                         }
