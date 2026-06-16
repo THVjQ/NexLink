@@ -57,12 +57,27 @@
                 <TextView android:id="@+id/statusNotif" android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:textSize="12sp" android:textColor="@color/muted"/>
             </LinearLayout>
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:padding="8dp">
+                <TextView android:text="Sent Message Capture" android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:textColor="@color/text" android:textSize="14sp"/>
+                <TextView android:id="@+id/statusAccessibility" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textSize="12sp" android:textColor="@color/muted"/>
+            </LinearLayout>
         </LinearLayout>
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnNotifAccess"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="Grant Notification Access" android:backgroundTint="@color/accent"
+            android:layout_marginBottom="10dp"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAccessibility"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Enable Sent Message Capture"
             android:layout_marginBottom="10dp"/>
 
         <com.google.android.material.button.MaterialButton

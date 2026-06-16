@@ -53,6 +53,31 @@ class SettingsFragment : Fragment() {
         b.btnNotifAccess.setOnClickListener {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         }
+
+        b.btnAccessibility.setOnClickListener {
+            AlertDialog.Builder(requireContext())
+                .setTitle("Sent Message Capture")
+                .setMessage(
+                    "NexLink uses Android's Accessibility Service to read the messages " +
+                    "you send inside Signal, WhatsApp, Telegram, Instagram, Discord, and Steam " +
+                    "while those apps are open on your screen.\n\n" +
+                    "This lets NexLink show both sides of your conversations in the inbox — " +
+                    "including replies you send — not just incoming messages.\n\n" +
+                    "What NexLink reads:\n" +
+                    "• Text you send in the supported social apps\n" +
+                    "• The name of the chat you are currently in\n\n" +
+                    "What NexLink does NOT do:\n" +
+                    "• Does not read passwords, banking apps, or any other app\n" +
+                    "• Does not send or share any data off your device\n" +
+                    "• All captured messages are stored locally on your phone only\n\n" +
+                    "Tap Enable to open Accessibility Settings and turn on NexLink."
+                )
+                .setPositiveButton("Enable") { _, _ ->
+                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
         b.btnAppSettings.setOnClickListener {
             startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                 data = Uri.fromParts("package", requireContext().packageName, null)
@@ -533,6 +558,15 @@ class SettingsFragment : Fragment() {
         ) ?: ""
         val listenerComp = ComponentName(ctx, NexLinkNotificationListener::class.java).flattenToString()
         b.statusNotif.text = if (listenerComp in enabledListeners) "Granted ✓" else "Not granted — tap button below"
+
+        val accessibilityEnabled = try {
+            val enabledServices = Settings.Secure.getString(
+                ctx.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            ) ?: ""
+            val accessComp = ComponentName(ctx, com.nexlink.app.services.NexLinkAccessibilityService::class.java).flattenToString()
+            accessComp in enabledServices
+        } catch (_: Exception) { false }
+        b.statusAccessibility.text = if (accessibilityEnabled) "Enabled ✓" else "Not enabled — tap button below"
     }
 
     // ── Dark mode ─────────────────────────────────────────────────────────────
