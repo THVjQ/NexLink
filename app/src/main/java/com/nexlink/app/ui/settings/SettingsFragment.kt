@@ -4,14 +4,10 @@ import android.Manifest
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
-import android.text.SpannableStringBuilder
-import android.text.style.StyleSpan
 import android.view.*
-import android.widget.ArrayAdapter
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -20,6 +16,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.nexlink.app.R
 import com.nexlink.app.databinding.FragmentSettingsBinding
+import com.nexlink.app.ui.NexPopup
 import com.nexlink.app.db.BlockStore
 import com.nexlink.app.db.DeletedConversation
 import com.nexlink.app.db.DeletedMessage
@@ -184,7 +181,7 @@ class SettingsFragment : Fragment() {
 
         // Appearance — Dark Mode
         refreshDarkModeLabel()
-        b.rowDarkMode.setOnClickListener { showDarkModeDialog() }
+        b.rowDarkMode.setOnClickListener { showDarkModeDialog(it) }
 
         // Appearance — App Icon
         refreshIconLabels()
@@ -255,22 +252,42 @@ class SettingsFragment : Fragment() {
                 .show()
             return
         }
-        AlertDialog.Builder(ctx)
+        val dp = ctx.resources.displayMetrics.density
+        val container = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
+        }
+        var dialog: AlertDialog? = null
+        dialog = AlertDialog.Builder(ctx)
             .setTitle("Blocked Numbers")
-            .setItems(blocked.toTypedArray()) { _, i ->
-                val num = blocked[i]
-                AlertDialog.Builder(ctx)
-                    .setTitle("Unblock $num?")
-                    .setPositiveButton("Unblock") { _, _ ->
+            .setView(android.widget.ScrollView(ctx).apply { addView(container) })
+            .setNegativeButton("Close", null)
+            .show()
+        blocked.forEach { num ->
+            val row = android.widget.LinearLayout(ctx).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding((20 * dp).toInt(), (14 * dp).toInt(), (20 * dp).toInt(), (14 * dp).toInt())
+                isClickable = true; isFocusable = true
+            }
+            row.addView(android.widget.TextView(ctx).apply {
+                text = num; textSize = 15f
+                setTextColor(resources.getColor(R.color.text, null))
+                layoutParams = android.widget.LinearLayout.LayoutParams(0,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            container.addView(row)
+            row.setOnClickListener {
+                NexPopup.show(row, listOf(
+                    NexPopup.Item("Unblock", R.drawable.ic_clear, isDestructive = true) {
+                        dialog?.dismiss()
                         BlockStore.unblock(ctx, num)
                         refreshBlockedCount()
                         Toast.makeText(ctx, "Unblocked $num", Toast.LENGTH_SHORT).show()
                     }
-                    .setNegativeButton("Cancel", null)
-                    .show()
+                ))
             }
-            .setNegativeButton("Close", null)
-            .show()
+        }
     }
 
     private fun showRecycleBinDialog() {
@@ -282,94 +299,96 @@ class SettingsFragment : Fragment() {
                 .setPositiveButton("OK", null).show()
             return
         }
-        // Top-level section chooser
-        val sectionLabels = buildList {
-            add("All (${convs.size + msgs.size})")
-            if (convs.isNotEmpty()) add("Chats (${convs.size})")
-            if (msgs.isNotEmpty()) add("Messages (${msgs.size})")
-        }
-        AlertDialog.Builder(ctx).setTitle("Recycle Bin")
-            .setItems(sectionLabels.toTypedArray()) { _, which ->
-                val filtered: List<BinEntry> = when (which) {
-                    1 -> if (convs.isNotEmpty()) convs.map { BinEntry.Conv(it) } else msgs.map { BinEntry.Msg(it) }
-                    2 -> msgs.map { BinEntry.Msg(it) }
-                    else -> (convs.map { BinEntry.Conv(it) } + msgs.map { BinEntry.Msg(it) })
-                        .sortedByDescending { it.deletedAt }
-                }
-                showBinSection(ctx, filtered)
-            }
-            .setNeutralButton("Clear all") { _, _ ->
+        NexPopup.show(b.rowRecycleBin, buildList {
+            add(NexPopup.Item("All (${convs.size + msgs.size})", R.drawable.ic_inbox) {
+                showBinSection(ctx, (convs.map { BinEntry.Conv(it) } + msgs.map { BinEntry.Msg(it) })
+                    .sortedByDescending { it.deletedAt })
+            })
+            if (convs.isNotEmpty()) add(NexPopup.Item("Chats (${convs.size})", R.drawable.ic_sms) {
+                showBinSection(ctx, convs.map { BinEntry.Conv(it) })
+            })
+            if (msgs.isNotEmpty()) add(NexPopup.Item("Messages (${msgs.size})", R.drawable.ic_compose) {
+                showBinSection(ctx, msgs.map { BinEntry.Msg(it) })
+            })
+            add(NexPopup.Item("Clear all", R.drawable.ic_delete, isDestructive = true) {
                 AlertDialog.Builder(ctx).setTitle("Clear recycle bin?")
                     .setMessage("All items will be permanently removed.")
                     .setPositiveButton("Clear") { _, _ -> RecycleBinStore.clear(ctx); refreshRecycleBinCount() }
                     .setNegativeButton("Cancel", null).show()
-            }
-            .setNegativeButton("Close", null).show()
+            })
+        })
     }
 
     private fun showBinSection(ctx: android.content.Context, entries: List<BinEntry>) {
         val now = System.currentTimeMillis()
         fun daysLeft(at: Long) = (30 - ((now - at) / 86_400_000)).coerceAtLeast(0)
+        val dp = ctx.resources.displayMetrics.density
 
-        val adapter = object : ArrayAdapter<BinEntry>(ctx, 0, entries) {
-            override fun getView(pos: Int, convertView: View?, parent: android.view.ViewGroup): View {
-                val entry = getItem(pos)!!
-                val container = convertView as? android.widget.LinearLayout
-                    ?: android.widget.LinearLayout(ctx).apply {
-                        orientation = android.widget.LinearLayout.VERTICAL
-                        setPadding(48, 24, 48, 24)
-                    }
-                container.removeAllViews()
-                fun tv(text: CharSequence, sizeSp: Float, colorId: Int) = TextView(ctx).apply {
-                    this.text = text; textSize = sizeSp
-                    setTextColor(resources.getColor(colorId, null))
-                }
-                when (entry) {
-                    is BinEntry.Conv -> {
-                        val d = entry.d
-                        val title = SpannableStringBuilder("💬 ${d.contactName.ifBlank { d.address }}").apply {
-                            setSpan(StyleSpan(Typeface.BOLD), 0, length, 0)
-                        }
-                        container.addView(tv(title, 14f, R.color.text))
-                        if (d.lastMessage.isNotBlank())
-                            container.addView(tv(d.lastMessage.take(80), 12f, R.color.muted))
-                        container.addView(tv("${daysLeft(d.deletedAt)} days left · chat", 11f, R.color.accent))
-                    }
-                    is BinEntry.Msg -> {
-                        val d = entry.d
-                        val title = SpannableStringBuilder("✉ ${d.address}").apply {
-                            setSpan(StyleSpan(Typeface.BOLD), 0, length, 0)
-                        }
-                        container.addView(tv(title, 14f, R.color.text))
-                        container.addView(tv(d.body.trim().take(80).ifBlank { "(media)" }, 12f, R.color.muted))
-                        container.addView(tv("${daysLeft(d.deletedAt)} days left · message", 11f, R.color.accent))
-                    }
-                }
-                return container
-            }
+        val container = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
         }
-        AlertDialog.Builder(ctx).setTitle("Recycle Bin")
-            .setAdapter(adapter) { _, i ->
-                when (val entry = entries[i]) {
-                    is BinEntry.Conv -> {
-                        val d = entry.d
-                        AlertDialog.Builder(ctx).setTitle(d.contactName.ifBlank { d.address })
-                            .setMessage("Last message: ${d.lastMessage.take(60).ifBlank { "(none)" }}")
-                            .setPositiveButton("Restore") { _, _ ->
+        var dialog: AlertDialog? = null
+        dialog = AlertDialog.Builder(ctx).setTitle("Recycle Bin")
+            .setView(android.widget.ScrollView(ctx).apply { addView(container) })
+            .setNegativeButton("Close", null)
+            .show()
+
+        entries.forEach { entry ->
+            val row = android.widget.LinearLayout(ctx).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                setPadding((20 * dp).toInt(), (14 * dp).toInt(), (20 * dp).toInt(), (14 * dp).toInt())
+                isClickable = true; isFocusable = true
+            }
+            when (entry) {
+                is BinEntry.Conv -> {
+                    val d = entry.d
+                    row.addView(android.widget.TextView(ctx).apply {
+                        text = "💬 ${d.contactName.ifBlank { d.address }}"
+                        textSize = 14f; setTypeface(null, android.graphics.Typeface.BOLD)
+                        setTextColor(resources.getColor(R.color.text, null))
+                    })
+                    if (d.lastMessage.isNotBlank()) row.addView(android.widget.TextView(ctx).apply {
+                        text = d.lastMessage.take(80); textSize = 12f
+                        setTextColor(resources.getColor(R.color.muted, null))
+                    })
+                    row.addView(android.widget.TextView(ctx).apply {
+                        text = "${daysLeft(d.deletedAt)} days left"; textSize = 11f
+                        setTextColor(resources.getColor(R.color.accent, null))
+                    })
+                    row.setOnClickListener {
+                        NexPopup.show(row, listOf(
+                            NexPopup.Item("Restore", R.drawable.ic_open_in_app) {
+                                dialog?.dismiss()
                                 RecycleBinStore.remove(ctx, d.threadId); refreshRecycleBinCount()
                                 Toast.makeText(ctx, "Conversation restored", Toast.LENGTH_SHORT).show()
-                            }
-                            .setNeutralButton("Delete permanently") { _, _ ->
+                            },
+                            NexPopup.Item("Delete permanently", R.drawable.ic_delete, isDestructive = true) {
+                                dialog?.dismiss()
                                 RecycleBinStore.remove(ctx, d.threadId); refreshRecycleBinCount()
                                 Toast.makeText(ctx, "Permanently deleted", Toast.LENGTH_SHORT).show()
                             }
-                            .setNegativeButton("Cancel", null).show()
+                        ))
                     }
-                    is BinEntry.Msg -> {
-                        val d = entry.d
-                        AlertDialog.Builder(ctx).setTitle("Message from ${d.address}")
-                            .setMessage(d.body.take(200).ifBlank { "(media attachment)" })
-                            .setNeutralButton("Delete permanently") { _, _ ->
+                }
+                is BinEntry.Msg -> {
+                    val d = entry.d
+                    row.addView(android.widget.TextView(ctx).apply {
+                        text = "✉ ${d.address}"
+                        textSize = 14f; setTypeface(null, android.graphics.Typeface.BOLD)
+                        setTextColor(resources.getColor(R.color.text, null))
+                    })
+                    row.addView(android.widget.TextView(ctx).apply {
+                        text = d.body.trim().take(80).ifBlank { "(media)" }; textSize = 12f
+                        setTextColor(resources.getColor(R.color.muted, null))
+                    })
+                    row.addView(android.widget.TextView(ctx).apply {
+                        text = "${daysLeft(d.deletedAt)} days left"; textSize = 11f
+                        setTextColor(resources.getColor(R.color.accent, null))
+                    })
+                    row.setOnClickListener {
+                        NexPopup.show(row, listOf(
+                            NexPopup.Item("Delete permanently", R.drawable.ic_delete, isDestructive = true) {
+                                dialog?.dismiss()
                                 val remaining = RecycleBinStore.getMessages(ctx).filter { it.id != d.id }
                                 ctx.getSharedPreferences("nx_recycle_bin", android.content.Context.MODE_PRIVATE)
                                     .edit().putString("deleted_msgs", org.json.JSONArray().apply {
@@ -385,11 +404,19 @@ class SettingsFragment : Fragment() {
                                 refreshRecycleBinCount()
                                 Toast.makeText(ctx, "Message permanently deleted", Toast.LENGTH_SHORT).show()
                             }
-                            .setNegativeButton("Cancel", null).show()
+                        ))
                     }
                 }
             }
-            .setNegativeButton("Close", null).show()
+            container.addView(row)
+            // Thin divider
+            container.addView(android.view.View(ctx).apply {
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT, 1
+                ).apply { marginStart = (20 * dp).toInt() }
+                setBackgroundColor(0x22FFFFFF)
+            })
+        }
     }
 
     private fun showQrContactDialog() {
@@ -586,22 +613,19 @@ class SettingsFragment : Fragment() {
         }
     }
 
-    private fun showDarkModeDialog() {
+    private fun showDarkModeDialog(anchor: View) {
         val ctx = requireContext()
-        val options = arrayOf("System default", "Light", "Dark")
-        val current = NotificationPrefs.getDarkMode(ctx)
-        AlertDialog.Builder(ctx).setTitle("Dark Mode")
-            .setSingleChoiceItems(options, current) { dlg, which ->
-                NotificationPrefs.setDarkMode(ctx, which)
-                AppCompatDelegate.setDefaultNightMode(when (which) {
+        NexPopup.show(anchor, listOf("System default", "Light", "Dark").mapIndexed { i, label ->
+            NexPopup.Item(label, R.drawable.ic_settings) {
+                NotificationPrefs.setDarkMode(ctx, i)
+                AppCompatDelegate.setDefaultNightMode(when (i) {
                     1    -> AppCompatDelegate.MODE_NIGHT_NO
                     2    -> AppCompatDelegate.MODE_NIGHT_YES
                     else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
                 })
                 refreshDarkModeLabel()
-                dlg.dismiss()
             }
-            .setNegativeButton("Cancel", null).show()
+        })
     }
 
     // ── Icon settings ─────────────────────────────────────────────────────────

@@ -20,6 +20,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.nexlink.app.R
 import com.nexlink.app.databinding.FragmentCallsBinding
+import com.nexlink.app.ui.NexPopup
 import com.nexlink.app.db.CallEntry
 import com.nexlink.app.db.CallLogHelper
 import com.nexlink.shared.AvatarColors
@@ -169,8 +170,8 @@ class CallsFragment : Fragment() {
 
                         h.btnCall.setOnClickListener { placeCall(row.number) }
                         h.itemView.setOnClickListener { placeCall(row.number) }
-                        h.btnCall.setOnLongClickListener { showSimCallPicker(row.number); true }
-                        h.itemView.setOnLongClickListener { showSimCallPicker(row.number); true }
+                        h.btnCall.setOnLongClickListener { showSimCallPicker(row.number, it); true }
+                        h.itemView.setOnLongClickListener { showSimCallPicker(row.number, h.btnCall); true }
                     }
                 }
             }
@@ -203,7 +204,7 @@ class CallsFragment : Fragment() {
     // ── SIM-aware call ────────────────────────────────────────────────────────
 
     @SuppressLint("MissingPermission")
-    private fun showSimCallPicker(number: String) {
+    private fun showSimCallPicker(number: String, anchor: View) {
         val ctx = requireContext()
         if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.CALL_PHONE)
             != PackageManager.PERMISSION_GRANTED) return
@@ -215,25 +216,24 @@ class CallsFragment : Fragment() {
 
             val hasState = ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_PHONE_STATE) ==
                 PackageManager.PERMISSION_GRANTED
-            val labels = accounts.mapIndexed { idx, handle ->
-                try {
-                    val name = tm.getPhoneAccount(handle)?.label?.toString() ?: "SIM ${idx + 1}"
-                    if (!hasState) return@mapIndexed name
-                    val num = sm.activeSubscriptionInfoList?.getOrNull(idx)
-                        ?.number?.takeIf { it.isNotBlank() }?.let { "\n$it" } ?: ""
-                    "$name$num"
-                } catch (_: Exception) { "SIM ${idx + 1}" }
-            }.toTypedArray()
 
-            AlertDialog.Builder(ctx)
-                .setTitle("Call $number via…")
-                .setItems(labels) { _, i ->
+            NexPopup.show(anchor, accounts.mapIndexed { idx, handle ->
+                val label = try {
+                    val name = tm.getPhoneAccount(handle)?.label?.toString() ?: "SIM ${idx + 1}"
+                    if (!hasState) name
+                    else {
+                        val num = sm.activeSubscriptionInfoList?.getOrNull(idx)
+                            ?.number?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""
+                        "$name$num"
+                    }
+                } catch (_: Exception) { "SIM ${idx + 1}" }
+                NexPopup.Item(label, R.drawable.ic_call) {
                     val bundle = android.os.Bundle()
-                    bundle.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, accounts[i])
+                    bundle.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, accounts[idx])
                     try { tm.placeCall(Uri.parse("tel:$number"), bundle) }
                     catch (_: Exception) { placeCall(number) }
                 }
-                .show()
+            })
         } catch (_: Exception) { placeCall(number) }
     }
 

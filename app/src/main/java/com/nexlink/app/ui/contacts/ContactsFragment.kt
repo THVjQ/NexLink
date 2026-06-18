@@ -23,6 +23,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.nexlink.app.R
 import com.nexlink.app.databinding.FragmentContactsBinding
 import com.nexlink.app.db.DeepLinkHelper
+import com.nexlink.app.ui.NexPopup
 import com.nexlink.app.ui.sms.ConversationActivity
 
 data class Contact(
@@ -47,9 +48,9 @@ class ContactsFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         adapter = ContactsAdapter(
-            onSms    = { c -> openSms(c) },
-            onCall   = { c -> placeCall(c) },
-            onDelete = { c -> confirmDeleteContact(c) }
+            onSms       = { c, v -> openSms(c, v) },
+            onCall      = { c, v -> placeCall(c, v) },
+            onLongPress = { c, v -> showContactOptions(c, v) }
         )
         b.recycler.layoutManager = LinearLayoutManager(requireContext())
         b.recycler.adapter = adapter
@@ -171,24 +172,29 @@ class ContactsFragment : Fragment() {
         adapter.setData(filtered)
     }
 
-    private fun openSms(c: Contact) {
+    private fun openSms(c: Contact, anchor: View) {
         if (c.numbers.size <= 1) {
             startActivity(Intent(requireContext(), ConversationActivity::class.java).apply {
                 putExtra("address", c.number)
                 putExtra("contact_name", c.name)
             })
         } else {
-            AlertDialog.Builder(requireContext())
-                .setTitle("Message ${c.name}")
-                .setItems(c.numbers.toTypedArray()) { _, i ->
+            NexPopup.show(anchor, c.numbers.map { num ->
+                NexPopup.Item(num, R.drawable.ic_sms) {
                     startActivity(Intent(requireContext(), ConversationActivity::class.java).apply {
-                        putExtra("address", c.numbers[i])
+                        putExtra("address", num)
                         putExtra("contact_name", c.name)
                     })
                 }
-                .setNegativeButton("Cancel", null)
-                .show()
+            })
         }
+    }
+
+    private fun showContactOptions(c: Contact, anchor: View) {
+        NexPopup.show(anchor, listOf(
+            NexPopup.Item("Edit", R.drawable.ic_edit) { editContact(c) },
+            NexPopup.Item("Delete", R.drawable.ic_delete, isDestructive = true) { confirmDeleteContact(c) }
+        ))
     }
 
     private fun editContact(c: Contact) {
@@ -218,47 +224,31 @@ class ContactsFragment : Fragment() {
             .show()
     }
 
-    private fun placeCall(c: Contact) {
+    private fun placeCall(c: Contact, anchor: View) {
         val ctx = requireContext()
-        val options = mutableListOf<String>()
-        val actions = mutableListOf<() -> Unit>()
-
-        options += "📞  Phone call"
-        actions += {
-            if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.CALL_PHONE)
-                == PackageManager.PERMISSION_GRANTED) {
-                if (c.numbers.size <= 1) {
-                    startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:${c.number}")))
-                } else {
-                    AlertDialog.Builder(ctx)
-                        .setTitle("Call ${c.name}")
-                        .setItems(c.numbers.toTypedArray()) { _, i ->
-                            startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:${c.numbers[i]}")))
-                        }
-                        .setNegativeButton("Cancel", null)
-                        .show()
+        NexPopup.show(anchor, buildList {
+            if (c.numbers.size <= 1) {
+                add(NexPopup.Item("Phone call", R.drawable.ic_call) {
+                    if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.CALL_PHONE)
+                        == PackageManager.PERMISSION_GRANTED)
+                        startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:${c.number}")))
+                })
+            } else {
+                c.numbers.forEach { num ->
+                    add(NexPopup.Item("Call $num", R.drawable.ic_call) {
+                        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.CALL_PHONE)
+                            == PackageManager.PERMISSION_GRANTED)
+                            startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:$num")))
+                    })
                 }
             }
-        }
-
-        if (ctx.packageManager.getLaunchIntentForPackage("com.whatsapp") != null) {
-            options += "🟢  WhatsApp"
-            actions += { DeepLinkHelper.whatsApp(ctx, c.number) }
-        }
-        if (ctx.packageManager.getLaunchIntentForPackage("org.telegram.messenger") != null) {
-            options += "✈️  Telegram"
-            actions += { DeepLinkHelper.telegram(ctx, c.number) }
-        }
-        if (ctx.packageManager.getLaunchIntentForPackage("org.thoughtcrime.securesms") != null) {
-            options += "🔵  Signal"
-            actions += { DeepLinkHelper.signal(ctx) }
-        }
-
-        AlertDialog.Builder(ctx)
-            .setTitle("Call ${c.name} via…")
-            .setItems(options.toTypedArray()) { _, i -> actions[i]() }
-            .setNegativeButton("Cancel", null)
-            .show()
+            if (ctx.packageManager.getLaunchIntentForPackage("com.whatsapp") != null)
+                add(NexPopup.Item("WhatsApp", R.drawable.ic_call) { DeepLinkHelper.whatsApp(ctx, c.number) })
+            if (ctx.packageManager.getLaunchIntentForPackage("org.telegram.messenger") != null)
+                add(NexPopup.Item("Telegram", R.drawable.ic_call) { DeepLinkHelper.telegram(ctx, c.number) })
+            if (ctx.packageManager.getLaunchIntentForPackage("org.thoughtcrime.securesms") != null)
+                add(NexPopup.Item("Signal", R.drawable.ic_call) { DeepLinkHelper.signal(ctx) })
+        })
     }
 
     override fun onDestroyView() { super.onDestroyView(); _b = null }

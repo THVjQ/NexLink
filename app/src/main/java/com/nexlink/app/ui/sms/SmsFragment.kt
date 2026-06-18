@@ -259,23 +259,19 @@ class SmsFragment : Fragment() {
     private fun showCategoryMenu() {
         val ctx = requireContext()
         val cats = CategoryStore.getAll(ctx)
-        val editOption = if (cats.isNotEmpty()) arrayOf("Edit categories") else emptyArray()
-        val items = arrayOf("New category") + cats.map { it.name }.toTypedArray() + editOption
-        AlertDialog.Builder(ctx)
-            .setTitle("Categories")
-            .setItems(items) { _, which ->
-                when {
-                    which == 0 -> showNewCategoryDialog()
-                    which <= cats.size -> {
-                        val cat = cats[which - 1]
-                        activeCategoryId = if (activeCategoryId == cat.id) null else cat.id
-                        refreshCategoryChips()
-                        filterConversations(b.etSearch.text?.toString() ?: "")
-                    }
-                    else -> showEditCategoriesDialog()
-                }
+        NexPopup.show(b.btnMoreOptions, buildList {
+            add(NexPopup.Item("New category", R.drawable.ic_add) { showNewCategoryDialog() })
+            cats.forEach { cat ->
+                add(NexPopup.Item(cat.name, R.drawable.ic_inbox) {
+                    activeCategoryId = if (activeCategoryId == cat.id) null else cat.id
+                    refreshCategoryChips()
+                    filterConversations(b.etSearch.text?.toString() ?: "")
+                })
             }
-            .show()
+            if (cats.isNotEmpty()) add(NexPopup.Item("Edit categories", R.drawable.ic_edit) {
+                showEditCategoriesDialog()
+            })
+        })
     }
 
     private fun showNewCategoryDialog() {
@@ -395,8 +391,8 @@ class SmsFragment : Fragment() {
                     return@runOnUiThread
                 }
                 val names = contacts.map { c ->
-                    if (c.numbers.size > 1) "${c.name}\n${c.number}  +${c.numbers.size - 1} more"
-                    else "${c.name}\n${c.number}"
+                    if (c.numbers.size > 1) "${c.name}  ·  ${c.number}  +${c.numbers.size - 1}"
+                    else "${c.name}  ·  ${c.number}"
                 }.toTypedArray()
                 if (!multiSelect) {
                     AlertDialog.Builder(ctx)

@@ -34,6 +34,7 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexlink.app.R
 import com.nexlink.app.databinding.ActivityConversationBinding
+import com.nexlink.app.ui.NexPopup
 import com.nexlink.app.db.ChatCustomizationStore
 import com.nexlink.app.db.CryptoStore
 import com.nexlink.app.db.GroupNameStore
@@ -329,31 +330,28 @@ class ConversationActivity : AppCompatActivity() {
         }
 
         // Custom Icon — photo from gallery
-        b.rowCustomIcon.setOnClickListener {
-            AlertDialog.Builder(this)
-                .setTitle("Chat icon")
-                .setItems(arrayOf("Choose from gallery", "Remove icon")) { _, which ->
-                    if (which == 0) chatIconLauncher.launch("image/*")
-                    else { ChatCustomizationStore.setIcon(this, address, ""); Toast.makeText(this, "Icon removed", Toast.LENGTH_SHORT).show() }
+        b.rowCustomIcon.setOnClickListener { v ->
+            NexPopup.show(v, listOf(
+                NexPopup.Item("Choose from gallery", R.drawable.ic_camera) { chatIconLauncher.launch("image/*") },
+                NexPopup.Item("Remove icon", R.drawable.ic_clear, isDestructive = true) {
+                    ChatCustomizationStore.setIcon(this, address, "")
+                    Toast.makeText(this, "Icon removed", Toast.LENGTH_SHORT).show()
                 }
-                .show()
+            ))
         }
 
         // Custom Wallpaper picker
-        b.rowCustomWallpaper.setOnClickListener {
-            AlertDialog.Builder(this)
-                .setTitle("Chat wallpaper")
-                .setItems(arrayOf("Choose from gallery", "Remove wallpaper")) { _, which ->
-                    if (which == 0) wallpaperLauncher.launch("image/*")
-                    else {
-                        ChatCustomizationStore.clearWallpaper(this, address)
-                        b.recycler.background = null
-                        b.contentLayout.setBackgroundColor(getColor(com.nexlink.app.R.color.bg))
-                        b.toolbar.setBackgroundColor(getColor(com.nexlink.app.R.color.surface))
-                        Toast.makeText(this, "Wallpaper removed", Toast.LENGTH_SHORT).show()
-                    }
+        b.rowCustomWallpaper.setOnClickListener { v ->
+            NexPopup.show(v, listOf(
+                NexPopup.Item("Choose from gallery", R.drawable.ic_camera) { wallpaperLauncher.launch("image/*") },
+                NexPopup.Item("Remove wallpaper", R.drawable.ic_clear, isDestructive = true) {
+                    ChatCustomizationStore.clearWallpaper(this, address)
+                    b.recycler.background = null
+                    b.contentLayout.setBackgroundColor(getColor(R.color.bg))
+                    b.toolbar.setBackgroundColor(getColor(R.color.surface))
+                    Toast.makeText(this, "Wallpaper removed", Toast.LENGTH_SHORT).show()
                 }
-                .show()
+            ))
         }
 
         // Search messages: filter shown inside main recycler, results visible behind semi-transparent drawer
@@ -586,22 +584,17 @@ class ConversationActivity : AppCompatActivity() {
     // ── Attachments ───────────────────────────────────────────────────────────
 
     private fun showAttachPicker() {
-        val options = arrayOf("📷 Camera", "🖼 Photo / Gallery", "🎬 Video", "🎵 Audio file", "📎 File")
-        AlertDialog.Builder(this)
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> {
-                        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-                            == PackageManager.PERMISSION_GRANTED) launchCamera()
-                        else reqCameraPermLauncher.launch(Manifest.permission.CAMERA)
-                    }
-                    1 -> galleryLauncher.launch("image/*")
-                    2 -> videoLauncher.launch("video/*")
-                    3 -> audioLauncher.launch("audio/*")
-                    4 -> fileLauncher.launch("*/*")
-                }
-            }
-            .show()
+        NexPopup.show(b.btnAttach, listOf(
+            NexPopup.Item("Camera",     R.drawable.ic_camera) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                    == PackageManager.PERMISSION_GRANTED) launchCamera()
+                else reqCameraPermLauncher.launch(Manifest.permission.CAMERA)
+            },
+            NexPopup.Item("Photo / Gallery", R.drawable.ic_attach)  { galleryLauncher.launch("image/*") },
+            NexPopup.Item("Video",           R.drawable.ic_attach)  { videoLauncher.launch("video/*") },
+            NexPopup.Item("Audio file",      R.drawable.ic_mic)     { audioLauncher.launch("audio/*") },
+            NexPopup.Item("File",            R.drawable.ic_attach)  { fileLauncher.launch("*/*") }
+        ))
     }
 
     private fun launchCamera() {
