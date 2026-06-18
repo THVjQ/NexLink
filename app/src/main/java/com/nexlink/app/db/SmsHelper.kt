@@ -251,30 +251,66 @@ object SmsHelper {
 
             // Step 4: assemble results
             for (row in rows) {
-                val part = mediaPartMap[row.id] ?: textPartMap[row.id] ?: continue
-                val isIn    = row.msgBox == Telephony.Mms.MESSAGE_BOX_INBOX
-                val isVoice = part.mimeType.startsWith("audio/")
-                val body = when {
-                    part.mimeType == "text/plain"          -> part.textBody ?: ""
-                    isVoice                                -> "🎤 Voice message"
-                    part.mimeType.startsWith("image/")     -> ""
-                    part.mimeType.startsWith("video/")     -> "🎬 Video"
-                    else                                   -> "📎 ${part.name ?: "File"}"
-                }
+                val mediaPart = mediaPartMap[row.id]
+                val textPart  = textPartMap[row.id]
+                val isIn      = row.msgBox == Telephony.Mms.MESSAGE_BOX_INBOX
                 val senderAddr = if (isIn) senderMap[row.id] else null
-                result += SmsMessage(
-                    id         = row.id,
-                    threadId   = threadId,
-                    address    = senderAddr ?: primaryAddress,
-                    body       = body,
-                    timestamp  = row.date,
-                    isIncoming = isIn,
-                    senderName = senderAddr?.let { getContactName(ctx, it) },
-                    isMms      = true,
-                    isVoice    = isVoice,
-                    mediaUri   = if (part.mimeType == "text/plain") null else part.uri,
-                    mimeType   = if (part.mimeType == "text/plain") null else part.mimeType
-                )
+
+                if (mediaPart != null) {
+                    val isVoice = mediaPart.mimeType.startsWith("audio/")
+                    val body = when {
+                        isVoice                                  -> "🎤 Voice message"
+                        mediaPart.mimeType.startsWith("image/") -> ""
+                        mediaPart.mimeType.startsWith("video/") -> "🎬 Video"
+                        else                                     -> "📎 ${mediaPart.name ?: "File"}"
+                    }
+                    result += SmsMessage(
+                        id         = row.id,
+                        threadId   = threadId,
+                        address    = senderAddr ?: primaryAddress,
+                        body       = body,
+                        timestamp  = row.date,
+                        isIncoming = isIn,
+                        senderName = senderAddr?.let { getContactName(ctx, it) },
+                        isMms      = true,
+                        isVoice    = isVoice,
+                        mediaUri   = mediaPart.uri,
+                        mimeType   = mediaPart.mimeType
+                    )
+                    // If the MMS also has a text caption, emit it as a separate text bubble
+                    // so the user sees both the image and the caption message.
+                    if (textPart != null) {
+                        val caption = textPart.textBody?.takeIf { it.isNotBlank() }
+                            ?: readTextFromUri(ctx, Uri.parse(textPart.uri)).takeIf { it.isNotBlank() }
+                        if (caption != null) {
+                            result += SmsMessage(
+                                id         = -row.id,  // synthetic negative ID for caption part
+                                threadId   = threadId,
+                                address    = senderAddr ?: primaryAddress,
+                                body       = caption,
+                                timestamp  = row.date,
+                                isIncoming = isIn,
+                                senderName = senderAddr?.let { getContactName(ctx, it) },
+                                isMms      = true
+                            )
+                        }
+                    }
+                } else if (textPart != null) {
+                    // Text-only MMS
+                    val text = textPart.textBody?.takeIf { it.isNotBlank() }
+                        ?: readTextFromUri(ctx, Uri.parse(textPart.uri)).takeIf { it.isNotBlank() }
+                        ?: continue  // skip genuinely empty text MMS (delivery reports etc.)
+                    result += SmsMessage(
+                        id         = row.id,
+                        threadId   = threadId,
+                        address    = senderAddr ?: primaryAddress,
+                        body       = text,
+                        timestamp  = row.date,
+                        isIncoming = isIn,
+                        senderName = senderAddr?.let { getContactName(ctx, it) },
+                        isMms      = true
+                    )
+                }
             }
         } catch (_: Exception) {}
         return result

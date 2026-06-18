@@ -50,10 +50,28 @@ class NexLinkNotificationListener : NotificationListenerService() {
         )
     }
 
+    private fun isVoiceMessageNotification(extras: android.os.Bundle): Boolean {
+        val text = extras.getCharSequence("android.text")?.toString()?.lowercase() ?: return false
+        return text.contains("voice message") || text.contains("voice note") ||
+               text.contains("audio message") || text.contains("🎤")
+    }
+
     private fun isMediaMessage(extras: android.os.Bundle): Boolean {
         val text = extras.getCharSequence("android.text")?.toString()?.lowercase() ?: return false
         return text.contains("voice message") || text.contains("audio message") ||
                text.contains("voice note") || text.contains("🎵") || text.contains("🎤")
+    }
+
+    // Messenger and Signal send background polling/status notifications — skip them.
+    private fun isPollingNotification(text: String): Boolean {
+        val lower = text.lowercase()
+        return lower.contains("checking for messages") ||
+               lower.contains("notifications disabled") ||
+               lower.contains("message notifications disabled") ||
+               lower.contains("your messages will appear here") ||
+               lower.contains("tap to check messages") ||
+               lower.contains("signal is connected") ||
+               lower.contains("pinned notification")
     }
 
     private fun isReactionNotification(text: String): Boolean {
@@ -94,10 +112,25 @@ class NexLinkNotificationListener : NotificationListenerService() {
 
         if (pkg !in NotificationStore.watchedPackages) return
 
+        // Skip persistent foreground-service / ongoing notifications (Signal's call service, etc.)
+        if (sbn.isOngoing) return
+
+        // Skip group-summary notifications (WhatsApp/Instagram send one per chat + one summary)
+        if (sbn.notification?.flags != null &&
+            sbn.notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY != 0) return
+
         val extras = sbn.notification?.extras ?: return
-        val title  = extras.getCharSequence("android.title")?.toString() ?: return
-        val text   = extras.getCharSequence("android.text")?.toString()  ?: return
-        if (title.isBlank() || text.isBlank()) return
+        val rawTitle = extras.getCharSequence("android.title")?.toString() ?: return
+        val text     = extras.getCharSequence("android.text")?.toString()  ?: return
+        if (rawTitle.isBlank() || text.isBlank()) return
+        // For MessagingStyle group chats (Signal, WhatsApp), android.conversationTitle is
+        // the group/chat name while android.title is the individual sender.  Using the
+        // conversation title groups all members' messages under one chat in the inbox.
+        val convTitle = extras.getCharSequence("android.conversationTitle")?.toString()
+        val title = convTitle?.takeIf { it.isNotBlank() } ?: rawTitle
+
+        // Skip polling/status notifications from Messenger, Signal, etc.
+        if (isPollingNotification(text) || isPollingNotification(title)) return
 
         // Check if this is a call notification from a social app
         if (isCallNotification(sbn.notification, extras)) {
@@ -127,10 +160,13 @@ class NexLinkNotificationListener : NotificationListenerService() {
 
         NotificationStore.add(n, applicationContext)
 
-        // Suppress source app notification when setting is enabled
-        // But if pass-through-media is on and this is a media message, don't cancel the source
-        val isMedia = isMediaMessage(extras)
+        // Suppress source app notification when setting is enabled.
+        // Voice messages are NEVER suppressed — the user must open the social app to play audio.
+        // Other media (images, video) respect the pass-through-media toggle.
+        val isVoice = isVoiceMessageNotification(extras)
+        val isMedia = isMediaMessage(extras) && !isVoice
         val shouldSuppressSource = NotificationPrefs.isSuppressSourceEnabled(ctx) &&
+            !isVoice &&
             !(NotificationPrefs.isPassThroughMedia(ctx) && isMedia)
         if (shouldSuppressSource) {
             cancelNotification(sbn.key)

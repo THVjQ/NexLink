@@ -48,6 +48,10 @@ class NexLinkMmsReceivedReceiver : MmsReceivedReceiver() {
             }
         }
 
+        // Skip phantom notifications where the sender couldn't be resolved and no real
+        // content was detected — these are usually read-receipts or delivery reports.
+        if (sender == "Unknown" && label == "📎 MMS") return
+
         SmsNotifier.notify(ctx, sender, label)
     }
 

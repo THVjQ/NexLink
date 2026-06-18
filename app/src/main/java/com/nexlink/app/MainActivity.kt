@@ -64,8 +64,6 @@ class MainActivity : AppCompatActivity() {
         promptDefaultSmsApp()
         promptNotificationAccess()
 
-        loadFragment(smsFragment)
-
         binding.bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.nav_sms      -> { loadFragment(smsFragment);      true }
@@ -79,7 +77,24 @@ class MainActivity : AppCompatActivity() {
 
         handleSocialNotifTap(intent)
         val startNav = intent.getIntExtra("navigate_to", R.id.nav_sms)
+        // Load the initial fragment directly so there is never a double-load or Z-order race.
+        loadFragment(when (startNav) {
+            R.id.nav_inbox    -> inboxFragment
+            R.id.nav_calls    -> callsFragment
+            R.id.nav_contacts -> contactsFragment
+            R.id.nav_settings -> settingsFragment
+            else              -> smsFragment
+        })
         binding.bottomNav.selectedItemId = startNav
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (binding.bottomNav.selectedItemId != R.id.nav_sms) {
+            binding.bottomNav.selectedItemId = R.id.nav_sms
+        } else {
+            super.onBackPressed()
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

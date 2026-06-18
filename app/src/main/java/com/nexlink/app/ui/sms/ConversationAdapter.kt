@@ -1,5 +1,8 @@
 package com.nexlink.app.ui.sms
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.net.Uri
 import android.provider.ContactsContract
 import android.view.LayoutInflater
@@ -59,7 +62,11 @@ class ConversationAdapter(
             h.avatarPhoto.visibility = View.VISIBLE
             h.avatar.visibility = View.INVISIBLE
             try {
-                h.avatarPhoto.setImageURI(Uri.parse(iconUri))
+                val raw = ctx.contentResolver.openInputStream(Uri.parse(iconUri))?.use {
+                    android.graphics.BitmapFactory.decodeStream(it)
+                }
+                if (raw != null) h.avatarPhoto.setImageBitmap(cropToCircle(raw))
+                else h.avatarPhoto.setImageURI(Uri.parse(iconUri))
             } catch (_: Exception) {
                 h.avatarPhoto.visibility = View.GONE
                 h.avatar.visibility = View.VISIBLE
@@ -79,9 +86,14 @@ class ConversationAdapter(
                 h.avatarPhoto.post {
                     if (h.avatarPhoto.tag == c.address && photoUri != null) {
                         try {
-                            h.avatarPhoto.setImageURI(photoUri)
-                            h.avatarPhoto.visibility = View.VISIBLE
-                            h.avatar.visibility = View.INVISIBLE
+                            val raw = ctx.contentResolver.openInputStream(photoUri)?.use {
+                                android.graphics.BitmapFactory.decodeStream(it)
+                            }
+                            if (raw != null) {
+                                h.avatarPhoto.setImageBitmap(cropToCircle(raw))
+                                h.avatarPhoto.visibility = View.VISIBLE
+                                h.avatar.visibility = View.INVISIBLE
+                            }
                         } catch (_: Exception) { /* leave initials */ }
                     }
                 }
@@ -123,6 +135,20 @@ class ConversationAdapter(
             diff < 7 * 86_400_000L  -> SimpleDateFormat("EEE", Locale.getDefault()).format(Date(ms))
             else                    -> SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(ms))
         }
+    }
+
+    private fun cropToCircle(src: Bitmap): Bitmap {
+        val size = minOf(src.width, src.height)
+        val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(out)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val r = size / 2f
+        canvas.drawCircle(r, r, r, paint)
+        paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
+        canvas.drawBitmap(src, ((size - src.width) / 2f), ((size - src.height) / 2f), paint)
+        paint.xfermode = null
+        if (!src.isRecycled) src.recycle()
+        return out
     }
 
     private fun queryContactPhoto(ctx: android.content.Context, address: String): Uri? {
