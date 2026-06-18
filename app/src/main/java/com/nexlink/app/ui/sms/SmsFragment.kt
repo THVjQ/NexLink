@@ -21,6 +21,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexlink.app.R
 import com.nexlink.app.databinding.FragmentSmsBinding
 import com.nexlink.app.db.BlockStore
+import com.nexlink.app.ui.NexPopup
 import com.nexlink.app.db.CategoryStore
 import com.nexlink.shared.Conversation
 import com.nexlink.app.db.GroupNameStore
@@ -51,7 +52,7 @@ class SmsFragment : Fragment() {
 
         adapter = ConversationAdapter(
             onClick     = { conv -> openConversation(conv) },
-            onLongClick = { conv -> showConversationOptions(conv) }
+            onLongClick = { conv, view -> showConversationOptions(conv, view) }
         )
         b.recycler.layoutManager = LinearLayoutManager(requireContext())
         b.recycler.adapter = adapter
@@ -184,50 +185,44 @@ class SmsFragment : Fragment() {
         })
     }
 
-    private fun showConversationOptions(conv: Conversation) {
+    private fun showConversationOptions(conv: Conversation, anchor: View) {
         val ctx = requireContext()
-        val isPinned = PinStore.isPinned(ctx, conv.threadId)
-        val pinLabel = if (isPinned) "Unpin" else "Pin"
+        val isPinned  = PinStore.isPinned(ctx, conv.threadId)
         val isBlocked = BlockStore.isBlocked(ctx, conv.address)
-        val blockLabel = if (isBlocked) "Unblock" else "Block"
-
-        val cats = CategoryStore.getAll(ctx)
-        val options = if (cats.isNotEmpty())
-            arrayOf(pinLabel, blockLabel, "Add to category", "Delete")
-        else
-            arrayOf(pinLabel, blockLabel, "Delete")
-
-        AlertDialog.Builder(ctx)
-            .setItems(options) { _, which ->
-                when {
-                    which == 0 -> {
-                        if (isPinned) PinStore.unpin(ctx, conv.threadId)
-                        else PinStore.pin(ctx, conv.threadId)
-                        loadConversations()
-                    }
-                    which == 1 -> {
-                        if (isBlocked) {
-                            BlockStore.unblock(ctx, conv.address)
+        val cats      = CategoryStore.getAll(ctx)
+        NexPopup.show(anchor, buildList {
+            add(NexPopup.Item(
+                if (isPinned) "Unpin" else "Pin", R.drawable.ic_pin
+            ) {
+                if (isPinned) PinStore.unpin(ctx, conv.threadId) else PinStore.pin(ctx, conv.threadId)
+                loadConversations()
+            })
+            add(NexPopup.Item(
+                if (isBlocked) "Unblock" else "Block", R.drawable.ic_clear,
+                isDestructive = !isBlocked
+            ) {
+                if (isBlocked) {
+                    BlockStore.unblock(ctx, conv.address)
+                    loadConversations()
+                } else {
+                    AlertDialog.Builder(ctx)
+                        .setTitle("Block ${conv.contactName.ifBlank { conv.address }}?")
+                        .setMessage("You won't receive messages from this number.")
+                        .setPositiveButton("Block") { _, _ ->
+                            RecycleBinStore.add(ctx, conv)
+                            BlockStore.block(ctx, conv.address)
                             loadConversations()
-                        } else {
-                            AlertDialog.Builder(ctx)
-                                .setTitle("Block ${conv.contactName.ifBlank { conv.address }}?")
-                                .setMessage("You won't receive messages from this number.")
-                                .setPositiveButton("Block") { _, _ ->
-                                    RecycleBinStore.add(ctx, conv)
-                                    BlockStore.block(ctx, conv.address)
-                                    loadConversations()
-                                }
-                                .setNegativeButton("Cancel", null).show()
                         }
-                    }
-                    which == 2 && cats.isNotEmpty() -> {
-                        showCategoryAssignDialog(conv, cats)
-                    }
-                    else -> confirmDeleteConversation(conv)
+                        .setNegativeButton("Cancel", null).show()
                 }
-            }
-            .show()
+            })
+            if (cats.isNotEmpty()) add(NexPopup.Item("Add to category", R.drawable.ic_inbox) {
+                showCategoryAssignDialog(conv, cats)
+            })
+            add(NexPopup.Item("Delete", R.drawable.ic_delete, isDestructive = true) {
+                confirmDeleteConversation(conv)
+            })
+        })
     }
 
     private fun showCategoryAssignDialog(conv: Conversation, cats: List<com.nexlink.app.db.ChatCategory>) {
@@ -383,12 +378,10 @@ class SmsFragment : Fragment() {
     // ── FAB — new chat / new group ─────────────────────────────────────────────
 
     private fun showNewChatMenu() {
-        AlertDialog.Builder(requireContext())
-            .setItems(arrayOf("New message", "New group chat")) { _, which ->
-                if (which == 0) showContactPicker(multiSelect = false)
-                else showContactPicker(multiSelect = true)
-            }
-            .show()
+        NexPopup.show(b.fabNewChat, listOf(
+            NexPopup.Item("New message",    R.drawable.ic_compose)  { showContactPicker(multiSelect = false) },
+            NexPopup.Item("New group chat", R.drawable.ic_contacts) { showContactPicker(multiSelect = true)  }
+        ))
     }
 
     private fun showContactPicker(multiSelect: Boolean) {

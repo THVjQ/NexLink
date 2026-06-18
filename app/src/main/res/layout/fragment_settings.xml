@@ -85,7 +85,15 @@
             style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="App Permissions &amp; Settings"
-            android:layout_marginBottom="20dp"/>
+            android:layout_marginBottom="10dp"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSetDefaultSms"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Set as Default SMS App"
+            android:backgroundTint="@color/accent"
+            android:layout_marginBottom="20dp"
+            android:visibility="gone"/>
 
         <!-- Messaging features -->
         <TextView android:text="MESSAGING" android:textSize="11sp" android:textStyle="bold"

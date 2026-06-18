@@ -83,6 +83,9 @@ class SettingsFragment : Fragment() {
                 data = Uri.fromParts("package", requireContext().packageName, null)
             })
         }
+        b.btnSetDefaultSms.setOnClickListener {
+            (activity as? com.nexlink.app.MainActivity)?.requestDefaultSmsRole()
+        }
         b.btnReportBug.setOnClickListener {
             val template = buildString {
                 appendLine("**Device:** ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
@@ -567,6 +570,9 @@ class SettingsFragment : Fragment() {
             accessComp in enabledServices
         } catch (_: Exception) { false }
         b.statusAccessibility.text = if (accessibilityEnabled) "Enabled ✓" else "Not enabled — tap button below"
+
+        val isDefault = android.provider.Telephony.Sms.getDefaultSmsPackage(ctx) == ctx.packageName
+        b.btnSetDefaultSms.visibility = if (isDefault) View.GONE else View.VISIBLE
     }
 
     // ── Dark mode ─────────────────────────────────────────────────────────────

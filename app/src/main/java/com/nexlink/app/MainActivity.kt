@@ -162,22 +162,32 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("Set NexLink as Default SMS App")
             .setMessage("To receive SMS notifications and see new messages here, set NexLink as your default SMS app.")
-            .setPositiveButton("Set as Default") { _, _ ->
-                try {
-                    startActivity(
-                        Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT)
-                            .putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    )
-                } catch (_: Exception) {
-                    startActivity(
-                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                            data = android.net.Uri.fromParts("package", packageName, null)
-                        }
-                    )
-                }
-            }
+            .setPositiveButton("Set as Default") { _, _ -> requestDefaultSmsRole() }
             .setNegativeButton("Not Now", null)
             .show()
+    }
+
+    fun requestDefaultSmsRole() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            val rm = getSystemService(android.app.role.RoleManager::class.java)
+            if (rm != null && rm.isRoleAvailable(android.app.role.RoleManager.ROLE_SMS) &&
+                !rm.isRoleHeld(android.app.role.RoleManager.ROLE_SMS)) {
+                startActivityForResult(rm.createRequestRoleIntent(android.app.role.RoleManager.ROLE_SMS), 42)
+                return
+            }
+        }
+        try {
+            startActivity(
+                Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT)
+                    .putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        } catch (_: Exception) {
+            startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = android.net.Uri.fromParts("package", packageName, null)
+                }
+            )
+        }
     }
 }

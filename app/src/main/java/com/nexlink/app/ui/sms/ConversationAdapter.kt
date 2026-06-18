@@ -25,7 +25,7 @@ import java.util.Locale
 
 class ConversationAdapter(
     private val onClick: (Conversation) -> Unit,
-    private val onLongClick: ((Conversation) -> Unit)? = null
+    private val onLongClick: ((Conversation, View) -> Unit)? = null
 ) :
     RecyclerView.Adapter<ConversationAdapter.VH>() {
 
@@ -123,7 +123,7 @@ class ConversationAdapter(
         }
 
         h.itemView.setOnClickListener { onClick(c) }
-        h.itemView.setOnLongClickListener { onLongClick?.invoke(c); true }
+        h.itemView.setOnLongClickListener { onLongClick?.invoke(c, h.itemView); true }
     }
 
     private fun formatTime(ms: Long): String {
