@@ -167,17 +167,12 @@ class ConversationActivity : AppCompatActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         b.toolbar.setNavigationOnClickListener { finish() }
 
-        if (!isGroup && address.isNotEmpty() && NotificationPrefs.isEncryptionEnabled(this)) {
-            Thread {
-                val hasSession = CryptoStore.getSessionKey(this, address) != null
-                if (hasSession) {
-                    runOnUiThread { supportActionBar?.subtitle = "🔒 End-to-end encrypted" }
-                } else if (!CryptoStore.hasSentKey(this, address)) {
-                    CryptoStore.markKeySent(this, address)
-                    val pub = CryptoStore.getPublicKeyBytes(this)
-                    SmsHelper.sendSms(this, address, buildKeyExchangeBody(pub), -1)
-                }
-            }.start()
+        if (!isGroup && address.isNotEmpty()) {
+            if (!NotificationPrefs.hasSeenEncryptionPrompt(this)) {
+                showEncryptionOnboardingDialog()
+            } else if (NotificationPrefs.isEncryptionEnabled(this)) {
+                initiateEncryptionIfNeeded()
+            }
         }
 
         adapter = BubbleAdapter(
@@ -288,6 +283,40 @@ class ConversationActivity : AppCompatActivity() {
         }
     }
 
+    private fun showEncryptionOnboardingDialog() {
+        NotificationPrefs.markEncryptionPromptSeen(this)
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Enable End-to-End Encryption?")
+            .setMessage(
+                "NexLink can automatically encrypt your messages with contacts who also " +
+                "have NexLink installed.\n\n" +
+                "When encryption is active, a small key exchange message is sent to your " +
+                "contact to set up the secure channel — they will see a brief explanation " +
+                "if they don't have NexLink.\n\n" +
+                "You can turn this on or off at any time from the chat info panel."
+            )
+            .setPositiveButton("Turn On Encryption") { _, _ ->
+                NotificationPrefs.setEncryptionEnabled(this, true)
+                initiateEncryptionIfNeeded()
+            }
+            .setNegativeButton("Not Now", null)
+            .setCancelable(true)
+            .show()
+    }
+
+    private fun initiateEncryptionIfNeeded() {
+        Thread {
+            val hasSession = CryptoStore.getSessionKey(this, address) != null
+            if (hasSession) {
+                runOnUiThread { supportActionBar?.subtitle = "🔒 End-to-end encrypted" }
+            } else if (!CryptoStore.hasSentKey(this, address)) {
+                CryptoStore.markKeySent(this, address)
+                val pub = CryptoStore.getPublicKeyBytes(this)
+                SmsHelper.sendSms(this, address, CryptoStore.buildKeyExchange(pub), -1)
+            }
+        }.start()
+    }
+
     private fun setupDrawer() {
         // Encryption status in drawer
         Thread {
@@ -375,11 +404,11 @@ class ConversationActivity : AppCompatActivity() {
 
     private fun setDrawerTab(tab: DrawerTab) {
         drawerTab = tab
-        val accent = resources.getColor(R.color.accent, null)
-        val muted  = resources.getColor(R.color.muted, null)
-        b.tabMedia.setTextColor(if (tab == DrawerTab.MEDIA) accent else muted)
+        val white = resources.getColor(R.color.text, null)
+        val muted = resources.getColor(R.color.muted, null)
+        b.tabMedia.setTextColor(if (tab == DrawerTab.MEDIA) white else muted)
         b.tabMedia.setBackgroundResource(if (tab == DrawerTab.MEDIA) R.drawable.bg_card_selected else R.drawable.bg_card_unselected)
-        b.tabFiles.setTextColor(if (tab == DrawerTab.FILES) accent else muted)
+        b.tabFiles.setTextColor(if (tab == DrawerTab.FILES) white else muted)
         b.tabFiles.setBackgroundResource(if (tab == DrawerTab.FILES) R.drawable.bg_card_selected else R.drawable.bg_card_unselected)
     }
 

@@ -15,15 +15,18 @@ import com.nexlink.app.db.SmsHelper
 class InCallActivity : AppCompatActivity() {
 
     private lateinit var b: ActivityInCallBinding
-    private var callSeconds = 0
     private val timerHandler = Handler(Looper.getMainLooper())
     private val timerRunnable = object : Runnable {
         override fun run() {
-            callSeconds++
-            val m = callSeconds / 60
-            val s = callSeconds % 60
+            // Compute elapsed time from the wall-clock start recorded in CallManager.
+            // This stays correct even if the activity is recreated (user locks screen, etc.)
+            val elapsed = if (CallManager.callStartTimeMs > 0)
+                (System.currentTimeMillis() - CallManager.callStartTimeMs) / 1000L
+            else 0L
+            val m = elapsed / 60
+            val s = elapsed % 60
             b.tvTimer.text = "%02d:%02d".format(m, s)
-            timerHandler.postDelayed(this, 1000)
+            timerHandler.postDelayed(this, 500)
         }
     }
     private var isMuted   = false
@@ -50,15 +53,15 @@ class InCallActivity : AppCompatActivity() {
                 Call.STATE_RINGING -> {
                     b.tvStatus.text = "Incoming call"
                     b.tvTimer.text  = ""
-                    b.layoutRinging.visibility = android.view.View.VISIBLE
-                    b.layoutActive.visibility  = android.view.View.GONE
+                    b.layoutRinging.visibility = View.VISIBLE
+                    b.layoutActive.visibility  = View.GONE
                     timerHandler.removeCallbacks(timerRunnable)
                 }
                 Call.STATE_ACTIVE, Call.STATE_CONNECTING, Call.STATE_DIALING -> {
                     b.tvStatus.text = if (state == Call.STATE_ACTIVE) "On call" else "Calling…"
-                    b.layoutRinging.visibility = android.view.View.GONE
-                    b.layoutActive.visibility  = android.view.View.VISIBLE
-                    if (state == Call.STATE_ACTIVE && callSeconds == 0) {
+                    b.layoutRinging.visibility = View.GONE
+                    b.layoutActive.visibility  = View.VISIBLE
+                    if (state == Call.STATE_ACTIVE && !timerHandler.hasCallbacks(timerRunnable)) {
                         timerHandler.post(timerRunnable)
                     }
                 }

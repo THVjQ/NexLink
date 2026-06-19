@@ -356,13 +356,53 @@ class BubbleAdapter(
     private fun showFullscreen(ctx: Context, uri: Uri) {
         val dialog = Dialog(ctx, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+
         val iv = ImageView(ctx).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
             try { setImageURI(uri) } catch (_: Exception) { setImageResource(android.R.drawable.ic_menu_gallery) }
-            setOnClickListener { dialog.dismiss() }
         }
+
+        // Pinch-to-zoom and pan via Matrix
+        var scaleFactor = 1f
+        var lastX = 0f; var lastY = 0f
+        var transX = 0f; var transY = 0f
+        val scaleDetector = android.view.ScaleGestureDetector(ctx,
+            object : android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                override fun onScale(det: android.view.ScaleGestureDetector): Boolean {
+                    scaleFactor = (scaleFactor * det.scaleFactor).coerceIn(1f, 8f)
+                    applyMatrix(iv, scaleFactor, transX, transY)
+                    return true
+                }
+            })
+
+        iv.setOnTouchListener { v, ev ->
+            scaleDetector.onTouchEvent(ev)
+            when (ev.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> { lastX = ev.rawX; lastY = ev.rawY }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    if (!scaleDetector.isInProgress && scaleFactor > 1f) {
+                        transX += ev.rawX - lastX; transY += ev.rawY - lastY
+                        applyMatrix(iv, scaleFactor, transX, transY)
+                    }
+                    lastX = ev.rawX; lastY = ev.rawY
+                }
+                android.view.MotionEvent.ACTION_UP -> {
+                    if (!scaleDetector.isInProgress && scaleFactor <= 1.05f) dialog.dismiss()
+                }
+            }
+            true
+        }
+
         dialog.setContentView(iv)
         dialog.show()
+    }
+
+    private fun applyMatrix(iv: ImageView, scale: Float, tx: Float, ty: Float) {
+        val m = android.graphics.Matrix()
+        m.setScale(scale, scale, iv.width / 2f, iv.height / 2f)
+        m.postTranslate(tx, ty)
+        iv.imageMatrix = m
+        iv.scaleType = ImageView.ScaleType.MATRIX
     }
 
     private fun showMenu(anchor: View, m: SmsMessage, displayBody: String = m.body) {

@@ -25,7 +25,7 @@
             android:layout_gravity="end"
             android:paddingHorizontal="10dp" android:paddingVertical="4dp"
             android:layout_marginEnd="14dp" android:layout_marginTop="4dp" android:layout_marginBottom="2dp"
-            android:textSize="11sp" android:textColor="@color/accent"
+            android:textSize="11sp" android:textColor="@color/text"
             android:background="@drawable/bg_card_selected"
             android:clickable="true" android:focusable="true"
             android:visibility="gone"/>
@@ -200,7 +200,7 @@
             <TextView android:id="@+id/tabMedia"
                 android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:text="Media"
-                android:textSize="13sp" android:textColor="@color/accent" android:textStyle="bold"
+                android:textSize="13sp" android:textColor="@color/text" android:textStyle="bold"
                 android:gravity="center" android:paddingVertical="8dp"
                 android:background="@drawable/bg_card_selected"/>
             <View android:layout_width="8dp" android:layout_height="match_parent"/>

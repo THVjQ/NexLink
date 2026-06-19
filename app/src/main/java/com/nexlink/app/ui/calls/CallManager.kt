@@ -10,10 +10,18 @@ object CallManager {
     val callerName   = MutableLiveData("")
     val callerNumber = MutableLiveData("")
 
+    /** Wall-clock ms when the call first became ACTIVE. 0 while not yet active. */
+    var callStartTimeMs = 0L
+        private set
+
     private val stateCallback = object : Call.Callback() {
         override fun onStateChanged(call: Call, state: Int) {
+            if (state == Call.STATE_ACTIVE && callStartTimeMs == 0L) {
+                callStartTimeMs = System.currentTimeMillis()
+            }
             callState.postValue(state)
             if (state == Call.STATE_DISCONNECTED || state == Call.STATE_DISCONNECTING) {
+                callStartTimeMs = 0L
                 currentCall.postValue(null)
             }
         }

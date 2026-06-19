@@ -68,7 +68,15 @@ object NotificationPrefs {
     // ── Encryption master toggle ──
     fun isEncryptionEnabled(ctx: Context): Boolean =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getBoolean("encryption_enabled", true)
+            .getBoolean("encryption_enabled", false)
+
+    fun hasSeenEncryptionPrompt(ctx: Context): Boolean =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean("encryption_prompt_shown", false)
+
+    fun markEncryptionPromptSeen(ctx: Context) =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean("encryption_prompt_shown", true).apply()
 
     fun setEncryptionEnabled(ctx: Context, enabled: Boolean) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
