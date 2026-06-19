@@ -1,6 +1,7 @@
 package com.nexlink.app.db
 
 import android.content.Context
+import android.provider.Settings
 import android.util.Base64
 import java.security.*
 import java.security.spec.*
@@ -16,8 +17,8 @@ import javax.crypto.spec.SecretKeySpec
  *   Key exchange  : [NXKEY1:<base64(X.509 EC pubkey)>]
  *   Encrypted msg : [NXMSG1:<base64(12-byte IV)>:<base64(AES-GCM ciphertext+tag)>]
  *
- * Sessions are established automatically when both parties have NexLink as their
- * default SMS app.  Static ECDH — forward secrecy via key rotation is planned for V2.
+ * The identity key is derived deterministically from ANDROID_ID so reinstalling the
+ * app (with the same signing certificate) always restores the same key — no backup needed.
  */
 object CryptoStore {
 
@@ -37,9 +38,18 @@ object CryptoStore {
     }
 
     private fun generateAndStore(ctx: Context): ByteArray {
+        // Derive deterministically from ANDROID_ID — same device + same signing cert
+        // always produces the same identity key, surviving uninstall/reinstall cycles.
+        val androidId = Settings.Secure.getString(ctx.contentResolver, Settings.Secure.ANDROID_ID).orEmpty()
+        val seed = MessageDigest.getInstance("SHA-256")
+            .digest("NexLink-id-v1:$androidId".toByteArray(Charsets.UTF_8))
+
+        @Suppress("GetInstance")
+        val rng = SecureRandom.getInstance("SHA1PRNG").also { it.setSeed(seed) }
         val kpg = KeyPairGenerator.getInstance("EC")
-        kpg.initialize(ECGenParameterSpec("secp256r1"))
+        kpg.initialize(ECGenParameterSpec("secp256r1"), rng)
         val kp = kpg.generateKeyPair()
+
         prefs(ctx).edit()
             .putString(KEY_MY_PRIV, b64enc(kp.private.encoded))
             .putString(KEY_MY_PUB,  b64enc(kp.public.encoded))

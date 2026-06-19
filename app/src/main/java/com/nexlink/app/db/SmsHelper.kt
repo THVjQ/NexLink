@@ -501,16 +501,31 @@ object SmsHelper {
     // ── Send ──────────────────────────────────────────────────────────────────
 
     fun sendSms(ctx: Context, address: String, body: String, subscriptionId: Int = -1) {
-        @Suppress("DEPRECATION")
-        val sm = if (subscriptionId >= 0) android.telephony.SmsManager.getSmsManagerForSubscriptionId(subscriptionId)
-                 else android.telephony.SmsManager.getDefault()
-        sm.sendTextMessage(address, null, body, null, null)
+        // Insert into DB first (STATUS_PENDING) so we have a row ID for the delivery intent.
         val values = ContentValues().apply {
             put(Telephony.Sms.ADDRESS, address); put(Telephony.Sms.BODY, body)
             put(Telephony.Sms.DATE, System.currentTimeMillis())
             put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_SENT); put(Telephony.Sms.READ, 1)
+            put(Telephony.Sms.STATUS, Telephony.Sms.STATUS_PENDING)
         }
-        try { ctx.contentResolver.insert(Telephony.Sms.Sent.CONTENT_URI, values) } catch (_: Exception) {}
+        val msgUri = try { ctx.contentResolver.insert(Telephony.Sms.Sent.CONTENT_URI, values) } catch (_: Exception) { null }
+        val msgId  = msgUri?.lastPathSegment?.toLongOrNull() ?: -1L
+
+        val flags = android.app.PendingIntent.FLAG_MUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+        val sentIntent = if (msgId > 0) android.app.PendingIntent.getBroadcast(
+            ctx.applicationContext,
+            (msgId and Int.MAX_VALUE.toLong()).toInt() xor 0x10000,
+            android.content.Intent("${ctx.packageName}.SMS_SENT").setPackage(ctx.packageName).putExtra("message_id", msgId),
+            flags
+        ) else null
+        val deliveryIntent = if (msgId > 0) android.app.PendingIntent.getBroadcast(
+            ctx.applicationContext,
+            (msgId and Int.MAX_VALUE.toLong()).toInt(),
+            android.content.Intent("${ctx.packageName}.SMS_DELIVERED").setPackage(ctx.packageName).putExtra("message_id", msgId),
+            flags
+        ) else null
+
+        getSmsManager(subscriptionId).sendTextMessage(address, null, body, sentIntent, deliveryIntent)
     }
 
     fun sendGroupText(ctx: Context, threadId: Long, participants: List<String>, text: String, subId: Int = -1): Long {

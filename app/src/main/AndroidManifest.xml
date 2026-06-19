@@ -259,6 +259,20 @@
             </intent-filter>
         </receiver>
 
+        <!-- ── SMS sent callback ── fires when SMS leaves device, clears the clock icon -->
+        <receiver android:name=".receivers.SmsSentReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="${applicationId}.SMS_SENT"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- ── SMS delivery report receiver ── upgrades to double-tick when carrier confirms delivery -->
+        <receiver android:name=".receivers.SmsDeliveredReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="${applicationId}.SMS_DELIVERED"/>
+            </intent-filter>
+        </receiver>
+
         <!-- ── Notification inline reply ── -->
         <receiver android:name=".receivers.NotificationReplyReceiver" android:exported="false"/>
 

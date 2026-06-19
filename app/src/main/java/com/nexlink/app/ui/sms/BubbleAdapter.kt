@@ -221,12 +221,13 @@ class BubbleAdapter(
     private fun bindStatus(iv: ImageView?, m: SmsMessage) {
         if (iv == null || m.isIncoming) { iv?.visibility = View.GONE; return }
         iv.visibility = View.VISIBLE
-        // RCS read receipt: deliveryStatus==32 reused as "seen by recipient" → blue double tick
+        // STATUS_NONE=-1  STATUS_COMPLETE=0  STATUS_PENDING=32  STATUS_FAILED=64
         val (drawable, applyTint, tint) = when {
-            m.id < 0                                    -> Triple(R.drawable.ic_status_pending,   true,  0x80FFFFFF.toInt())
-            isRcsConversation && m.deliveryStatus == 32 -> Triple(R.drawable.ic_status_read,      false, 0)
-            isRcsConversation && m.deliveryStatus == 0  -> Triple(R.drawable.ic_status_delivered, true,  0xAAFFFFFF.toInt())
-            else                                        -> Triple(R.drawable.ic_status_sent,      true,  0xAAFFFFFF.toInt())
+            m.id < 0               -> Triple(R.drawable.ic_status_pending,   true,  0x80FFFFFF.toInt())
+            m.deliveryStatus == 32 -> Triple(R.drawable.ic_status_pending,   true,  0x80FFFFFF.toInt())
+            m.deliveryStatus == 0  -> Triple(R.drawable.ic_status_delivered, true,  0xAAFFFFFF.toInt())
+            m.deliveryStatus == 64 -> Triple(R.drawable.ic_status_sent,      true,  0x55FFFFFF.toInt())
+            else                   -> Triple(R.drawable.ic_status_sent,      true,  0xAAFFFFFF.toInt())
         }
         iv.setImageResource(drawable)
         iv.imageTintList = if (applyTint) ColorStateList.valueOf(tint) else null

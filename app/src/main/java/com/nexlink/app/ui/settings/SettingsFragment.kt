@@ -84,6 +84,10 @@ class SettingsFragment : Fragment() {
         b.btnSetDefaultSms.setOnClickListener {
             (activity as? com.nexlink.app.MainActivity)?.requestDefaultSmsRole()
         }
+        b.btnBuyMeCoffee.setOnClickListener {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://buymeacoffee.com/THVjQ")))
+        }
+
         b.btnReportBug.setOnClickListener {
             val template = buildString {
                 appendLine("**Device:** ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
@@ -121,6 +125,12 @@ class SettingsFragment : Fragment() {
             } else {
                 NotificationPrefs.setEncryptionEnabled(ctx, true)
             }
+        }
+
+        // Key exchange promo toggle
+        b.switchKeyExchangePromo.isChecked = NotificationPrefs.isKeyExchangePromoEnabled(ctx)
+        b.switchKeyExchangePromo.setOnCheckedChangeListener { _, isChecked ->
+            NotificationPrefs.setKeyExchangePromoEnabled(ctx, isChecked)
         }
 
         // Suppress-source toggle
@@ -202,6 +212,7 @@ class SettingsFragment : Fragment() {
         val ctx = context ?: return
         b.switchRcs.isChecked = NotificationPrefs.isRcsEnabled(ctx)
         b.switchEncryption.isChecked = NotificationPrefs.isEncryptionEnabled(ctx)
+        b.switchKeyExchangePromo.isChecked = NotificationPrefs.isKeyExchangePromoEnabled(ctx)
         b.switchSuppressSource.isChecked = NotificationPrefs.isSuppressSourceEnabled(ctx)
         b.switchSuppressCallNotifs.isChecked = NotificationPrefs.isSuppressCallNotifs(ctx)
         b.switchPassThroughMedia.isChecked = NotificationPrefs.isPassThroughMedia(ctx)

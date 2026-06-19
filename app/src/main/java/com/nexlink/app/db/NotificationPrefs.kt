@@ -75,6 +75,16 @@ object NotificationPrefs {
             .edit().putBoolean("encryption_enabled", enabled).apply()
     }
 
+    // ── Key exchange promo: include NexLink intro when sending encryption keys ──
+    fun isKeyExchangePromoEnabled(ctx: Context): Boolean =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean("key_exchange_promo", false)
+
+    fun setKeyExchangePromoEnabled(ctx: Context, v: Boolean) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean("key_exchange_promo", v).apply()
+    }
+
     // ── Dark mode: 0=system, 1=light, 2=dark ──
     fun getDarkMode(ctx: Context): Int =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("dark_mode", 0)

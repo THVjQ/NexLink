@@ -175,7 +175,7 @@ class ConversationActivity : AppCompatActivity() {
                 } else if (!CryptoStore.hasSentKey(this, address)) {
                     CryptoStore.markKeySent(this, address)
                     val pub = CryptoStore.getPublicKeyBytes(this)
-                    SmsHelper.sendSms(this, address, CryptoStore.buildKeyExchange(pub), -1)
+                    SmsHelper.sendSms(this, address, buildKeyExchangeBody(pub), -1)
                 }
             }.start()
         }
@@ -315,7 +315,7 @@ class ConversationActivity : AppCompatActivity() {
                 CryptoStore.clearSentKey(this, address)
                 Thread {
                     val pub = CryptoStore.getPublicKeyBytes(this)
-                    SmsHelper.sendSms(this, address, CryptoStore.buildKeyExchange(pub), -1)
+                    SmsHelper.sendSms(this, address, buildKeyExchangeBody(pub), -1)
                     CryptoStore.markKeySent(this, address)
                     runOnUiThread { Toast.makeText(this, "Key exchange sent", Toast.LENGTH_SHORT).show() }
                 }.start()
@@ -325,7 +325,7 @@ class ConversationActivity : AppCompatActivity() {
         b.btnResendKey.setOnClickListener {
             Thread {
                 val pub = CryptoStore.getPublicKeyBytes(this)
-                SmsHelper.sendSms(this, address, CryptoStore.buildKeyExchange(pub), -1)
+                SmsHelper.sendSms(this, address, buildKeyExchangeBody(pub), -1)
                 runOnUiThread { Toast.makeText(this, "Key exchange sent", Toast.LENGTH_SHORT).show() }
             }.start()
         }
@@ -682,6 +682,13 @@ class ConversationActivity : AppCompatActivity() {
                 if (sendAfter) sendMessage()
             }
             .show()
+    }
+
+    private fun buildKeyExchangeBody(pubKeyBytes: ByteArray): String {
+        val token = CryptoStore.buildKeyExchange(pubKeyBytes)
+        return if (NotificationPrefs.isKeyExchangePromoEnabled(this))
+            "I'm using NexLink for secure, private messaging — download it free at thvjq.com.au/Nexlink\n\n$token"
+        else token
     }
 
     private fun simLabel(sim: SimInfo): String {
