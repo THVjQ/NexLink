@@ -11,6 +11,7 @@ import android.view.*
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
@@ -111,7 +112,7 @@ class SettingsFragment : Fragment() {
         b.switchEncryption.isChecked = NotificationPrefs.isEncryptionEnabled(ctx)
         b.switchEncryption.setOnCheckedChangeListener { _, isChecked ->
             if (!isChecked) {
-                AlertDialog.Builder(ctx)
+                MaterialAlertDialogBuilder(ctx)
                     .setTitle("Disable Encryption?")
                     .setMessage("Messages will no longer be encrypted. This cannot be undone for existing sessions without re-sending a key exchange.")
                     .setPositiveButton("Disable") { _, _ -> NotificationPrefs.setEncryptionEnabled(ctx, false) }
@@ -245,7 +246,7 @@ class SettingsFragment : Fragment() {
         val ctx = requireContext()
         val blocked = BlockStore.blockedSet(ctx).toList()
         if (blocked.isEmpty()) {
-            AlertDialog.Builder(ctx)
+            MaterialAlertDialogBuilder(ctx)
                 .setTitle("Blocked Numbers")
                 .setMessage("No blocked numbers.")
                 .setPositiveButton("OK", null)
@@ -258,7 +259,7 @@ class SettingsFragment : Fragment() {
             setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
         }
         var dialog: AlertDialog? = null
-        dialog = AlertDialog.Builder(ctx)
+        dialog = MaterialAlertDialogBuilder(ctx)
             .setTitle("Blocked Numbers")
             .setView(android.widget.ScrollView(ctx).apply { addView(container) })
             .setNegativeButton("Close", null)
@@ -295,7 +296,7 @@ class SettingsFragment : Fragment() {
         val convs = RecycleBinStore.getAll(ctx)
         val msgs  = RecycleBinStore.getMessages(ctx)
         if (convs.isEmpty() && msgs.isEmpty()) {
-            AlertDialog.Builder(ctx).setTitle("Recycle Bin").setMessage("The recycle bin is empty.")
+            MaterialAlertDialogBuilder(ctx).setTitle("Recycle Bin").setMessage("The recycle bin is empty.")
                 .setPositiveButton("OK", null).show()
             return
         }
@@ -311,7 +312,7 @@ class SettingsFragment : Fragment() {
                 showBinSection(ctx, msgs.map { BinEntry.Msg(it) })
             })
             add(NexPopup.Item("Clear all", R.drawable.ic_delete, isDestructive = true) {
-                AlertDialog.Builder(ctx).setTitle("Clear recycle bin?")
+                MaterialAlertDialogBuilder(ctx).setTitle("Clear recycle bin?")
                     .setMessage("All items will be permanently removed.")
                     .setPositiveButton("Clear") { _, _ -> RecycleBinStore.clear(ctx); refreshRecycleBinCount() }
                     .setNegativeButton("Cancel", null).show()
@@ -328,7 +329,7 @@ class SettingsFragment : Fragment() {
             orientation = android.widget.LinearLayout.VERTICAL
         }
         var dialog: AlertDialog? = null
-        dialog = AlertDialog.Builder(ctx).setTitle("Recycle Bin")
+        dialog = MaterialAlertDialogBuilder(ctx).setTitle("Recycle Bin")
             .setView(android.widget.ScrollView(ctx).apply { addView(container) })
             .setNegativeButton("Close", null)
             .show()
@@ -422,7 +423,7 @@ class SettingsFragment : Fragment() {
     private fun showQrContactDialog() {
         val ctx = requireContext()
         val dialogView = layoutInflater.inflate(com.nexlink.app.R.layout.dialog_qr_contact, null)
-        val dialog = AlertDialog.Builder(ctx).setView(dialogView).create()
+        val dialog = MaterialAlertDialogBuilder(ctx).setView(dialogView).create()
 
         val ivQr         = dialogView.findViewById<android.widget.ImageView>(com.nexlink.app.R.id.ivQrCode)
         val tvQrTitle    = dialogView.findViewById<android.widget.TextView>(com.nexlink.app.R.id.tvQrTitle)
@@ -713,7 +714,7 @@ class SettingsFragment : Fragment() {
 
         grid.adapter = adapter
 
-        dialog = AlertDialog.Builder(ctx)
+        dialog = MaterialAlertDialogBuilder(ctx)
             .setTitle(title)
             .setView(grid)
             .setNegativeButton("Cancel", null)

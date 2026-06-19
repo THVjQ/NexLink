@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.provider.Telephony
 import androidx.appcompat.app.AlertDialog
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.app.ActivityCompat
@@ -139,7 +140,7 @@ class MainActivity : AppCompatActivity() {
         val enabled = Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: ""
         val comp = ComponentName(this, NexLinkNotificationListener::class.java).flattenToString()
         if (comp in enabled) return
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this)
             .setTitle("Allow Notification Access")
             .setMessage(
                 "NexLink needs Notification Access to show messages from WhatsApp, " +
@@ -159,7 +160,7 @@ class MainActivity : AppCompatActivity() {
         if (prefs.getBoolean("sms_prompt_shown", false)) return
         prefs.edit().putBoolean("sms_prompt_shown", true).apply()
 
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this)
             .setTitle("Set NexLink as Default SMS App")
             .setMessage("To receive SMS notifications and see new messages here, set NexLink as your default SMS app.")
             .setPositiveButton("Set as Default") { _, _ -> requestDefaultSmsRole() }

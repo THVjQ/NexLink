@@ -18,6 +18,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.nexlink.app.R
 import com.nexlink.app.databinding.FragmentSmsBinding
 import com.nexlink.app.db.BlockStore
@@ -205,7 +206,7 @@ class SmsFragment : Fragment() {
                     BlockStore.unblock(ctx, conv.address)
                     loadConversations()
                 } else {
-                    AlertDialog.Builder(ctx)
+                    MaterialAlertDialogBuilder(ctx)
                         .setTitle("Block ${conv.contactName.ifBlank { conv.address }}?")
                         .setMessage("You won't receive messages from this number.")
                         .setPositiveButton("Block") { _, _ ->
@@ -228,7 +229,7 @@ class SmsFragment : Fragment() {
     private fun showCategoryAssignDialog(conv: Conversation, cats: List<com.nexlink.app.db.ChatCategory>) {
         val ctx = requireContext()
         val names = cats.map { it.name }.toTypedArray()
-        AlertDialog.Builder(ctx)
+        MaterialAlertDialogBuilder(ctx)
             .setTitle("Add to category")
             .setItems(names) { _, i ->
                 CategoryStore.assignThread(ctx, cats[i].id, conv.threadId)
@@ -240,7 +241,7 @@ class SmsFragment : Fragment() {
 
     private fun confirmDeleteConversation(conv: Conversation) {
         val ctx = requireContext()
-        AlertDialog.Builder(ctx)
+        MaterialAlertDialogBuilder(ctx)
             .setTitle("Delete conversation")
             .setMessage("Delete conversation with ${conv.contactName.ifBlank { conv.address }}?")
             .setPositiveButton("Delete") { _, _ ->
@@ -280,7 +281,7 @@ class SmsFragment : Fragment() {
             hint = "Category name"
             setPadding(48, 24, 48, 24)
         }
-        AlertDialog.Builder(ctx)
+        MaterialAlertDialogBuilder(ctx)
             .setTitle("New category")
             .setView(input)
             .setPositiveButton("Create") { _, _ ->
@@ -299,16 +300,16 @@ class SmsFragment : Fragment() {
         val cats = CategoryStore.getAll(ctx)
         if (cats.isEmpty()) return
         val names = cats.map { it.name }.toTypedArray()
-        AlertDialog.Builder(ctx)
+        MaterialAlertDialogBuilder(ctx)
             .setTitle("Edit categories")
             .setItems(names) { _, i ->
                 val cat = cats[i]
-                AlertDialog.Builder(ctx)
+                MaterialAlertDialogBuilder(ctx)
                     .setTitle(cat.name)
                     .setItems(arrayOf("Rename", "Delete")) { _, which ->
                         if (which == 0) {
                             val input = android.widget.EditText(ctx).apply { setText(cat.name); setPadding(48, 24, 48, 24) }
-                            AlertDialog.Builder(ctx).setTitle("Rename")
+                            MaterialAlertDialogBuilder(ctx).setTitle("Rename")
                                 .setView(input)
                                 .setPositiveButton("OK") { _, _ ->
                                     CategoryStore.renameCategory(ctx, cat.id, input.text.toString().trim())
@@ -375,139 +376,48 @@ class SmsFragment : Fragment() {
 
     private fun showNewChatMenu() {
         NexPopup.show(b.fabNewChat, listOf(
-            NexPopup.Item("New message",    R.drawable.ic_compose)  { showContactPicker(multiSelect = false) },
-            NexPopup.Item("New group chat", R.drawable.ic_contacts) { showContactPicker(multiSelect = true)  }
+            NexPopup.Item("New message",    R.drawable.ic_compose)  { openContactPicker(multiSelect = false) },
+            NexPopup.Item("New group chat", R.drawable.ic_contacts) { openContactPicker(multiSelect = true)  }
         ))
     }
 
-    private fun showContactPicker(multiSelect: Boolean) {
-        val ctx = context ?: return
-        Thread {
-            val contacts = loadContactsForPicker(ctx)
-            if (!isAdded) return@Thread
-            activity?.runOnUiThread {
-                if (contacts.isEmpty()) {
-                    Toast.makeText(ctx, "No contacts found", Toast.LENGTH_SHORT).show()
-                    return@runOnUiThread
-                }
-                val names = contacts.map { c ->
-                    if (c.numbers.size > 1) "${c.name}  ·  ${c.number}  +${c.numbers.size - 1}"
-                    else "${c.name}  ·  ${c.number}"
-                }.toTypedArray()
-                if (!multiSelect) {
-                    AlertDialog.Builder(ctx)
-                        .setTitle("New message")
-                        .setItems(arrayOf("✏  Enter a number…") + names) { _, i ->
-                            if (i == 0) {
-                                val et = android.widget.EditText(ctx).apply {
-                                    hint = "Phone number"
-                                    inputType = android.text.InputType.TYPE_CLASS_PHONE
-                                    setPadding(48, 24, 48, 24)
-                                }
-                                AlertDialog.Builder(ctx)
-                                    .setTitle("Enter phone number")
-                                    .setView(et)
-                                    .setPositiveButton("Message") { _, _ ->
-                                        val number = et.text.toString().trim()
-                                        if (number.isNotEmpty()) {
-                                            startActivity(Intent(ctx, ConversationActivity::class.java).apply {
-                                                putExtra("address", number)
-                                                putExtra("contact_name", number)
-                                            })
-                                        }
-                                    }
-                                    .setNegativeButton("Cancel", null)
-                                    .show()
-                            } else {
-                                val contact = contacts[i - 1]
-                                if (contact.numbers.size <= 1) {
-                                    startActivity(Intent(ctx, ConversationActivity::class.java).apply {
-                                        putExtra("address", contact.number)
-                                        putExtra("contact_name", contact.name)
-                                    })
-                                } else {
-                                    AlertDialog.Builder(ctx)
-                                        .setTitle("Message ${contact.name}")
-                                        .setItems(contact.numbers.toTypedArray()) { _, ni ->
-                                            startActivity(Intent(ctx, ConversationActivity::class.java).apply {
-                                                putExtra("address", contact.numbers[ni])
-                                                putExtra("contact_name", contact.name)
-                                            })
-                                        }
-                                        .setNegativeButton("Cancel", null)
-                                        .show()
-                                }
-                            }
-                        }
-                        .setNegativeButton("Cancel", null)
-                        .show()
-                } else {
-                    val checked = BooleanArray(contacts.size) { false }
-                    AlertDialog.Builder(ctx)
-                        .setTitle("New group")
-                        .setMultiChoiceItems(names, checked) { _, which, isChecked -> checked[which] = isChecked }
-                        .setPositiveButton("Create") { _, _ ->
-                            val selected = contacts.filterIndexed { i, _ -> checked[i] }
-                            if (selected.size < 2) {
-                                Toast.makeText(ctx, "Select at least 2 contacts for a group", Toast.LENGTH_SHORT).show()
-                                return@setPositiveButton
-                            }
-                            val participants = selected.map { it.number }
-                            val defaultName  = selected.joinToString(", ") { it.name.split(" ").first() }
-                            val nameInput = android.widget.EditText(ctx).apply {
-                                hint = "Group name"
-                                setText(defaultName)
-                                setPadding(48, 24, 48, 24)
-                            }
-                            AlertDialog.Builder(ctx)
-                                .setTitle("Name your group")
-                                .setView(nameInput)
-                                .setPositiveButton("Start") { _, _ ->
-                                    val groupName = nameInput.text.toString().trim().ifEmpty { defaultName }
-                                    GroupNameStore.setName(ctx, participants, groupName)
-                                    startActivity(Intent(ctx, ConversationActivity::class.java).apply {
-                                        putExtra("address", participants.first())
-                                        putExtra("contact_name", groupName)
-                                        putExtra("thread_id", 0L)
-                                        putStringArrayListExtra("participants", ArrayList(participants))
-                                    })
-                                }
-                                .setNegativeButton("Cancel", null)
-                                .show()
-                        }
-                        .setNegativeButton("Cancel", null)
-                        .show()
-                }
-            }
-        }.start()
+    private fun openContactPicker(multiSelect: Boolean) {
+        ContactPickerSheet(
+            multiSelect  = multiSelect,
+            onSinglePick = { contact, number ->
+                startActivity(Intent(requireContext(), ConversationActivity::class.java).apply {
+                    putExtra("address", number)
+                    putExtra("contact_name", contact.name)
+                })
+            },
+            onGroupPick  = { contacts -> showGroupNameDialog(contacts) }
+        ).show(parentFragmentManager, "contact_picker")
     }
 
-    private fun loadContactsForPicker(ctx: android.content.Context): List<Contact> {
-        val proj = arrayOf(
-            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-            ContactsContract.CommonDataKinds.Phone.NUMBER,
-            ContactsContract.CommonDataKinds.Phone.LOOKUP_KEY
-        )
-        val grouped = linkedMapOf<String, Pair<String, MutableList<String>>>()
-        try {
-            ctx.contentResolver.query(
-                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                proj, null, null,
-                "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} ASC"
-            )?.use { c ->
-                while (c.moveToNext()) {
-                    val name = c.getString(0) ?: continue
-                    val num  = c.getString(1)?.replace("\\s".toRegex(), "") ?: continue
-                    val key  = c.getString(2)?.takeIf { it.isNotBlank() } ?: num
-                    val entry = grouped.getOrPut(key) { Pair(name, mutableListOf()) }
-                    if (num !in entry.second) entry.second.add(num)
-                }
-            }
-        } catch (_: Exception) {}
-        return grouped.entries.map { (key, pair) ->
-            Contact(pair.first, pair.second.first(), pair.second, key)
+    private fun showGroupNameDialog(contacts: List<Contact>) {
+        val ctx = requireContext()
+        val defaultName = contacts.joinToString(", ") { it.name.split(" ").first() }
+        val nameInput = android.widget.EditText(ctx).apply {
+            hint = "Group name"; setText(defaultName); setPadding(48, 24, 48, 24)
         }
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle("Name your group")
+            .setView(nameInput)
+            .setPositiveButton("Start") { _, _ ->
+                val groupName = nameInput.text.toString().trim().ifEmpty { defaultName }
+                val participants = contacts.map { it.number }
+                GroupNameStore.setName(ctx, participants, groupName)
+                startActivity(Intent(ctx, ConversationActivity::class.java).apply {
+                    putExtra("address", participants.first())
+                    putExtra("contact_name", groupName)
+                    putExtra("thread_id", 0L)
+                    putStringArrayListExtra("participants", ArrayList(participants))
+                })
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
+
 
     override fun onDestroyView() { super.onDestroyView(); _b = null }
 }

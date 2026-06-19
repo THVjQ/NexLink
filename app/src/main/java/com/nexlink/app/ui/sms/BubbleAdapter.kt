@@ -24,6 +24,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.nexlink.app.R
@@ -373,7 +374,7 @@ class BubbleAdapter(
             })
             add(NexPopup.Item("Forward", R.drawable.ic_open_in_app) { onForward?.invoke(m) })
             add(NexPopup.Item("Delete", R.drawable.ic_delete, isDestructive = true) {
-                AlertDialog.Builder(ctx)
+                MaterialAlertDialogBuilder(ctx)
                     .setMessage("Delete this message?")
                     .setPositiveButton("Delete") { _, _ -> onDelete?.invoke(m) }
                     .setNegativeButton("Cancel", null)
@@ -390,7 +391,7 @@ class BubbleAdapter(
             add(NexPopup.Item("Forward",  R.drawable.ic_open_in_app) { onForward?.invoke(m) })
             if (!isVideo) add(NexPopup.Item("Copy image", R.drawable.ic_edit) { copyImageToClipboard(ctx, m) })
             add(NexPopup.Item("Delete", R.drawable.ic_delete, isDestructive = true) {
-                AlertDialog.Builder(ctx)
+                MaterialAlertDialogBuilder(ctx)
                     .setMessage("Delete this message?")
                     .setPositiveButton("Delete") { _, _ -> onDelete?.invoke(m) }
                     .setNegativeButton("Cancel", null).show()

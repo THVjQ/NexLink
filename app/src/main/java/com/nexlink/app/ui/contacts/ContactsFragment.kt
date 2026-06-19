@@ -14,6 +14,7 @@ import android.text.TextWatcher
 import android.view.*
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
@@ -207,7 +208,7 @@ class ContactsFragment : Fragment() {
     }
 
     private fun confirmDeleteContact(c: Contact) {
-        AlertDialog.Builder(requireContext())
+        MaterialAlertDialogBuilder(requireContext())
             .setTitle("Delete contact")
             .setMessage("Delete ${c.name} from contacts?")
             .setPositiveButton("Delete") { _, _ ->

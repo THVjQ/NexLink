@@ -23,6 +23,7 @@ import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -302,7 +303,7 @@ class ConversationActivity : AppCompatActivity() {
         b.switchChatEncryption.setOnCheckedChangeListener { _, isChecked ->
             if (!encryptionListenerActive) return@setOnCheckedChangeListener
             if (!isChecked) {
-                AlertDialog.Builder(this)
+                MaterialAlertDialogBuilder(this)
                     .setTitle("Disable Encryption for this chat?")
                     .setMessage("Messages to this contact will no longer be encrypted.")
                     .setPositiveButton("Disable") { _, _ ->
@@ -472,7 +473,7 @@ class ConversationActivity : AppCompatActivity() {
                 setText(supportActionBar?.title?.toString() ?: "")
                 setPadding(48, 24, 48, 24)
             }
-            AlertDialog.Builder(this)
+            MaterialAlertDialogBuilder(this)
                 .setTitle(if (isGroup) "Rename group" else "Rename chat")
                 .setView(input)
                 .setPositiveButton("Save") { _, _ ->
@@ -485,7 +486,7 @@ class ConversationActivity : AppCompatActivity() {
             return true
         }
         if (item.itemId == R.id.action_delete_conversation) {
-            AlertDialog.Builder(this)
+            MaterialAlertDialogBuilder(this)
                 .setTitle("Delete conversation")
                 .setMessage("This will delete all messages in this conversation.")
                 .setPositiveButton("Delete") { _, _ ->
@@ -505,7 +506,7 @@ class ConversationActivity : AppCompatActivity() {
 
     private fun requireDefaultSmsApp(): Boolean {
         if (SmsHelper.isDefaultSmsApp(this)) return true
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this)
             .setTitle("Default SMS app required")
             .setMessage("To send media, voice messages, or group texts, NexLink must be set as your default SMS app.")
             .setPositiveButton("Open settings") { _, _ ->
@@ -649,7 +650,7 @@ class ConversationActivity : AppCompatActivity() {
             val convs = SmsHelper.getConversations(this, 20)
             runOnUiThread {
                 val names = convs.map { it.contactName.ifBlank { it.address } }.toTypedArray()
-                AlertDialog.Builder(this)
+                MaterialAlertDialogBuilder(this)
                     .setTitle("Forward to…")
                     .setItems(names) { _, i ->
                         val c = convs[i]
@@ -672,7 +673,7 @@ class ConversationActivity : AppCompatActivity() {
 
     private fun showSimPicker(sendAfter: Boolean) {
         val items = sims.map { simLabel(it) }.toTypedArray()
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this)
             .setTitle("Choose SIM")
             .setItems(items) { _, i ->
                 selectedSimId = sims[i].subscriptionId
