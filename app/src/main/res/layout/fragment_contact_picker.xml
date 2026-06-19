@@ -44,12 +44,12 @@
         <EditText android:id="@+id/etPickerSearch"
             android:layout_width="0dp" android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:hint="Search contacts"
+            android:hint="Search or enter a number"
             android:textColorHint="@color/muted"
             android:textColor="@color/text"
             android:textSize="15sp"
             android:background="@android:color/transparent"
-            android:inputType="textPersonName"
+            android:inputType="text"
             android:maxLines="1"
             android:paddingTop="12dp" android:paddingBottom="12dp"/>
         <ImageButton android:id="@+id/btnPickerClearSearch"
@@ -59,6 +59,43 @@
             android:alpha="0.5"
             android:visibility="gone"/>
     </LinearLayout>
+
+    <!-- "Use this number" banner — visible when search looks like a phone number -->
+    <LinearLayout
+        android:id="@+id/bannerUseNumber"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical"
+        android:paddingStart="16dp" android:paddingEnd="16dp"
+        android:paddingTop="10dp" android:paddingBottom="10dp"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true" android:focusable="true"
+        android:visibility="gone">
+        <ImageView
+            android:layout_width="40dp" android:layout_height="40dp"
+            android:src="@drawable/ic_sms"
+            android:padding="8dp"
+            android:background="@drawable/bg_avatar"
+            android:tint="@color/text"/>
+        <LinearLayout
+            android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:layout_marginStart="14dp">
+            <TextView android:id="@+id/tvUseNumberLabel"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textSize="15sp" android:textColor="@color/text"
+                android:text="Message this number"/>
+            <TextView android:id="@+id/tvUseNumberValue"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textSize="12sp" android:textColor="@color/muted"
+                android:layout_marginTop="1dp"/>
+        </LinearLayout>
+    </LinearLayout>
+
+    <View android:id="@+id/dividerUseNumber"
+        android:layout_width="match_parent" android:layout_height="1dp"
+        android:background="@color/divider"
+        android:visibility="gone"/>
 
     <!-- Contacts list -->
     <androidx.recyclerview.widget.RecyclerView

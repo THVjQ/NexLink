@@ -30,7 +30,13 @@ class ContactPickerSheet(
 ) : BottomSheetDialogFragment() {
 
     private var allContacts = listOf<Contact>()
-    private val selectedKeys = mutableSetOf<String>()
+    private val selectedKeys   = mutableSetOf<String>()
+    private val manualNumbers  = mutableListOf<String>() // numbers typed that aren't in contacts
+
+    private fun looksLikeNumber(q: String): Boolean {
+        val digits = q.filter { it.isDigit() }
+        return digits.length >= 4 && q.matches(Regex("[+\\d\\s()\\-.]+"))
+    }
 
     override fun getTheme() = R.style.DialerSheet
 
@@ -38,15 +44,21 @@ class ContactPickerSheet(
         inf.inflate(R.layout.fragment_contact_picker, c, false)
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        val tvTitle   = view.findViewById<TextView>(R.id.tvPickerTitle)
-        val tvCount   = view.findViewById<TextView>(R.id.tvSelectedCount)
-        val etSearch  = view.findViewById<EditText>(R.id.etPickerSearch)
-        val btnClear  = view.findViewById<ImageButton>(R.id.btnPickerClearSearch)
-        val recycler  = view.findViewById<RecyclerView>(R.id.pickerRecycler)
-        val btnDone   = view.findViewById<View>(R.id.btnPickerDone)
+        val tvTitle        = view.findViewById<TextView>(R.id.tvPickerTitle)
+        val tvCount        = view.findViewById<TextView>(R.id.tvSelectedCount)
+        val etSearch       = view.findViewById<EditText>(R.id.etPickerSearch)
+        val btnClear       = view.findViewById<ImageButton>(R.id.btnPickerClearSearch)
+        val recycler       = view.findViewById<RecyclerView>(R.id.pickerRecycler)
+        val btnDone        = view.findViewById<View>(R.id.btnPickerDone)
+        val bannerUseNum   = view.findViewById<View>(R.id.bannerUseNumber)
+        val tvUseNumLabel  = view.findViewById<TextView>(R.id.tvUseNumberLabel)
+        val tvUseNumValue  = view.findViewById<TextView>(R.id.tvUseNumberValue)
+        val dividerUseNum  = view.findViewById<View>(R.id.dividerUseNumber)
 
-        tvTitle.text     = if (multiSelect) "New group" else "New message"
+        tvTitle.text      = if (multiSelect) "New group" else "New message"
         btnDone.isVisible = multiSelect
+
+        fun totalSelected() = selectedKeys.size + manualNumbers.size
 
         var adapter: PickerAdapter? = null
         adapter = PickerAdapter(
@@ -68,7 +80,7 @@ class ContactPickerSheet(
                 } else {
                     val key = contact.lookupKey.ifBlank { contact.number }
                     if (key in selectedKeys) selectedKeys.remove(key) else selectedKeys.add(key)
-                    val n = selectedKeys.size
+                    val n = totalSelected()
                     tvCount.text = if (n == 0) "" else "$n selected"
                     tvCount.isVisible = n > 0
                     adapter?.notifyDataSetChanged()
@@ -78,11 +90,33 @@ class ContactPickerSheet(
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
 
+        // "Use this number" banner — tap to start chat (single) or add to group (multi)
+        bannerUseNum.setOnClickListener {
+            val num = etSearch.text?.toString()?.trim() ?: return@setOnClickListener
+            if (!looksLikeNumber(num)) return@setOnClickListener
+            val normalised = num.replace("\\s".toRegex(), "")
+            if (!multiSelect) {
+                val synthetic = Contact(normalised, normalised, listOf(normalised))
+                onSinglePick(synthetic, normalised)
+                dismiss()
+            } else {
+                if (normalised !in manualNumbers) {
+                    manualNumbers.add(normalised)
+                    val n = totalSelected()
+                    tvCount.text    = "$n selected"
+                    tvCount.isVisible = true
+                }
+                etSearch.text?.clear()
+            }
+        }
+
         btnDone.setOnClickListener {
-            val picks = allContacts.filter {
+            val contactPicks = allContacts.filter {
                 it.lookupKey.ifBlank { it.number } in selectedKeys
             }
-            if (picks.isNotEmpty()) { onGroupPick?.invoke(picks); dismiss() }
+            val manualPicks = manualNumbers.map { Contact(it, it, listOf(it)) }
+            val all = contactPicks + manualPicks
+            if (all.isNotEmpty()) { onGroupPick?.invoke(all); dismiss() }
         }
 
         etSearch.addTextChangedListener(object : TextWatcher {
@@ -91,6 +125,13 @@ class ContactPickerSheet(
             override fun afterTextChanged(s: Editable?) {
                 val q = s?.toString() ?: ""
                 btnClear.isVisible = q.isNotEmpty()
+                val isNum = looksLikeNumber(q)
+                bannerUseNum.isVisible  = isNum
+                dividerUseNum.isVisible = isNum
+                if (isNum) {
+                    tvUseNumLabel.text = if (multiSelect) "Add this number to group" else "Message this number"
+                    tvUseNumValue.text = q.trim()
+                }
                 adapter?.let { applyFilter(q, it) }
             }
         })
