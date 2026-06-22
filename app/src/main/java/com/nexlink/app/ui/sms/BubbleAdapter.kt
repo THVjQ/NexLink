@@ -191,10 +191,11 @@ class BubbleAdapter(
     }
 
     inner class ImageVH(v: View) : RecyclerView.ViewHolder(v) {
-        val image:  ImageView  = v.findViewById(R.id.ivBubble)
-        val time:   TextView   = v.findViewById(R.id.tvTime)
-        val sender: TextView?  = v.findViewById(R.id.tvSenderName)
-        val status: ImageView? = v.findViewById(R.id.ivStatus)
+        val image:    ImageView                    = v.findViewById(R.id.ivBubble)
+        val time:     TextView                     = v.findViewById(R.id.tvTime)
+        val sender:   TextView?                    = v.findViewById(R.id.tvSenderName)
+        val status:   ImageView?                   = v.findViewById(R.id.ivStatus)
+        val progress: android.widget.ProgressBar?  = v.findViewById(R.id.pbSending)
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, pos: Int) {
@@ -337,6 +338,8 @@ class BubbleAdapter(
         h.time.text = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(m.timestamp))
         bindSender(h.sender, m)
         bindStatus(h.status, m)
+        // Show spinner while outgoing message is still being uploaded (optimistic id < 0)
+        h.progress?.visibility = if (m.id < 0 && !m.isIncoming) View.VISIBLE else View.GONE
         val isVideo = m.mimeType?.startsWith("video/") == true
         if (isVideo) {
             h.image.setImageResource(android.R.drawable.ic_media_play)
@@ -525,15 +528,39 @@ class BubbleAdapter(
         }
     }
 
-    private fun playAudio(ctx: Context, uri: String) {
-        try {
-            val player = MediaPlayer()
-            player.setDataSource(ctx, Uri.parse(uri))
-            player.prepareAsync()
-            player.setOnPreparedListener { it.start() }
-            player.setOnCompletionListener { it.release() }
-        } catch (e: Exception) {
-            Toast.makeText(ctx, "Cannot play: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
+    private fun playAudio(ctx: Context, uriStr: String) {
+        Thread {
+            try {
+                val uri = Uri.parse(uriStr)
+                val player = MediaPlayer()
+                // content://mms/part/… URIs must go through ContentResolver, not direct URI,
+                // because the MMS content provider requires a file descriptor handoff.
+                if (uri.scheme == "content") {
+                    val pfd = ctx.contentResolver.openFileDescriptor(uri, "r")
+                    if (pfd != null) {
+                        player.setDataSource(pfd.fileDescriptor)
+                        pfd.close()
+                    } else {
+                        player.setDataSource(ctx, uri)
+                    }
+                } else {
+                    player.setDataSource(ctx, uri)
+                }
+                player.setOnPreparedListener { it.start() }
+                player.setOnCompletionListener { it.release() }
+                player.setOnErrorListener { mp, what, extra ->
+                    mp.release()
+                    Handler(Looper.getMainLooper()).post {
+                        Toast.makeText(ctx, "Playback error ($what/$extra)", Toast.LENGTH_SHORT).show()
+                    }
+                    true
+                }
+                player.prepare()
+            } catch (e: Exception) {
+                Handler(Looper.getMainLooper()).post {
+                    Toast.makeText(ctx, "Cannot play audio: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
     }
 }

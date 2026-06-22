@@ -461,6 +461,14 @@ class ConversationActivity : AppCompatActivity() {
         contentResolver.registerContentObserver(Telephony.Sms.CONTENT_URI, true, smsObserver)
         contentResolver.registerContentObserver(android.net.Uri.parse("content://mms"), true, mmsObserver)
         loadMessages()
+        // Dismiss the SMS notification whenever the chat is visible — covers both
+        // tapping the notification AND navigating here from the conversation list.
+        if (address.isNotEmpty()) {
+            SmsNotifier.clearPending(this, address)
+            SmsHelper.markRead(this, address)
+            ReadTracker.markRead(this, address)
+            if (threadId > 0) SmsHelper.markReadByThread(this, threadId)
+        }
     }
 
     override fun onPause() {
@@ -638,6 +646,22 @@ class ConversationActivity : AppCompatActivity() {
     private fun sendAttachment(uri: android.net.Uri, mimeType: String) {
         if (address.isEmpty()) return
         if (!requireDefaultSmsApp()) return
+
+        // MMS size limit — most carriers reject messages over ~1–2 MB.
+        val maxBytes = 2L * 1024 * 1024 // 2 MB
+        val fileBytes = runCatching {
+            contentResolver.query(uri,
+                arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)?.use { c ->
+                if (c.moveToFirst()) c.getLong(0) else 0L
+            } ?: 0L
+        }.getOrDefault(0L)
+        if (fileBytes > maxBytes) {
+            val sizeMb = "%.1f".format(fileBytes / 1_048_576.0)
+            Toast.makeText(this,
+                "File too large (${sizeMb} MB). Maximum MMS size is 2 MB.",
+                Toast.LENGTH_LONG).show()
+            return
+        }
 
         val optimisticMsg = SmsMessage(
             id          = -(System.currentTimeMillis()),

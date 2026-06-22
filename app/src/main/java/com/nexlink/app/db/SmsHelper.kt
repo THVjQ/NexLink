@@ -44,7 +44,7 @@ object SmsHelper {
                     val recipIds   = c.getString(recipIdx) ?: continue
                     val parts      = recipIds.trim().split(" ")
                         .mapNotNull { sid -> canonMap[sid.toLongOrNull() ?: -1L] }
-                        .filter { it.isNotBlank() }
+                        .filter { addr -> addr.isNotBlank() && addr.any { it.isDigit() } }
                     if (parts.isEmpty()) continue
                     val primary    = parts.first()
                     val name       = if (parts.size > 1) parts.joinToString(", ") { getContactName(ctx, it) }
