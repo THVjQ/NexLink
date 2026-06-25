@@ -47,26 +47,41 @@ class SmsReceiver : BroadcastReceiver() {
                     when {
                         CryptoStore.isKeyExchange(bodyStr) -> {
                             // Peer has NexLink — store their public key and establish a session.
-                            // Only reply with our key if we haven't already done so, preventing
-                            // an infinite key exchange loop between two NexLink users.
                             val peerPub = CryptoStore.parseKeyExchange(bodyStr)
                             if (peerPub != null) {
+                                val weAlreadySentOurKey = CryptoStore.hasSentKey(context, sender)
                                 CryptoStore.storePeerKey(context, sender, peerPub)
-                                if (!CryptoStore.hasSentKey(context, sender)) {
+
+                                if (!weAlreadySentOurKey) {
+                                    // We're the responder — auto-reply with our key.
+                                    // Do NOT mark session ready yet; wait for confirmation that
+                                    // they received our key (i.e. their first encrypted message).
                                     CryptoStore.markKeySent(context, sender)
                                     val ourPub = CryptoStore.getPublicKeyBytes(context)
                                     SmsHelper.sendSms(context, sender,
                                         CryptoStore.buildKeyExchange(ourPub), -1)
+                                } else {
+                                    // We're the initiator and just received their reply.
+                                    // This confirms they got our key → session is bidirectionally ready.
+                                    CryptoStore.markSessionReady(context, sender)
+                                    notifySessionEstablished(context, sender)
                                 }
                             }
                             // Key exchange messages are internal — not shown to the user
                         }
                         else -> {
                             SmsHelper.saveIncomingSms(context, sender, bodyStr)
+                            // If the peer sends an encrypted message it proves they have our public key
+                            // (they derived the same session key) → mark session bidirectionally ready.
+                            if (CryptoStore.isEncrypted(bodyStr) &&
+                                CryptoStore.getSessionKey(context, sender) != null) {
+                                CryptoStore.markSessionReady(context, sender)
+                            }
                             val notif = if (CryptoStore.isEncrypted(bodyStr))
                                 "🔒 Encrypted message" else bodyStr
                             SmsNotifier.notify(context, sender, notif)
                             WearSync.pushConversations(context)
+                            notifySessionEstablished(context, sender)
                         }
                     }
                 }
@@ -75,6 +90,14 @@ class SmsReceiver : BroadcastReceiver() {
             }
         }.start()
     }
+}
+
+private fun notifySessionEstablished(ctx: Context, address: String) {
+    val intent = android.content.Intent("com.nexlink.app.SESSION_ESTABLISHED").apply {
+        setPackage(ctx.packageName)
+        putExtra("address", address)
+    }
+    ctx.sendBroadcast(intent)
 }
 
 class SmsReceiverFallback : BroadcastReceiver() {

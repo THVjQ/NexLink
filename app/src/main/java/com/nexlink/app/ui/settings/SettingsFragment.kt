@@ -24,7 +24,9 @@ import com.nexlink.app.db.DeletedMessage
 import com.nexlink.app.db.IconPrefs
 import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.RecycleBinStore
+import com.nexlink.app.db.SmsBackupHelper
 import com.nexlink.app.services.NexLinkNotificationListener
+import androidx.activity.result.contract.ActivityResultContracts
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -40,6 +42,50 @@ class SettingsFragment : Fragment() {
     private var _b: FragmentSettingsBinding? = null
     private val b get() = _b!!
     private var socialsExpanded = false
+
+    private val exportLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("text/xml")
+    ) { uri ->
+        uri ?: return@registerForActivityResult
+        val ctx = requireContext()
+        Thread {
+            try {
+                val count = ctx.contentResolver.openOutputStream(uri)?.use { out ->
+                    SmsBackupHelper.exportToXml(ctx, out)
+                } ?: 0
+                activity?.runOnUiThread {
+                    Toast.makeText(ctx, "Exported $count messages", Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                activity?.runOnUiThread {
+                    Toast.makeText(ctx, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
+    }
+
+    private val importLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri ?: return@registerForActivityResult
+        val ctx = requireContext()
+        Thread {
+            try {
+                val result = ctx.contentResolver.openInputStream(uri)?.use { inp ->
+                    SmsBackupHelper.importFromXml(ctx, inp)
+                } ?: SmsBackupHelper.ImportResult(0, 0)
+                activity?.runOnUiThread {
+                    Toast.makeText(ctx,
+                        "Imported ${result.imported} messages (${result.skipped} skipped)",
+                        Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                activity?.runOnUiThread {
+                    Toast.makeText(ctx, "Import failed: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
+    }
 
     override fun onCreateView(i: LayoutInflater, c: ViewGroup?, s: Bundle?): View {
         _b = FragmentSettingsBinding.inflate(i, c, false); return b.root
@@ -86,6 +132,27 @@ class SettingsFragment : Fragment() {
         }
         b.btnBuyMeCoffee.setOnClickListener {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://buymeacoffee.com/THVjQ")))
+        }
+
+        b.btnExportSms.setOnClickListener {
+            val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+            exportLauncher.launch("NexLink_SMS_$ts.xml")
+        }
+
+        b.btnImportSms.setOnClickListener {
+            val ctx = requireContext()
+            if (!com.nexlink.app.db.SmsHelper.isDefaultSmsApp(ctx)) {
+                MaterialAlertDialogBuilder(ctx)
+                    .setTitle("Default SMS app required")
+                    .setMessage("To import messages, NexLink must be set as your default SMS app.")
+                    .setPositiveButton("Open settings") { _, _ ->
+                        (activity as? com.nexlink.app.MainActivity)?.requestDefaultSmsRole()
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+                return@setOnClickListener
+            }
+            importLauncher.launch(arrayOf("text/xml", "application/xml", "*/*"))
         }
 
         b.btnReportBug.setOnClickListener {

@@ -27,6 +27,9 @@ object CryptoStore {
     private const val KEY_MY_PUB     = "my_pub"
     private const val PFX_SESSION    = "sess_"
     private const val PFX_SENT       = "sent_"
+    // Set once we KNOW the peer has our public key (bidirectional confirmation).
+    // Without this, we might encrypt before they can decrypt.
+    private const val PFX_READY      = "ready_"
 
     // ── Identity key ──────────────────────────────────────────────────────────
 
@@ -86,6 +89,22 @@ object CryptoStore {
 
     fun clearSentKey(ctx: Context, address: String) =
         prefs(ctx).edit().remove(PFX_SENT + norm(address)).apply()
+
+    // Session is "ready" (safe to encrypt outgoing) once confirmed bidirectional:
+    // either we are the initiator and received their reply, or we received an
+    // encrypted message from them (proving they have our public key).
+    fun isSessionReady(ctx: Context, address: String): Boolean =
+        prefs(ctx).getBoolean(PFX_READY + norm(address), false)
+
+    fun markSessionReady(ctx: Context, address: String) =
+        prefs(ctx).edit().putBoolean(PFX_READY + norm(address), true).apply()
+
+    fun clearSession(ctx: Context, address: String) =
+        prefs(ctx).edit()
+            .remove(PFX_SESSION + norm(address))
+            .remove(PFX_SENT    + norm(address))
+            .remove(PFX_READY   + norm(address))
+            .apply()
 
     // ── Wire format ───────────────────────────────────────────────────────────
 

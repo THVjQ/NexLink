@@ -10,6 +10,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.os.Handler
 import android.os.Looper
 import android.provider.Telephony
@@ -72,6 +74,14 @@ class ConversationActivity : AppCompatActivity() {
     private val loading = AtomicBoolean(false)
     private val debounceHandler = Handler(Looper.getMainLooper())
     private val debounceLoad = Runnable { loadMessages() }
+
+    private val sessionReceiver = object : BroadcastReceiver() {
+        override fun onReceive(ctx: android.content.Context, intent: android.content.Intent) {
+            val addr = intent.getStringExtra("address") ?: return
+            // Refresh if this session change is for the current conversation
+            if (sameNumber(addr, address)) refreshEncryptionState()
+        }
+    }
 
     // Debounced: rapid-fire DB notifications collapse to one reload
     private fun scheduleLoad() {
@@ -306,25 +316,79 @@ class ConversationActivity : AppCompatActivity() {
 
     private fun initiateEncryptionIfNeeded() {
         Thread {
-            val hasSession = CryptoStore.getSessionKey(this, address) != null
-            if (hasSession) {
-                runOnUiThread { supportActionBar?.subtitle = "🔒 End-to-end encrypted" }
-            } else if (!CryptoStore.hasSentKey(this, address)) {
-                CryptoStore.markKeySent(this, address)
-                val pub = CryptoStore.getPublicKeyBytes(this)
-                SmsHelper.sendSms(this, address, CryptoStore.buildKeyExchange(pub), -1)
+            val sessionKey  = CryptoStore.getSessionKey(this, address)
+            val sessionReady = CryptoStore.isSessionReady(this, address)
+            when {
+                sessionKey != null && sessionReady ->
+                    runOnUiThread { supportActionBar?.subtitle = "🔒 End-to-end encrypted" }
+                sessionKey != null && !sessionReady ->
+                    // We have their key, awaiting confirmation they have ours
+                    runOnUiThread { supportActionBar?.subtitle = "🔑 Key exchange pending…" }
+                !CryptoStore.hasSentKey(this, address) -> {
+                    CryptoStore.markKeySent(this, address)
+                    sendPromoIfEnabled()
+                    val pub = CryptoStore.getPublicKeyBytes(this)
+                    SmsHelper.sendSms(this, address, CryptoStore.buildKeyExchange(pub), -1)
+                    runOnUiThread { supportActionBar?.subtitle = "🔑 Key exchange sent…" }
+                }
+                else ->
+                    runOnUiThread { supportActionBar?.subtitle = "🔑 Awaiting reply…" }
             }
         }.start()
+    }
+
+    private fun refreshEncryptionState() {
+        Thread {
+            val sessionKey   = CryptoStore.getSessionKey(this, address)
+            val sessionReady = CryptoStore.isSessionReady(this, address)
+            val encEnabled   = NotificationPrefs.isEncryptionEnabled(this)
+            runOnUiThread {
+                when {
+                    sessionKey != null && sessionReady ->
+                        supportActionBar?.subtitle = "🔒 End-to-end encrypted"
+                    sessionKey != null ->
+                        supportActionBar?.subtitle = "🔑 Key exchange pending…"
+                    CryptoStore.hasSentKey(this, address) ->
+                        supportActionBar?.subtitle = "🔑 Awaiting reply…"
+                    else -> {}
+                }
+                // Also refresh the drawer switch/status
+                b.switchChatEncryption.isChecked = sessionKey != null && sessionReady && encEnabled
+                b.tvEncryptionStatus.text = when {
+                    sessionKey != null && sessionReady -> "End-to-end encrypted"
+                    sessionKey != null -> "Key sent — awaiting confirmation"
+                    CryptoStore.hasSentKey(this, address) -> "Key sent — awaiting reply"
+                    else -> "Not active"
+                }
+                b.btnResendKey.visibility = if (sessionKey != null || CryptoStore.hasSentKey(this, address)) View.VISIBLE else View.GONE
+            }
+            // Reload so decrypted messages render if session just became ready
+            if (sessionReady) loadMessages()
+        }.start()
+    }
+
+    private fun sameNumber(a: String, b: String): Boolean {
+        if (a == b) return true
+        fun tail9(n: String) = n.replace("[^\\d]".toRegex(), "").takeLast(9)
+        return tail9(a) == tail9(b) && tail9(a).isNotEmpty()
     }
 
     private fun setupDrawer() {
         // Encryption status in drawer
         Thread {
-            val hasSession = CryptoStore.getSessionKey(this, address) != null
+            val sessionKey   = CryptoStore.getSessionKey(this, address)
+            val sessionReady = CryptoStore.isSessionReady(this, address)
             runOnUiThread {
-                b.switchChatEncryption.isChecked = hasSession && NotificationPrefs.isEncryptionEnabled(this)
-                b.tvEncryptionStatus.text = if (hasSession) "End-to-end encrypted" else "Not active"
-                b.btnResendKey.visibility = if (hasSession) View.VISIBLE else View.GONE
+                b.switchChatEncryption.isChecked = sessionKey != null && sessionReady &&
+                    NotificationPrefs.isEncryptionEnabled(this)
+                b.tvEncryptionStatus.text = when {
+                    sessionKey != null && sessionReady -> "End-to-end encrypted"
+                    sessionKey != null -> "Key sent — awaiting confirmation"
+                    CryptoStore.hasSentKey(this, address) -> "Key sent — awaiting reply"
+                    else -> "Not active"
+                }
+                b.btnResendKey.visibility =
+                    if (sessionKey != null || CryptoStore.hasSentKey(this, address)) View.VISIBLE else View.GONE
                 encryptionListenerActive = true
             }
         }.start()
@@ -341,10 +405,11 @@ class ConversationActivity : AppCompatActivity() {
                     .setNegativeButton("Cancel") { _, _ -> b.switchChatEncryption.isChecked = true }
                     .show()
             } else {
-                CryptoStore.clearSentKey(this, address)
+                CryptoStore.clearSession(this, address)
                 Thread {
+                    sendPromoIfEnabled()
                     val pub = CryptoStore.getPublicKeyBytes(this)
-                    SmsHelper.sendSms(this, address, buildKeyExchangeBody(pub), -1)
+                    SmsHelper.sendSms(this, address, CryptoStore.buildKeyExchange(pub), -1)
                     CryptoStore.markKeySent(this, address)
                     runOnUiThread { Toast.makeText(this, "Key exchange sent", Toast.LENGTH_SHORT).show() }
                 }.start()
@@ -353,8 +418,19 @@ class ConversationActivity : AppCompatActivity() {
 
         b.btnResendKey.setOnClickListener {
             Thread {
+                CryptoStore.markKeySent(this, address)
                 val pub = CryptoStore.getPublicKeyBytes(this)
-                SmsHelper.sendSms(this, address, buildKeyExchangeBody(pub), -1)
+                val token = CryptoStore.buildKeyExchange(pub)
+                if (NotificationPrefs.isKeyExchangePromoEnabled(this)) {
+                    // Send promo as a separate SMS so the key token is never fragmented
+                    val promo = "Hi! This message is part of NexLink's end-to-end encryption setup. " +
+                        "If you don't use NexLink, no action is needed — you can safely ignore it.\n\n" +
+                        "Get NexLink free:\n" +
+                        "Website: https://thvjq.com.au/nexlink\n" +
+                        "Google Play: https://play.google.com/store/apps/details?id=com.thvjq.nexlink"
+                    SmsHelper.sendSms(this, address, promo, -1)
+                }
+                SmsHelper.sendSms(this, address, token, -1)
                 runOnUiThread { Toast.makeText(this, "Key exchange sent", Toast.LENGTH_SHORT).show() }
             }.start()
         }
@@ -460,6 +536,13 @@ class ConversationActivity : AppCompatActivity() {
         super.onResume()
         contentResolver.registerContentObserver(Telephony.Sms.CONTENT_URI, true, smsObserver)
         contentResolver.registerContentObserver(android.net.Uri.parse("content://mms"), true, mmsObserver)
+        val filter = IntentFilter("com.nexlink.app.SESSION_ESTABLISHED")
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(sessionReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(sessionReceiver, filter)
+        }
         loadMessages()
         // Dismiss the SMS notification whenever the chat is visible — covers both
         // tapping the notification AND navigating here from the conversation list.
@@ -475,6 +558,7 @@ class ConversationActivity : AppCompatActivity() {
         super.onPause()
         contentResolver.unregisterContentObserver(smsObserver)
         contentResolver.unregisterContentObserver(mmsObserver)
+        try { unregisterReceiver(sessionReceiver) } catch (_: Exception) {}
         cancelRecording()
     }
 
@@ -610,9 +694,11 @@ class ConversationActivity : AppCompatActivity() {
                     val resolvedTid = SmsHelper.sendGroupText(this, threadId, participants, text, selectedSimId)
                     if (threadId == 0L && resolvedTid > 0L) threadId = resolvedTid
                 } else {
-                    val sessionKey = CryptoStore.getSessionKey(this, address)
-                    val encEnabled = NotificationPrefs.isEncryptionEnabled(this)
-                    val outgoing = if (sessionKey != null && encEnabled) CryptoStore.encrypt(text, sessionKey) else text
+                    val sessionKey   = CryptoStore.getSessionKey(this, address)
+                    val sessionReady = CryptoStore.isSessionReady(this, address)
+                    val encEnabled   = NotificationPrefs.isEncryptionEnabled(this)
+                    val outgoing = if (sessionKey != null && sessionReady && encEnabled)
+                        CryptoStore.encrypt(text, sessionKey) else text
                     SmsHelper.sendSms(this, address, outgoing, selectedSimId)
                 }
                 runOnUiThread { loadMessages() }
@@ -742,16 +828,16 @@ class ConversationActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun buildKeyExchangeBody(pubKeyBytes: ByteArray): String {
-        val token = CryptoStore.buildKeyExchange(pubKeyBytes)
-        return if (NotificationPrefs.isKeyExchangePromoEnabled(this))
-            "Hi! This message is part of NexLink's end-to-end encryption setup. " +
+    // Sends the promo as a SEPARATE SMS (if enabled) then returns just the bare key token.
+    // Keeping the token in its own SMS avoids multi-part fragmentation that can break parsing.
+    private fun sendPromoIfEnabled() {
+        if (!NotificationPrefs.isKeyExchangePromoEnabled(this)) return
+        val promo = "Hi! This message is part of NexLink's end-to-end encryption setup. " +
             "If you don't use NexLink, no action is needed — you can safely ignore it.\n\n" +
-            "Want to chat securely? Get NexLink free:\n" +
+            "Get NexLink free:\n" +
             "Website: https://thvjq.com.au/nexlink\n" +
-            "Google Play: https://play.google.com/store/apps/details?id=com.thvjq.nexlink\n\n" +
-            token
-        else token
+            "Google Play: https://play.google.com/store/apps/details?id=com.thvjq.nexlink"
+        SmsHelper.sendSms(this, address, promo, -1)
     }
 
     private fun simLabel(sim: SimInfo): String {

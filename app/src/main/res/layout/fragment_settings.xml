@@ -500,6 +500,36 @@
 
         </LinearLayout>
 
+        <!-- Import / Export -->
+        <TextView android:text="BACKUP &amp; RESTORE" android:textSize="11sp" android:textStyle="bold"
+            android:textColor="@color/muted" android:letterSpacing="0.09"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:layout_marginBottom="8dp"/>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:background="@drawable/bg_card" android:padding="14dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView android:text="Export all SMS messages to a standard XML file that any Android SMS app can import. Encrypted messages are automatically decrypted."
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:textColor="@color/muted" android:textSize="12sp"
+                android:layout_marginBottom="10dp"/>
+
+            <Button android:id="@+id/btnExportSms"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Export SMS to XML"
+                android:backgroundTint="@color/accent"
+                android:textColor="#FFFFFF"
+                android:layout_marginBottom="8dp"/>
+
+            <Button android:id="@+id/btnImportSms"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Import SMS from XML"
+                android:backgroundTint="@color/surface2"
+                android:textColor="@color/text"/>
+
+        </LinearLayout>
+
         <!-- Bug Report / Support -->
         <TextView android:text="SUPPORT" android:textSize="11sp" android:textStyle="bold"
             android:textColor="@color/muted" android:letterSpacing="0.09"
