@@ -25,11 +25,15 @@ object CryptoStore {
     private const val PREFS          = "nx_crypto_v1"
     private const val KEY_MY_PRIV    = "my_priv"
     private const val KEY_MY_PUB     = "my_pub"
-    private const val PFX_SESSION    = "sess_"
-    private const val PFX_SENT       = "sent_"
+    private const val PFX_SESSION     = "sess_"
+    private const val PFX_SENT        = "sent_"
     // Set once we KNOW the peer has our public key (bidirectional confirmation).
     // Without this, we might encrypt before they can decrypt.
-    private const val PFX_READY      = "ready_"
+    private const val PFX_READY       = "ready_"
+    // Set when WE sent the first key exchange unprompted (we are the initiator).
+    // Used in SmsReceiver to distinguish "their reply to our initiation" (don't re-reply)
+    // from "they initiated / re-initiated after reinstall" (always auto-reply).
+    private const val PFX_INITIATED_TO = "init_"
 
     // ── Identity key ──────────────────────────────────────────────────────────
 
@@ -99,11 +103,19 @@ object CryptoStore {
     fun markSessionReady(ctx: Context, address: String) =
         prefs(ctx).edit().putBoolean(PFX_READY + norm(address), true).apply()
 
+    /** True if we sent the key exchange to this address first (we are the initiator). */
+    fun didInitiateTo(ctx: Context, address: String): Boolean =
+        prefs(ctx).getBoolean(PFX_INITIATED_TO + norm(address), false)
+
+    fun markInitiatedTo(ctx: Context, address: String) =
+        prefs(ctx).edit().putBoolean(PFX_INITIATED_TO + norm(address), true).apply()
+
     fun clearSession(ctx: Context, address: String) =
         prefs(ctx).edit()
-            .remove(PFX_SESSION + norm(address))
-            .remove(PFX_SENT    + norm(address))
-            .remove(PFX_READY   + norm(address))
+            .remove(PFX_SESSION      + norm(address))
+            .remove(PFX_SENT         + norm(address))
+            .remove(PFX_READY        + norm(address))
+            .remove(PFX_INITIATED_TO + norm(address))
             .apply()
 
     // ── Wire format ───────────────────────────────────────────────────────────

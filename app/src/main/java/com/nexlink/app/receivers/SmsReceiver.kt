@@ -49,20 +49,18 @@ class SmsReceiver : BroadcastReceiver() {
                             // Peer has NexLink — store their public key and establish a session.
                             val peerPub = CryptoStore.parseKeyExchange(bodyStr)
                             if (peerPub != null) {
-                                val weAlreadySentOurKey = CryptoStore.hasSentKey(context, sender)
                                 CryptoStore.storePeerKey(context, sender, peerPub)
 
-                                if (!weAlreadySentOurKey) {
-                                    // We're the responder — auto-reply with our key.
-                                    // Do NOT mark session ready yet; wait for confirmation that
-                                    // they received our key (i.e. their first encrypted message).
+                                if (!CryptoStore.didInitiateTo(context, sender)) {
+                                    // They initiated (or we reinstalled and lost our init flag).
+                                    // Always auto-reply so reinstalls self-heal without manual action.
                                     CryptoStore.markKeySent(context, sender)
                                     val ourPub = CryptoStore.getPublicKeyBytes(context)
                                     SmsHelper.sendSms(context, sender,
                                         CryptoStore.buildKeyExchange(ourPub), -1)
                                 } else {
-                                    // We're the initiator and just received their reply.
-                                    // This confirms they got our key → session is bidirectionally ready.
+                                    // We initiated and just received their reply.
+                                    // Both sides now have each other's key → session ready.
                                     CryptoStore.markSessionReady(context, sender)
                                     notifySessionEstablished(context, sender)
                                 }

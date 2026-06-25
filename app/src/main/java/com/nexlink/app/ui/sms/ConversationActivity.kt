@@ -326,6 +326,7 @@ class ConversationActivity : AppCompatActivity() {
                     runOnUiThread { supportActionBar?.subtitle = "🔑 Key exchange pending…" }
                 !CryptoStore.hasSentKey(this, address) -> {
                     CryptoStore.markKeySent(this, address)
+                    CryptoStore.markInitiatedTo(this, address)
                     sendPromoIfEnabled()
                     val pub = CryptoStore.getPublicKeyBytes(this)
                     SmsHelper.sendSms(this, address, CryptoStore.buildKeyExchange(pub), -1)
@@ -411,6 +412,7 @@ class ConversationActivity : AppCompatActivity() {
                     val pub = CryptoStore.getPublicKeyBytes(this)
                     SmsHelper.sendSms(this, address, CryptoStore.buildKeyExchange(pub), -1)
                     CryptoStore.markKeySent(this, address)
+                    CryptoStore.markInitiatedTo(this, address)
                     runOnUiThread { Toast.makeText(this, "Key exchange sent", Toast.LENGTH_SHORT).show() }
                 }.start()
             }
@@ -419,17 +421,10 @@ class ConversationActivity : AppCompatActivity() {
         b.btnResendKey.setOnClickListener {
             Thread {
                 CryptoStore.markKeySent(this, address)
+                CryptoStore.markInitiatedTo(this, address)
                 val pub = CryptoStore.getPublicKeyBytes(this)
                 val token = CryptoStore.buildKeyExchange(pub)
-                if (NotificationPrefs.isKeyExchangePromoEnabled(this)) {
-                    // Send promo as a separate SMS so the key token is never fragmented
-                    val promo = "Hi! This message is part of NexLink's end-to-end encryption setup. " +
-                        "If you don't use NexLink, no action is needed — you can safely ignore it.\n\n" +
-                        "Get NexLink free:\n" +
-                        "Website: https://thvjq.com.au/nexlink\n" +
-                        "Google Play: https://play.google.com/store/apps/details?id=com.thvjq.nexlink"
-                    SmsHelper.sendSms(this, address, promo, -1)
-                }
+                sendPromoIfEnabled()
                 SmsHelper.sendSms(this, address, token, -1)
                 runOnUiThread { Toast.makeText(this, "Key exchange sent", Toast.LENGTH_SHORT).show() }
             }.start()
@@ -832,11 +827,9 @@ class ConversationActivity : AppCompatActivity() {
     // Keeping the token in its own SMS avoids multi-part fragmentation that can break parsing.
     private fun sendPromoIfEnabled() {
         if (!NotificationPrefs.isKeyExchangePromoEnabled(this)) return
-        val promo = "Hi! This message is part of NexLink's end-to-end encryption setup. " +
-            "If you don't use NexLink, no action is needed — you can safely ignore it.\n\n" +
-            "Get NexLink free:\n" +
-            "Website: https://thvjq.com.au/nexlink\n" +
-            "Google Play: https://play.google.com/store/apps/details?id=com.thvjq.nexlink"
+        val promo = "This is an automated key exchange message from NexLink. " +
+            "Your contact is establishing an end-to-end encrypted channel. " +
+            "No action is required on your part — this message can be safely disregarded."
         SmsHelper.sendSms(this, address, promo, -1)
     }
 
