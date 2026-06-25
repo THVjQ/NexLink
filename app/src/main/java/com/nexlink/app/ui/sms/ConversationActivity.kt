@@ -492,8 +492,11 @@ class ConversationActivity : AppCompatActivity() {
             if (address.isBlank()) return true
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
                 == PackageManager.PERMISSION_GRANTED) {
-                startActivity(android.content.Intent(android.content.Intent.ACTION_CALL,
-                    Uri.parse("tel:$address")))
+                startActivity(android.content.Intent(this,
+                    com.nexlink.app.ui.calls.DialerActivity::class.java).apply {
+                    data = Uri.parse("tel:$address")
+                    putExtra("contact_name", supportActionBar?.title?.toString() ?: address)
+                })
             } else {
                 ActivityCompat.requestPermissions(this,
                     arrayOf(Manifest.permission.CALL_PHONE), 200)
@@ -564,6 +567,8 @@ class ConversationActivity : AppCompatActivity() {
     private fun loadMessages() {
         if (!loading.compareAndSet(false, true)) return
         Thread {
+            // Clear any outgoing messages stuck in STATUS_PENDING (clock icon) older than 30 s.
+            SmsHelper.fixStuckPendingMessages(this)
             // Auto-resolve thread ID for new group conversations
             if (threadId == 0L && isGroup) {
                 threadId = runCatching {
@@ -740,7 +745,12 @@ class ConversationActivity : AppCompatActivity() {
     private fun buildKeyExchangeBody(pubKeyBytes: ByteArray): String {
         val token = CryptoStore.buildKeyExchange(pubKeyBytes)
         return if (NotificationPrefs.isKeyExchangePromoEnabled(this))
-            "I'm using NexLink for secure, private messaging — download it free at thvjq.com.au/Nexlink\n\n$token"
+            "Hi! This message is part of NexLink's end-to-end encryption setup. " +
+            "If you don't use NexLink, no action is needed — you can safely ignore it.\n\n" +
+            "Want to chat securely? Get NexLink free:\n" +
+            "Website: https://thvjq.com.au/nexlink\n" +
+            "Google Play: https://play.google.com/store/apps/details?id=com.thvjq.nexlink\n\n" +
+            token
         else token
     }
 

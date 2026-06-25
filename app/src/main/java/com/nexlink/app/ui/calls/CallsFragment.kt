@@ -168,8 +168,8 @@ class CallsFragment : Fragment() {
                         h.detail.text = "$typeStr · ${formatTime(row.timestamp)}$countSuffix"
                         h.detail.setTextColor(color)
 
-                        h.btnCall.setOnClickListener { placeCall(row.number) }
-                        h.itemView.setOnClickListener { placeCall(row.number) }
+                        h.btnCall.setOnClickListener { placeCall(row.number, row.name) }
+                        h.itemView.setOnClickListener { placeCall(row.number, row.name) }
                         h.btnCall.setOnLongClickListener { showSimCallPicker(row.number, it); true }
                         h.itemView.setOnLongClickListener { showSimCallPicker(row.number, h.btnCall); true }
                     }
@@ -237,11 +237,12 @@ class CallsFragment : Fragment() {
         } catch (_: Exception) { placeCall(number) }
     }
 
-    private fun placeCall(number: String) {
+    private fun placeCall(number: String, name: String = number) {
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CALL_PHONE)
             != PackageManager.PERMISSION_GRANTED) return
         startActivity(Intent(requireContext(), DialerActivity::class.java).apply {
             data = Uri.parse("tel:$number")
+            putExtra("contact_name", name)
         })
     }
 

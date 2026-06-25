@@ -15,6 +15,7 @@ import android.provider.Telephony.Mms
 import android.telephony.SmsManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.Person
 import androidx.core.app.RemoteInput
 import com.google.android.mms.pdu_alt.NotificationInd
 import com.google.android.mms.pdu_alt.PduParser
@@ -342,11 +343,12 @@ object SmsNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // InboxStyle shows each message on its own line when there are multiple
-        val style = NotificationCompat.InboxStyle()
-            .setBigContentTitle(name)
-        messages.takeLast(6).forEach { style.addLine(it) }
-        if (messages.size > 1) style.setSummaryText("${messages.size} new messages")
+        // MessagingStyle enables Samsung Buds and other wearables to read the message aloud,
+        // announcing "SMS from [contact name]" as the service + sender.
+        val person = Person.Builder().setName(name).build()
+        val msgStyle = NotificationCompat.MessagingStyle(person)
+            .setConversationTitle("SMS")
+        messages.takeLast(6).forEach { msgStyle.addMessage(it, System.currentTimeMillis(), person) }
 
         val contentText = if (messages.size == 1) body else "${messages.size} new messages from $name"
 
@@ -385,12 +387,13 @@ object SmsNotifier {
             .setLargeIcon(buildAvatarIcon(name))
             .setContentTitle(name)
             .setContentText(contentText)
-            .setStyle(style)
+            .setStyle(msgStyle)
             .setContentIntent(pi)
             .addAction(replyAction)
             .addAction(markReadAction)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setNumber(messages.size)
             .setGroup("sms_${sender.hashCode()}")
             .build()

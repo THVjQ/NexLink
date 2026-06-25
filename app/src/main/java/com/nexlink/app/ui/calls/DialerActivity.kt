@@ -29,6 +29,7 @@ class DialerActivity : AppCompatActivity() {
 
     private lateinit var b: ActivityDialerBinding
     private var number = ""
+    private var prefilledName = ""
     private lateinit var suggestAdapter: SuggestionAdapter
 
     private var sims = listOf<SimInfo>()
@@ -53,7 +54,11 @@ class DialerActivity : AppCompatActivity() {
         b.rvSuggestions.adapter = suggestAdapter
 
         val uri = intent.data
-        if (uri?.scheme == "tel") { number = uri.schemeSpecificPart ?: ""; updateDisplay() }
+        if (uri?.scheme == "tel") {
+            number = uri.schemeSpecificPart ?: ""
+            prefilledName = intent.getStringExtra("contact_name") ?: ""
+            updateDisplay()
+        }
 
         bindKeys()
         b.btnClose.setOnClickListener { it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY); finish() }
@@ -152,6 +157,7 @@ class DialerActivity : AppCompatActivity() {
         keys.forEach { (view, digit) ->
             view.setOnClickListener {
                 it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                prefilledName = ""  // user is editing the number manually
                 number += digit
                 updateDisplay()
             }
@@ -160,6 +166,14 @@ class DialerActivity : AppCompatActivity() {
 
     private fun updateDisplay() {
         b.tvNumber.text = formatNumber(number)
+        // Show contact name above the number if the dialer was pre-filled from a known contact
+        val showName = prefilledName.isNotBlank() && prefilledName != number
+        if (showName) {
+            b.tvContactName.text = prefilledName
+            b.tvContactName.visibility = android.view.View.VISIBLE
+        } else {
+            b.tvContactName.visibility = android.view.View.GONE
+        }
         updateSuggestions()
     }
 

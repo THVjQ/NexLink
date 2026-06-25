@@ -16,6 +16,14 @@
             android:src="@drawable/ic_clear" android:tint="@color/text" android:padding="8dp"/>
     </LinearLayout>
 
+    <!-- Contact name — shown when dialer is pre-filled from a saved contact -->
+    <TextView android:id="@+id/tvContactName"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:textSize="14sp" android:textColor="@color/text2"
+        android:gravity="center" android:paddingHorizontal="8dp"
+        android:paddingTop="8dp"
+        android:visibility="gone"/>
+
     <!-- Number display -->
     <TextView android:id="@+id/tvNumber"
         android:layout_width="match_parent" android:layout_height="wrap_content"

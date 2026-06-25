@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
+import androidx.core.app.Person
 import com.nexlink.app.App
 import com.nexlink.app.R
 import com.nexlink.app.db.NotificationPrefs
@@ -205,15 +206,23 @@ class NexLinkNotificationListener : NotificationListenerService() {
             ctx, notifId, tapIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        // MessagingStyle with the platform as conversation title lets Samsung Buds and
+        // other wearables announce "Signal from John" / "WhatsApp from John" etc.
+        val person = Person.Builder().setName(n.sender).build()
+        val msgStyle = NotificationCompat.MessagingStyle(person)
+            .setConversationTitle(n.platform)
+            .addMessage(n.text, n.timestamp, person)
+
         NotificationCompat.Builder(ctx, App.CH_SOCIAL)
             .setSmallIcon(SmsNotifier.notifIconRes(ctx))
             .setLargeIcon(buildCompositeIcon(n.platform))
             .setContentTitle("${n.platform} · ${n.sender}")
             .setContentText(n.text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(n.text))
+            .setStyle(msgStyle)
             .setContentIntent(pi)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .build()
             .also {
                 ctx.getSystemService(NotificationManager::class.java)

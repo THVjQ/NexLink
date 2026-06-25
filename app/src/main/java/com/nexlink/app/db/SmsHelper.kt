@@ -500,13 +500,29 @@ object SmsHelper {
 
     // ── Send ──────────────────────────────────────────────────────────────────
 
+    fun fixStuckPendingMessages(ctx: Context) {
+        try {
+            ctx.contentResolver.update(
+                Telephony.Sms.CONTENT_URI,
+                ContentValues().apply { put(Telephony.Sms.STATUS, Telephony.Sms.STATUS_NONE) },
+                "${Telephony.Sms.TYPE} = ? AND ${Telephony.Sms.STATUS} = ? AND ${Telephony.Sms.DATE} < ?",
+                arrayOf(
+                    Telephony.Sms.MESSAGE_TYPE_SENT.toString(),
+                    Telephony.Sms.STATUS_PENDING.toString(),
+                    (System.currentTimeMillis() - 30_000L).toString()
+                )
+            )
+        } catch (_: Exception) {}
+    }
+
     fun sendSms(ctx: Context, address: String, body: String, subscriptionId: Int = -1) {
-        // Insert into DB first (STATUS_PENDING) so we have a row ID for the delivery intent.
+        // Insert with STATUS_NONE (single tick) — SmsSentReceiver upgrades to FAILED on error,
+        // SmsDeliveredReceiver upgrades to COMPLETE (double tick) on carrier delivery report.
         val values = ContentValues().apply {
             put(Telephony.Sms.ADDRESS, address); put(Telephony.Sms.BODY, body)
             put(Telephony.Sms.DATE, System.currentTimeMillis())
             put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_SENT); put(Telephony.Sms.READ, 1)
-            put(Telephony.Sms.STATUS, Telephony.Sms.STATUS_PENDING)
+            put(Telephony.Sms.STATUS, Telephony.Sms.STATUS_NONE)
         }
         val msgUri = try { ctx.contentResolver.insert(Telephony.Sms.Sent.CONTENT_URI, values) } catch (_: Exception) { null }
         val msgId  = msgUri?.lastPathSegment?.toLongOrNull() ?: -1L
@@ -731,11 +747,24 @@ object SmsHelper {
     fun getContactName(ctx: Context, address: String): String {
         if (address.isBlank()) return address
         contactCache[address]?.let { return it }
-        try {
-            val uri = ContactsContract.PhoneLookup.CONTENT_FILTER_URI.buildUpon().appendPath(address).build()
-            ctx.contentResolver.query(uri, arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME), null, null, null)
-                ?.use { if (it.moveToFirst()) { val n = it.getString(0); contactCache[address] = n; return n } }
-        } catch (_: Exception) {}
+        // Try the number as-is first, then try alternate Australian formats (+614xx ↔ 04xx).
+        val candidates = mutableListOf(address)
+        val digits = address.replace("[^\\d]".toRegex(), "")
+        when {
+            address.startsWith("+614") && digits.length == 11 ->
+                candidates += "0${digits.drop(2)}"         // +61412345678 → 0412345678
+            address.startsWith("04") && digits.length == 10 ->
+                candidates += "+61${digits.drop(1)}"       // 0412345678 → +61412345678
+            address.startsWith("614") && digits.length == 11 ->
+                candidates += "0${digits.drop(2)}"         // 61412345678 → 0412345678
+        }
+        for (candidate in candidates) {
+            try {
+                val uri = ContactsContract.PhoneLookup.CONTENT_FILTER_URI.buildUpon().appendPath(candidate).build()
+                ctx.contentResolver.query(uri, arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME), null, null, null)
+                    ?.use { if (it.moveToFirst()) { val n = it.getString(0); contactCache[address] = n; return n } }
+            } catch (_: Exception) {}
+        }
         return address
     }
 
