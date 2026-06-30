@@ -201,8 +201,9 @@ object SmsHelper {
             val idArgs = ids.map { it.toString() }.toTypedArray()
 
             // Step 2: batch-fetch all parts (1 query instead of N)
-            val mediaPartMap = mutableMapOf<Long, MmsPart>()
-            val textPartMap  = mutableMapOf<Long, MmsPart>()
+            // mediaPartsMap stores ALL parts per MMS so multi-image messages render every photo.
+            val mediaPartsMap = mutableMapOf<Long, MutableList<MmsPart>>()
+            val textPartMap   = mutableMapOf<Long, MmsPart>()
             ctx.contentResolver.query(
                 Uri.parse("content://mms/part"),
                 arrayOf("mid", Telephony.Mms.Part._ID, Telephony.Mms.Part.CONTENT_TYPE,
@@ -218,8 +219,9 @@ object SmsHelper {
                                 ?: readTextFromUri(ctx, Uri.parse(partUri))
                             textPartMap[mid] = MmsPart(partUri, ct, c.getString(3), inline)
                         }
-                    } else if (!mediaPartMap.containsKey(mid)) {
-                        mediaPartMap[mid] = MmsPart(partUri, ct, c.getString(3))
+                    } else {
+                        mediaPartsMap.getOrPut(mid) { mutableListOf() }
+                            .add(MmsPart(partUri, ct, c.getString(3)))
                     }
                 }
             }
@@ -251,44 +253,47 @@ object SmsHelper {
 
             // Step 4: assemble results
             for (row in rows) {
-                val mediaPart = mediaPartMap[row.id]
-                val textPart  = textPartMap[row.id]
-                val isIn      = row.msgBox == Telephony.Mms.MESSAGE_BOX_INBOX
+                val mediaParts = mediaPartsMap[row.id] ?: emptyList()
+                val textPart   = textPartMap[row.id]
+                val isIn       = row.msgBox == Telephony.Mms.MESSAGE_BOX_INBOX
                 val senderAddr = if (isIn) senderMap[row.id] else null
 
-                if (mediaPart != null) {
-                    val isVoice = mediaPart.mimeType.startsWith("audio/")
-                    val body = when {
-                        isVoice                                  -> "🎤 Voice message"
-                        mediaPart.mimeType.startsWith("image/") -> ""
-                        mediaPart.mimeType.startsWith("video/") -> "🎬 Video"
-                        else                                     -> "📎 ${mediaPart.name ?: "File"}"
+                if (mediaParts.isNotEmpty()) {
+                    // Emit one bubble per media part — handles multi-image MMS properly.
+                    // Extra parts get synthetic negative IDs so DiffUtil treats them as distinct.
+                    mediaParts.forEachIndexed { idx, mediaPart ->
+                        val isVoice = mediaPart.mimeType.startsWith("audio/")
+                        val body = when {
+                            isVoice                                  -> "🎤 Voice message"
+                            mediaPart.mimeType.startsWith("image/") -> ""
+                            mediaPart.mimeType.startsWith("video/") -> "🎬 Video"
+                            else                                     -> "📎 ${mediaPart.name ?: "File"}"
+                        }
+                        result += SmsMessage(
+                            id         = if (idx == 0) row.id else -(row.id + idx.toLong() * 1_000_000L),
+                            threadId   = threadId,
+                            address    = senderAddr ?: primaryAddress,
+                            body       = body,
+                            timestamp  = row.date + idx,  // 1 ms offset preserves display order
+                            isIncoming = isIn,
+                            senderName = senderAddr?.let { getContactName(ctx, it) },
+                            isMms      = true,
+                            isVoice    = isVoice,
+                            mediaUri   = mediaPart.uri,
+                            mimeType   = mediaPart.mimeType
+                        )
                     }
-                    result += SmsMessage(
-                        id         = row.id,
-                        threadId   = threadId,
-                        address    = senderAddr ?: primaryAddress,
-                        body       = body,
-                        timestamp  = row.date,
-                        isIncoming = isIn,
-                        senderName = senderAddr?.let { getContactName(ctx, it) },
-                        isMms      = true,
-                        isVoice    = isVoice,
-                        mediaUri   = mediaPart.uri,
-                        mimeType   = mediaPart.mimeType
-                    )
-                    // If the MMS also has a text caption, emit it as a separate text bubble
-                    // so the user sees both the image and the caption message.
+                    // Text caption emitted once, after the last image bubble
                     if (textPart != null) {
                         val caption = textPart.textBody?.takeIf { it.isNotBlank() }
                             ?: readTextFromUri(ctx, Uri.parse(textPart.uri)).takeIf { it.isNotBlank() }
                         if (caption != null) {
                             result += SmsMessage(
-                                id         = -row.id,  // synthetic negative ID for caption part
+                                id         = -row.id,
                                 threadId   = threadId,
                                 address    = senderAddr ?: primaryAddress,
                                 body       = caption,
-                                timestamp  = row.date,
+                                timestamp  = row.date + mediaParts.size,
                                 isIncoming = isIn,
                                 senderName = senderAddr?.let { getContactName(ctx, it) },
                                 isMms      = true
@@ -558,6 +563,19 @@ object SmsHelper {
         sendViaMms(ctx, listOf(to), parts, subId)
     }
 
+    fun sendMultipleImagesMms(ctx: Context, to: String, uris: List<android.net.Uri>,
+                              subId: Int = -1, extraRecipients: List<String> = emptyList()) {
+        val recipients = (listOf(to) + extraRecipients).distinct()
+        val parts = uris.mapNotNull { uri ->
+            runCatching {
+                val (data, _) = compressForMms(ctx, uri, "image/jpeg")
+                MmsPduBuilder.Part("image/jpeg", data)
+            }.getOrNull()
+        }
+        if (parts.isEmpty()) throw Exception("No images could be read")
+        sendViaMms(ctx, recipients, parts, subId)
+    }
+
     fun sendMediaMms(ctx: Context, to: String, mediaUri: android.net.Uri, mimeType: String,
                      subId: Int = -1, extraRecipients: List<String> = emptyList()) {
         val recipients = (listOf(to) + extraRecipients).distinct()
@@ -568,9 +586,9 @@ object SmsHelper {
     }
 
     /**
-     * Compresses images to ≤ 500 KB for MMS. Non-image types are returned as-is
-     * (audio/AMR from the voice recorder is already small; video is passed through).
-     * Returns the compressed bytes and the effective MIME type (always image/jpeg for images).
+     * Compresses images to fit within the MMS carrier limit. Non-image types are returned as-is.
+     * Returns compressed bytes and effective MIME type (always image/jpeg for images).
+     * Large photos are automatically downsampled rather than rejected.
      */
     private fun compressForMms(ctx: Context, mediaUri: android.net.Uri, mimeType: String): Pair<ByteArray, String> {
         val raw = ctx.contentResolver.openInputStream(mediaUri)?.use { it.readBytes() }
@@ -578,10 +596,10 @@ object SmsHelper {
 
         if (!mimeType.startsWith("image/")) return Pair(raw, mimeType)
 
-        val MAX_BYTES = 500 * 1024  // 500 KB target
-        val MAX_DIM   = 1024        // max dimension in pixels
+        val MAX_BYTES = 1_100_000  // 1.1 MB — within most carriers' 1.2 MB limit
+        val MAX_DIM   = 1920       // full HD is plenty for MMS
 
-        // Decode bounds only to find the sampling factor needed
+        // Decode bounds only to find initial sampling factor
         val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
         android.graphics.BitmapFactory.decodeByteArray(raw, 0, raw.size, bounds)
 
@@ -589,7 +607,7 @@ object SmsHelper {
         var w = bounds.outWidth; var h = bounds.outHeight
         while (w > MAX_DIM || h > MAX_DIM) { sample *= 2; w /= 2; h /= 2 }
 
-        val bmp = android.graphics.BitmapFactory.decodeByteArray(raw, 0, raw.size,
+        var bmp = android.graphics.BitmapFactory.decodeByteArray(raw, 0, raw.size,
             android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
             ?: return Pair(raw, mimeType)
 
@@ -602,8 +620,21 @@ object SmsHelper {
             quality -= 10
         } while (result.size > MAX_BYTES && quality >= 20)
 
+        // If quality floor reached and still over limit, geometric downscale to fit
+        if (result.size > MAX_BYTES) {
+            val ratio = kotlin.math.sqrt(MAX_BYTES.toDouble() / result.size).toFloat()
+            val w2 = (bmp.width * ratio).toInt().coerceAtLeast(240)
+            val h2 = (bmp.height * ratio).toInt().coerceAtLeast(240)
+            val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, w2, h2, true)
+            bmp.recycle()
+            bmp = scaled
+            val baos = java.io.ByteArrayOutputStream()
+            bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, baos)
+            result = baos.toByteArray()
+        }
+
         bmp.recycle()
-        android.util.Log.d("NexLink_MMS", "compressForMms: ${raw.size / 1024}KB → ${result.size / 1024}KB (q=${ quality + 10})")
+        android.util.Log.d("NexLink_MMS", "compressForMms: ${raw.size / 1024}KB → ${result.size / 1024}KB (q=${quality + 10})")
         return Pair(result, "image/jpeg")
     }
 

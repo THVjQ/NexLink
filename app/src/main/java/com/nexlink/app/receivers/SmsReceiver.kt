@@ -25,6 +25,7 @@ import com.nexlink.app.db.CryptoStore
 import com.nexlink.app.db.IconPrefs
 import com.nexlink.app.db.MmsDownloader
 import com.nexlink.app.db.MmsPduResult
+import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.SmsHelper
 import com.nexlink.app.ui.sms.ConversationActivity
 import com.nexlink.app.wear.WearSync
@@ -403,7 +404,10 @@ object SmsNotifier {
         val markReadAction = NotificationCompat.Action.Builder(R.drawable.ic_clear, "Mark as Read", markReadPi)
             .build()
 
-        val notif = NotificationCompat.Builder(ctx, App.CH_SMS)
+        val channelId = if (NotificationPrefs.isPriorityContact(ctx, sender))
+            App.CH_SMS_PRIORITY else App.CH_SMS
+
+        val notif = NotificationCompat.Builder(ctx, channelId)
             .setSmallIcon(notifIconRes(ctx))
             .setLargeIcon(buildAvatarIcon(name))
             .setContentTitle(name)

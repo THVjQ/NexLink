@@ -110,6 +110,11 @@ class ConversationActivity : AppCompatActivity() {
         ActivityResultContracts.GetContent()
     ) { uri -> uri?.let { sendAttachment(it, contentResolver.getType(it) ?: "image/*") } }
 
+    private val galleryMultiLauncher = registerForActivityResult(
+        ActivityResultContracts.GetMultipleContents()
+    ) { uris -> if (uris.size == 1) sendAttachment(uris[0], contentResolver.getType(uris[0]) ?: "image/*")
+                else if (uris.isNotEmpty()) sendMultipleImages(uris) }
+
     private val videoLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri -> uri?.let { sendAttachment(it, contentResolver.getType(it) ?: "video/*") } }
@@ -455,6 +460,26 @@ class ConversationActivity : AppCompatActivity() {
             ))
         }
 
+        // Priority contact toggle (only for 1-to-1 chats)
+        if (!isGroup) {
+            b.rowPriorityContact.visibility = View.VISIBLE
+            b.switchPriorityContact.isChecked = NotificationPrefs.isPriorityContact(this, address)
+            b.switchPriorityContact.setOnCheckedChangeListener { _, isChecked ->
+                NotificationPrefs.setPriorityContact(this, address, isChecked)
+                if (isChecked) {
+                    val nm = getSystemService(android.app.NotificationManager::class.java)
+                    if (!nm.isNotificationPolicyAccessGranted) {
+                        Toast.makeText(this,
+                            "Grant Do Not Disturb access so NexLink can bypass DND for this contact.",
+                            Toast.LENGTH_LONG).show()
+                        startActivity(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
+                    }
+                }
+            }
+        } else {
+            b.rowPriorityContact.visibility = View.GONE
+        }
+
         // Search messages: filter shown inside main recycler, results visible behind semi-transparent drawer
         b.etDrawerSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
@@ -566,7 +591,22 @@ class ConversationActivity : AppCompatActivity() {
         return true
     }
 
+    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
+        // "Add to contacts" only makes sense for 1-to-1 chats (not groups)
+        menu.findItem(R.id.action_add_contact)?.isVisible = !isGroup
+        return super.onPrepareOptionsMenu(menu)
+    }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        if (item.itemId == R.id.action_add_contact) {
+            val intent = android.content.Intent(android.provider.ContactsContract.Intents.Insert.ACTION).apply {
+                type = android.provider.ContactsContract.RawContacts.CONTENT_TYPE
+                putExtra(android.provider.ContactsContract.Intents.Insert.PHONE, address)
+            }
+            try { startActivity(intent) }
+            catch (_: Exception) { Toast.makeText(this, "No contacts app available", Toast.LENGTH_SHORT).show() }
+            return true
+        }
         if (item.itemId == R.id.action_call) {
             if (address.isBlank()) return true
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
@@ -714,7 +754,8 @@ class ConversationActivity : AppCompatActivity() {
                     == PackageManager.PERMISSION_GRANTED) launchCamera()
                 else reqCameraPermLauncher.launch(Manifest.permission.CAMERA)
             },
-            NexPopup.Item("Photo / Gallery", R.drawable.ic_attach)  { galleryLauncher.launch("image/*") },
+            NexPopup.Item("Photo",           R.drawable.ic_attach)  { galleryLauncher.launch("image/*") },
+            NexPopup.Item("Multiple Photos", R.drawable.ic_attach)  { galleryMultiLauncher.launch("image/*") },
             NexPopup.Item("Video",           R.drawable.ic_attach)  { videoLauncher.launch("video/*") },
             NexPopup.Item("Audio file",      R.drawable.ic_mic)     { audioLauncher.launch("audio/*") },
             NexPopup.Item("File",            R.drawable.ic_attach)  { fileLauncher.launch("*/*") }
@@ -729,24 +770,52 @@ class ConversationActivity : AppCompatActivity() {
         cameraLauncher.launch(uri)
     }
 
+    private fun sendMultipleImages(uris: List<android.net.Uri>) {
+        if (address.isEmpty()) return
+        if (!requireDefaultSmsApp()) return
+        val optimistic = SmsMessage(
+            id = -System.currentTimeMillis(), threadId = threadId, address = address, body = "",
+            timestamp = System.currentTimeMillis(), isIncoming = false, isMms = true,
+            mediaUri = uris.first().toString(), mimeType = "image/jpeg"
+        )
+        adapter.addOptimistic(optimistic)
+        b.recycler.scrollToPosition(adapter.itemCount - 1)
+        Thread {
+            try {
+                SentMmsStore.save(this, optimistic)
+                SmsHelper.sendMultipleImagesMms(this, address, uris, selectedSimId,
+                    extraRecipients = if (isGroup) participants.drop(1) else emptyList())
+                runOnUiThread { loadMessages() }
+            } catch (e: SecurityException) {
+                runOnUiThread { requireDefaultSmsApp() }
+            } catch (e: Exception) {
+                runOnUiThread { Toast.makeText(this, "Send failed: ${e.message}", Toast.LENGTH_LONG).show() }
+            }
+        }.start()
+    }
+
     private fun sendAttachment(uri: android.net.Uri, mimeType: String) {
         if (address.isEmpty()) return
         if (!requireDefaultSmsApp()) return
 
-        // MMS size limit — most carriers reject messages over ~1–2 MB.
-        val maxBytes = 2L * 1024 * 1024 // 2 MB
-        val fileBytes = runCatching {
-            contentResolver.query(uri,
-                arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)?.use { c ->
-                if (c.moveToFirst()) c.getLong(0) else 0L
-            } ?: 0L
-        }.getOrDefault(0L)
-        if (fileBytes > maxBytes) {
-            val sizeMb = "%.1f".format(fileBytes / 1_048_576.0)
-            Toast.makeText(this,
-                "File too large (${sizeMb} MB). Maximum MMS size is 2 MB.",
-                Toast.LENGTH_LONG).show()
-            return
+        // Images are auto-compressed by compressForMms — no pre-check needed.
+        // Non-image files (audio, video, docs) can't be compressed so enforce the carrier limit.
+        val isImage = mimeType.startsWith("image/")
+        if (!isImage) {
+            val maxBytes = 2L * 1024 * 1024
+            val fileBytes = runCatching {
+                contentResolver.query(uri,
+                    arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)?.use { c ->
+                    if (c.moveToFirst()) c.getLong(0) else 0L
+                } ?: 0L
+            }.getOrDefault(0L)
+            if (fileBytes > maxBytes) {
+                val sizeMb = "%.1f".format(fileBytes / 1_048_576.0)
+                Toast.makeText(this,
+                    "File too large (${sizeMb} MB). Maximum MMS size is 2 MB.",
+                    Toast.LENGTH_LONG).show()
+                return
+            }
         }
 
         val optimisticMsg = SmsMessage(

@@ -360,32 +360,31 @@ class BubbleAdapter(
         val dialog = Dialog(ctx, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
 
-        val iv = ImageView(ctx).apply {
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            try { setImageURI(uri) } catch (_: Exception) { setImageResource(android.R.drawable.ic_menu_gallery) }
-        }
+        val iv = ImageView(ctx).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
 
-        // Pinch-to-zoom and pan via Matrix
         var scaleFactor = 1f
         var lastX = 0f; var lastY = 0f
         var transX = 0f; var transY = 0f
+        var bitmapReady = false
+
         val scaleDetector = android.view.ScaleGestureDetector(ctx,
             object : android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
                 override fun onScale(det: android.view.ScaleGestureDetector): Boolean {
+                    if (!bitmapReady) return true
                     scaleFactor = (scaleFactor * det.scaleFactor).coerceIn(1f, 8f)
-                    applyMatrix(iv, scaleFactor, transX, transY)
+                    applyZoom(iv, scaleFactor, transX, transY)
                     return true
                 }
             })
 
-        iv.setOnTouchListener { v, ev ->
+        iv.setOnTouchListener { _, ev ->
             scaleDetector.onTouchEvent(ev)
             when (ev.actionMasked) {
                 android.view.MotionEvent.ACTION_DOWN -> { lastX = ev.rawX; lastY = ev.rawY }
                 android.view.MotionEvent.ACTION_MOVE -> {
                     if (!scaleDetector.isInProgress && scaleFactor > 1f) {
                         transX += ev.rawX - lastX; transY += ev.rawY - lastY
-                        applyMatrix(iv, scaleFactor, transX, transY)
+                        applyZoom(iv, scaleFactor, transX, transY)
                     }
                     lastX = ev.rawX; lastY = ev.rawY
                 }
@@ -398,14 +397,48 @@ class BubbleAdapter(
 
         dialog.setContentView(iv)
         dialog.show()
+
+        // Load via ContentResolver so content://mms/part/… URIs work on all devices
+        Thread {
+            val bmp = try {
+                ctx.contentResolver.openInputStream(uri)?.use {
+                    android.graphics.BitmapFactory.decodeStream(it)
+                }
+            } catch (_: Exception) { null }
+            iv.post {
+                if (bmp != null) { iv.setImageBitmap(bmp); bitmapReady = true }
+                else iv.setImageResource(android.R.drawable.ic_menu_gallery)
+            }
+        }.start()
     }
 
-    private fun applyMatrix(iv: ImageView, scale: Float, tx: Float, ty: Float) {
+    private fun applyZoom(iv: ImageView, scale: Float, tx: Float, ty: Float) {
+        val drawable = iv.drawable ?: return
+        val bw = drawable.intrinsicWidth.toFloat()
+        val bh = drawable.intrinsicHeight.toFloat()
+        val vw = iv.width.toFloat()
+        val vh = iv.height.toFloat()
+        if (vw <= 0f || vh <= 0f || bw <= 0f || bh <= 0f) return
+
+        if (scale <= 1f) {
+            iv.scaleType = ImageView.ScaleType.FIT_CENTER
+            return
+        }
+
+        // Reconstruct the FIT_CENTER initial matrix (scale + center the bitmap in the view)
+        val fitScale = minOf(vw / bw, vh / bh)
+        val fitTx    = (vw - bw * fitScale) / 2f
+        val fitTy    = (vh - bh * fitScale) / 2f
+
         val m = android.graphics.Matrix()
-        m.setScale(scale, scale, iv.width / 2f, iv.height / 2f)
+        m.setScale(fitScale, fitScale)
+        m.postTranslate(fitTx, fitTy)
+        // Apply user zoom around view centre, then user pan
+        m.postScale(scale, scale, vw / 2f, vh / 2f)
         m.postTranslate(tx, ty)
+
         iv.imageMatrix = m
-        iv.scaleType = ImageView.ScaleType.MATRIX
+        iv.scaleType   = ImageView.ScaleType.MATRIX
     }
 
     private fun showMenu(anchor: View, m: SmsMessage, displayBody: String = m.body) {

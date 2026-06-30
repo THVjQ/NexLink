@@ -101,4 +101,18 @@ object NotificationPrefs {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putInt("dark_mode", mode).apply()
     }
+
+    // ── Priority contacts (bypass DND) ──
+    // Keyed on last 9 digits so +61412345678 and 0412345678 resolve to the same flag.
+    fun isPriorityContact(ctx: Context, address: String): Boolean {
+        val key = address.replace("[^\\d]".toRegex(), "").takeLast(9).ifEmpty { address }
+        return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean("priority_$key", false)
+    }
+
+    fun setPriorityContact(ctx: Context, address: String, priority: Boolean) {
+        val key = address.replace("[^\\d]".toRegex(), "").takeLast(9).ifEmpty { address }
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean("priority_$key", priority).apply()
+    }
 }

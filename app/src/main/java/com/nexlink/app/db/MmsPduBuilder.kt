@@ -75,32 +75,51 @@ object MmsPduBuilder {
     // ── SMIL builder ─────────────────────────────────────────────────────────
 
     private fun buildSmil(parts: List<Part>): String {
-        val regions = StringBuilder()
-        val body    = StringBuilder()
-        var hasImage = false; var hasVideo = false; var hasText = false
+        val regions    = StringBuilder()
+        val slides     = mutableListOf<String>() // one <par> per image/video slide
+        var currentSlide = StringBuilder()
+        var hasImageRegion = false; var hasVideoRegion = false; var hasTextRegion = false
+        var hasText = false
 
         parts.forEachIndexed { i, part ->
             val loc = fileNameFor(part.contentType, i)
             when {
-                part.contentType.startsWith("image/") && !hasImage -> {
-                    regions.append("<region id=\"Image\" top=\"0\" left=\"0\" height=\"100%\" width=\"100%\" fit=\"meet\"/>")
-                    body.append("<img src=\"$loc\" region=\"Image\"/>"); hasImage = true
+                part.contentType.startsWith("image/") -> {
+                    if (!hasImageRegion) {
+                        regions.append("<region id=\"Image\" top=\"0\" left=\"0\" height=\"100%\" width=\"100%\" fit=\"meet\"/>")
+                        hasImageRegion = true
+                    }
+                    // Flush previous slide and start a new one for each image
+                    if (currentSlide.isNotEmpty()) slides.add(currentSlide.toString())
+                    currentSlide = StringBuilder("<img src=\"$loc\" region=\"Image\"/>")
                 }
-                part.contentType.startsWith("video/") && !hasVideo -> {
-                    regions.append("<region id=\"Video\" top=\"0\" left=\"0\" height=\"100%\" width=\"100%\" fit=\"meet\"/>")
-                    body.append("<video src=\"$loc\" region=\"Video\"/>"); hasVideo = true
+                part.contentType.startsWith("video/") -> {
+                    if (!hasVideoRegion) {
+                        regions.append("<region id=\"Video\" top=\"0\" left=\"0\" height=\"100%\" width=\"100%\" fit=\"meet\"/>")
+                        hasVideoRegion = true
+                    }
+                    if (currentSlide.isNotEmpty()) slides.add(currentSlide.toString())
+                    currentSlide = StringBuilder("<video src=\"$loc\" region=\"Video\"/>")
                 }
                 part.contentType.startsWith("audio/") ->
-                    body.append("<audio src=\"$loc\"/>")
+                    currentSlide.append("<audio src=\"$loc\"/>")
                 part.contentType.startsWith("text/plain") && !hasText -> {
-                    regions.append("<region id=\"Text\" top=\"70%\" left=\"0\" height=\"30%\" width=\"100%\"/>")
-                    body.append("<text src=\"$loc\" region=\"Text\"/>"); hasText = true
+                    if (!hasTextRegion) {
+                        regions.append("<region id=\"Text\" top=\"70%\" left=\"0\" height=\"30%\" width=\"100%\"/>")
+                        hasTextRegion = true
+                    }
+                    currentSlide.append("<text src=\"$loc\" region=\"Text\"/>")
+                    hasText = true
                 }
             }
         }
+        // Flush final slide
+        slides.add(currentSlide.toString())
+
+        val body = slides.joinToString("") { "<par duration=\"5000ms\">$it</par>" }
 
         return "<smil><head><layout><root-layout width=\"100%\" height=\"100%\"/>$regions</layout></head>" +
-               "<body><par duration=\"5000ms\">$body</par></body></smil>"
+               "<body>$body</body></smil>"
     }
 
     private fun fileNameFor(mimeType: String, index: Int): String = when {
