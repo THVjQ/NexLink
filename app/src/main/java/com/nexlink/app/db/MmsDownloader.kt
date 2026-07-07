@@ -142,16 +142,24 @@ object MmsDownloader {
             val uri = persister.persist(pdu, Telephony.Mms.Inbox.CONTENT_URI, true, true, null, subId)
             android.util.Log.d(TAG, "MmsDownloader: stored at $uri")
 
-            ctx.contentResolver.update(uri, ContentValues().apply {
-                put(Telephony.Mms.READ, 0)
-                put(Telephony.Mms.SEEN, 0)
-            }, null, null)
-
             val sender = pdu.from?.textString
                 ?.let { String(it, Charsets.UTF_8) }
                 ?.substringBefore("/TYPE=")
                 ?.trim()
                 ?.ifBlank { null }
+
+            // Pin the row to the canonical thread the conversation UI opens for this sender.
+            // PduPersister derives a thread from the PDU addresses, which can differ in format
+            // from the SMS thread — a text/link MMS would then be stored but invisible in the
+            // chat (notification arrives, message "missing"). Force it to match.
+            val threadId = if (!sender.isNullOrBlank())
+                runCatching { Telephony.Threads.getOrCreateThreadId(ctx, sender) }.getOrDefault(0L) else 0L
+            ctx.contentResolver.update(uri, ContentValues().apply {
+                put(Telephony.Mms.READ, 0)
+                put(Telephony.Mms.SEEN, 0)
+                if (threadId > 0) put(Telephony.Mms.THREAD_ID, threadId)
+            }, null, null)
+            android.util.Log.d(TAG, "MmsDownloader: sender=$sender thread=$threadId")
 
             MmsPduResult(sender, extractNotifText(pdu))
         } catch (e: Exception) {

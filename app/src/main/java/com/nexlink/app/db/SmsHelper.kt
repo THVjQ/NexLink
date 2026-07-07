@@ -766,13 +766,35 @@ object SmsHelper {
         }
     }
 
-    fun saveIncomingSms(ctx: Context, address: String, body: String) {
+    /**
+     * Persists an incoming SMS into the inbox and returns the inserted row Uri (null on failure).
+     *
+     * The row is explicitly pinned to the canonical thread id resolved the same way the
+     * conversation UI resolves it (getOrCreateThreadId). Without this, the provider's implicit
+     * thread assignment could differ from the thread the UI opens — the message would be stored
+     * but invisible in the chat, producing "notification arrived but message missing" (seen
+     * most often with link SMS). Returning the Uri also lets callers log a genuine store failure
+     * instead of silently swallowing it while still posting a notification.
+     */
+    fun saveIncomingSms(ctx: Context, address: String, body: String): Uri? {
+        val threadId = runCatching {
+            Telephony.Threads.getOrCreateThreadId(ctx, address)
+        }.getOrDefault(0L)
         val values = ContentValues().apply {
             put(Telephony.Sms.ADDRESS, address); put(Telephony.Sms.BODY, body)
             put(Telephony.Sms.DATE, System.currentTimeMillis()); put(Telephony.Sms.DATE_SENT, System.currentTimeMillis())
             put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_INBOX); put(Telephony.Sms.READ, 0); put(Telephony.Sms.SEEN, 0)
+            if (threadId > 0) put(Telephony.Sms.THREAD_ID, threadId)
         }
-        try { ctx.contentResolver.insert(Telephony.Sms.Inbox.CONTENT_URI, values) } catch (_: Exception) {}
+        return try {
+            val uri = ctx.contentResolver.insert(Telephony.Sms.Inbox.CONTENT_URI, values)
+            if (uri == null) android.util.Log.e("NexLink_SMS", "saveIncomingSms: insert returned null (addr=$address len=${body.length})")
+            else android.util.Log.d("NexLink_SMS", "saveIncomingSms: stored $uri thread=$threadId")
+            uri
+        } catch (e: Exception) {
+            android.util.Log.e("NexLink_SMS", "saveIncomingSms: insert threw: ${e.message}")
+            null
+        }
     }
 
     fun getContactName(ctx: Context, address: String): String {

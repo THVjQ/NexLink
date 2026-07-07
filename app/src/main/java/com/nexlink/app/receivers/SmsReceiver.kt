@@ -69,7 +69,9 @@ class SmsReceiver : BroadcastReceiver() {
                             // Key exchange messages are internal — not shown to the user
                         }
                         else -> {
-                            SmsHelper.saveIncomingSms(context, sender, bodyStr)
+                            val storedUri = SmsHelper.saveIncomingSms(context, sender, bodyStr)
+                            if (storedUri == null)
+                                Log.e("NexLink_SMS", "Incoming SMS NOT persisted (sender=$sender len=${bodyStr.length}) — notifying anyway")
                             // If the peer sends an encrypted message it proves they have our public key
                             // (they derived the same session key) → mark session bidirectionally ready.
                             if (CryptoStore.isEncrypted(bodyStr) &&
