@@ -37,6 +37,12 @@ class MainActivity : AppCompatActivity() {
     private val contactsFragment = ContactsFragment()
     private val settingsFragment = SettingsFragment()
 
+    // Tab back-stack: Back pops one visited tab at a time (e.g. Signal→Inbox→SMS) instead of
+    // jumping straight to SMS, and only exits the app once history is empty.
+    private val navHistory = ArrayDeque<Int>()
+    private var currentNavId = R.id.nav_sms
+    private var navigatingBack = false
+
     companion object {
         private val REQUIRED_PERMS = arrayOf(
             Manifest.permission.READ_SMS,
@@ -66,14 +72,24 @@ class MainActivity : AppCompatActivity() {
         promptNotificationAccess()
 
         binding.bottomNav.setOnItemSelectedListener { item ->
-            when (item.itemId) {
-                R.id.nav_sms      -> { loadFragment(smsFragment);      true }
-                R.id.nav_inbox    -> { loadFragment(inboxFragment);     true }
-                R.id.nav_calls    -> { loadFragment(callsFragment);     true }
-                R.id.nav_contacts -> { loadFragment(contactsFragment);  true }
-                R.id.nav_settings -> { loadFragment(settingsFragment);  true }
-                else -> false
+            val fragment = when (item.itemId) {
+                R.id.nav_sms      -> smsFragment
+                R.id.nav_inbox    -> inboxFragment
+                R.id.nav_calls    -> callsFragment
+                R.id.nav_contacts -> contactsFragment
+                R.id.nav_settings -> settingsFragment
+                else -> null
             }
+            if (fragment != null) {
+                // Record the tab we're leaving so Back can return to it. Skipped when the
+                // selection is itself a Back-pop, so we never re-push what we just popped.
+                if (!navigatingBack && item.itemId != currentNavId) {
+                    navHistory.addLast(currentNavId)
+                }
+                currentNavId = item.itemId
+                loadFragment(fragment)
+                true
+            } else false
         }
 
         handleSocialNotifTap(intent)
@@ -86,14 +102,20 @@ class MainActivity : AppCompatActivity() {
             R.id.nav_settings -> settingsFragment
             else              -> smsFragment
         })
+        currentNavId = startNav
         binding.bottomNav.selectedItemId = startNav
     }
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (binding.bottomNav.selectedItemId != R.id.nav_sms) {
-            binding.bottomNav.selectedItemId = R.id.nav_sms
+        if (navHistory.isNotEmpty()) {
+            // Step back exactly one tab through the visit history.
+            val prev = navHistory.removeLast()
+            navigatingBack = true
+            binding.bottomNav.selectedItemId = prev
+            navigatingBack = false
         } else {
+            // At the root of the history stack — let Back close the app.
             super.onBackPressed()
         }
     }

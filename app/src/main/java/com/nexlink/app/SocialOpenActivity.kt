@@ -34,10 +34,13 @@ class SocialOpenActivity : Activity() {
         var opened = false
 
         // 1) Fire the social app's own contentIntent → opens the exact conversation.
-        val socialPi = NexLinkNotificationListener.popContentIntent(key)
+        //    Peek (not pop) so the inbox conversation row can reuse the same intent later.
+        val socialPi = NexLinkNotificationListener.peekContentIntent(key)
         if (socialPi != null) {
             try { socialPi.send(); opened = true }
-            catch (_: PendingIntent.CanceledException) {}
+            catch (_: PendingIntent.CanceledException) {
+                NexLinkNotificationListener.dropContentIntent(key)
+            }
         }
 
         // 2) Fallback: open the social app (not exact chat — happens if listener was restarted).

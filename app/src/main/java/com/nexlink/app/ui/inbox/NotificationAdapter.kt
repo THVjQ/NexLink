@@ -10,6 +10,7 @@ import com.nexlink.app.R
 import com.nexlink.app.db.DeepLinkHelper
 import com.nexlink.app.db.NotificationStore
 import com.nexlink.app.db.SocialNotification
+import com.nexlink.app.services.NexLinkNotificationListener
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -97,7 +98,19 @@ class NotificationAdapter : RecyclerView.Adapter<NotificationAdapter.VH>() {
         }
 
         h.itemView.setOnClickListener {
-            DeepLinkHelper.openPlatform(it.context, n.platform)
+            val ctx = it.context
+            // Prefer the social app's own contentIntent (cached from the notification) so we land
+            // in this exact conversation. Falls back to cold-launching the app when the intent is
+            // gone (e.g. after a reboot) or was canceled by the source app.
+            val pi = NexLinkNotificationListener.peekContentIntent(n.id)
+            var opened = false
+            if (pi != null) {
+                try { pi.send(); opened = true }
+                catch (_: android.app.PendingIntent.CanceledException) {
+                    NexLinkNotificationListener.dropContentIntent(n.id)
+                }
+            }
+            if (!opened) DeepLinkHelper.openPlatform(ctx, n.platform)
             // Mark as read so badge disappears after opening
             NotificationStore.markRead(n.platform, n.sender)
         }

@@ -288,6 +288,13 @@ class BubbleAdapter(
             // Make URLs and email addresses clickable — MovementMethod handles link taps;
             // long-press falls through to h.itemView's listener below.
             Linkify.addLinks(h.bubble, Linkify.WEB_URLS or Linkify.EMAIL_ADDRESSES)
+            // Links must contrast with the bubble background. The outgoing bubble is solid blue
+            // (#0178FF) with white text, so the default blue link colour renders blue-on-blue and
+            // the link is effectively invisible — force white there. Incoming bubbles are light,
+            // so the accent blue is readable. (URLSpan underline keeps links identifiable.)
+            h.bubble.setLinkTextColor(
+                if (m.isIncoming) 0xFF0178FF.toInt() else 0xFFFFFFFF.toInt()
+            )
             val spanned = h.bubble.text as? android.text.Spanned
             val hasLinks = spanned?.getSpans(0, spanned.length,
                 android.text.style.URLSpan::class.java)?.isNotEmpty() == true

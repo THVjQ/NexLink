@@ -22,11 +22,41 @@ class NexLinkNotificationListener : NotificationListenerService() {
 
     companion object {
         // Original contentIntents from social apps — keyed by StatusBarNotification.key.
-        // Stored so tapping the NexLink re-post opens the exact conversation.
-        private val contentIntents = mutableMapOf<String, android.app.PendingIntent>()
+        // Stored so tapping the NexLink re-post OR an inbox conversation row opens the exact
+        // chat instead of cold-launching the app to its last screen.
+        //
+        // In-memory only (does not survive a reboot) and read from the UI thread while written
+        // from the listener thread, so every access goes through the synchronized helpers below.
+        // Bounded LinkedHashMap: self-suppressed notifications keep their intent for the process
+        // lifetime (see selfSuppressed), so cap the size to avoid slow unbounded growth.
+        private const val MAX_CACHED_INTENTS = 200
+        private val cacheLock = Any()
+        private val contentIntents =
+            object : LinkedHashMap<String, android.app.PendingIntent>(16, 0.75f, false) {
+                override fun removeEldestEntry(
+                    eldest: MutableMap.MutableEntry<String, android.app.PendingIntent>
+                ): Boolean = size > MAX_CACHED_INTENTS
+            }
 
+        // Notification keys we canceled ourselves for source-suppression. The resulting
+        // onNotificationRemoved must NOT discard the cached intent or mark the message read —
+        // only the source app dismissing its own notification means "read in the app".
+        private val selfSuppressed = mutableSetOf<String>()
+
+        fun cacheContentIntent(key: String, pi: android.app.PendingIntent) =
+            synchronized(cacheLock) { contentIntents[key] = pi }
+
+        /** Return and remove — for one-shot callers. */
         fun popContentIntent(key: String): android.app.PendingIntent? =
-            contentIntents.remove(key)
+            synchronized(cacheLock) { contentIntents.remove(key) }
+
+        /** Return without removing so both the notification tap and the inbox row can use it. */
+        fun peekContentIntent(key: String): android.app.PendingIntent? =
+            synchronized(cacheLock) { contentIntents[key] }
+
+        /** Drop an intent the system reported as canceled/stale. */
+        fun dropContentIntent(key: String) =
+            synchronized(cacheLock) { contentIntents.remove(key) }
 
         // Common system SMS/MMS apps — suppressed when "Only notify via NexLink" is on.
         // NexLink itself is the SMS handler and re-posts its own notification, so these
@@ -144,7 +174,7 @@ class NexLinkNotificationListener : NotificationListenerService() {
         }
 
         // Cache the social app's own contentIntent so we can open the exact conversation on tap
-        sbn.notification.contentIntent?.let { contentIntents[sbn.key] = it }
+        sbn.notification.contentIntent?.let { cacheContentIntent(sbn.key, it) }
 
         val n = SocialNotification(
             id          = "${sbn.key}",
@@ -170,6 +200,10 @@ class NexLinkNotificationListener : NotificationListenerService() {
             !isVoice &&
             !(NotificationPrefs.isPassThroughMedia(ctx) && isMedia)
         if (shouldSuppressSource) {
+            // Mark before canceling: our cancel triggers onNotificationRemoved, which must keep
+            // the cached contentIntent alive (so the inbox row can still open the exact chat) and
+            // must not mistake this for the user having read the message in the source app.
+            selfSuppressed.add(sbn.key)
             cancelNotification(sbn.key)
         }
 
@@ -182,11 +216,14 @@ class NexLinkNotificationListener : NotificationListenerService() {
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         val pkg = sbn.packageName ?: return
         if (pkg !in NotificationStore.watchedPackages) return
+        // We canceled this ourselves to suppress the source app: it was NOT read in the app, and
+        // its cached contentIntent must survive so a later tap still opens the exact conversation.
+        if (selfSuppressed.remove(sbn.key)) return
         // Social app dismissed its own notification → user read the message in the app
         val extras = sbn.notification?.extras ?: return
         val title  = extras.getCharSequence("android.title")?.toString() ?: return
         NotificationStore.markRead(NotificationStore.platform(pkg), title)
-        contentIntents.remove(sbn.key)
+        dropContentIntent(sbn.key)
     }
 
     private fun postNexLinkNotification(n: SocialNotification) {
