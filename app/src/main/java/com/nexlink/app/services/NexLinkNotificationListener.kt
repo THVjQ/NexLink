@@ -1,11 +1,15 @@
 package com.nexlink.app.services
 
+import android.app.ActivityOptions
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.os.Build
+import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
@@ -57,6 +61,33 @@ class NexLinkNotificationListener : NotificationListenerService() {
         /** Drop an intent the system reported as canceled/stale. */
         fun dropContentIntent(key: String) =
             synchronized(cacheLock) { contentIntents.remove(key) }
+
+        /**
+         * Fire the social app's own contentIntent so the tap lands in the exact conversation.
+         * Returns false when there is nothing cached or the source app canceled the intent, so
+         * callers can fall back to cold-launching the app.
+         */
+        fun fireContentIntent(ctx: Context, key: String): Boolean {
+            val pi = peekContentIntent(key) ?: return false
+            return try {
+                pi.send(ctx, 0, null, null, null, null, backgroundStartOptions())
+                true
+            } catch (_: PendingIntent.CanceledException) {
+                dropContentIntent(key)
+                false
+            }
+        }
+
+        // Since Android 14 the sender no longer hands its background-activity-launch privilege
+        // to the PendingIntent's creator. Without opting in, send() returns normally while the
+        // system silently drops the launch — a tap that appears to do nothing at all.
+        private fun backgroundStartOptions(): Bundle? =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ActivityOptions.makeBasic()
+                    .setPendingIntentBackgroundActivityStartMode(
+                        ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
+                    .toBundle()
+            } else null
 
         // Common system SMS/MMS apps — suppressed when "Only notify via NexLink" is on.
         // NexLink itself is the SMS handler and re-posts its own notification, so these

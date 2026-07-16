@@ -30,10 +30,13 @@ object DeepLinkHelper {
     fun messenger(ctx: Context) = openApp(ctx, "com.facebook.orca")
 
     // ── Open any app by package name, toast if not installed ──
-    fun openApp(ctx: Context, pkg: String) {
+    fun openApp(ctx: Context, pkg: String): Boolean {
         val intent = ctx.packageManager.getLaunchIntentForPackage(pkg)
-        if (intent != null) ctx.startActivity(intent)
-        else Toast.makeText(ctx, "App not installed", Toast.LENGTH_SHORT).show()
+        if (intent == null) {
+            Toast.makeText(ctx, "App not installed", Toast.LENGTH_SHORT).show()
+            return false
+        }
+        return open(ctx, intent)
     }
 
     // ── Discord: open app ──
@@ -46,7 +49,9 @@ object DeepLinkHelper {
     fun steam(ctx: Context) = openApp(ctx, "com.valvesoftware.android.steam.community")
 
     // ── Open the right app for a given platform string ──
-    fun openPlatform(ctx: Context, platform: String) {
+    // Returns false for an unrecognised platform so callers can fall back rather than assume
+    // the app opened.
+    fun openPlatform(ctx: Context, platform: String): Boolean {
         val pkg = when (platform) {
             "Signal"    -> "org.thoughtcrime.securesms"
             "Telegram"  -> "org.telegram.messenger"
@@ -55,9 +60,9 @@ object DeepLinkHelper {
             "Discord"   -> "com.discord"
             "Instagram" -> "com.instagram.android"
             "Steam"     -> "com.valvesoftware.android.steam.community"
-            else        -> return
+            else        -> return false
         }
-        openApp(ctx, pkg)
+        return openApp(ctx, pkg)
     }
 
     private fun open(ctx: Context, intent: Intent): Boolean = try {

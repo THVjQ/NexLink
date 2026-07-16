@@ -102,15 +102,9 @@ class NotificationAdapter : RecyclerView.Adapter<NotificationAdapter.VH>() {
             // Prefer the social app's own contentIntent (cached from the notification) so we land
             // in this exact conversation. Falls back to cold-launching the app when the intent is
             // gone (e.g. after a reboot) or was canceled by the source app.
-            val pi = NexLinkNotificationListener.peekContentIntent(n.id)
-            var opened = false
-            if (pi != null) {
-                try { pi.send(); opened = true }
-                catch (_: android.app.PendingIntent.CanceledException) {
-                    NexLinkNotificationListener.dropContentIntent(n.id)
-                }
+            if (!NexLinkNotificationListener.fireContentIntent(ctx, n.id)) {
+                DeepLinkHelper.openPlatform(ctx, n.platform)
             }
-            if (!opened) DeepLinkHelper.openPlatform(ctx, n.platform)
             // Mark as read so badge disappears after opening
             NotificationStore.markRead(n.platform, n.sender)
         }

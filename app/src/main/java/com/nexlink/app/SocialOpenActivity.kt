@@ -2,7 +2,6 @@ package com.nexlink.app
 
 import android.app.Activity
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Intent
 import android.os.Bundle
 import com.nexlink.app.db.DeepLinkHelper
@@ -31,22 +30,14 @@ class SocialOpenActivity : Activity() {
             getSystemService(NotificationManager::class.java).cancel(notifId)
         }
 
-        var opened = false
-
         // 1) Fire the social app's own contentIntent → opens the exact conversation.
         //    Peek (not pop) so the inbox conversation row can reuse the same intent later.
-        val socialPi = NexLinkNotificationListener.peekContentIntent(key)
-        if (socialPi != null) {
-            try { socialPi.send(); opened = true }
-            catch (_: PendingIntent.CanceledException) {
-                NexLinkNotificationListener.dropContentIntent(key)
-            }
-        }
+        var opened = NexLinkNotificationListener.fireContentIntent(this, key)
 
         // 2) Fallback: open the social app (not exact chat — happens if listener was restarted).
         if (!opened && platform != null) {
-            try { DeepLinkHelper.openPlatform(this, platform); opened = true }
-            catch (_: Exception) {}
+            opened = try { DeepLinkHelper.openPlatform(this, platform) }
+                     catch (_: Exception) { false }
         }
 
         // 3) Last resort: open NexLink inbox.
