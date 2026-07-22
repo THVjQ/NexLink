@@ -520,7 +520,8 @@ object SmsHelper {
         } catch (_: Exception) {}
     }
 
-    fun sendSms(ctx: Context, address: String, body: String, subscriptionId: Int = -1) {
+    /** Sends an SMS and returns the inserted telephony row id (or -1). */
+    fun sendSms(ctx: Context, address: String, body: String, subscriptionId: Int = -1): Long {
         // Insert with STATUS_NONE (single tick) — SmsSentReceiver upgrades to FAILED on error,
         // SmsDeliveredReceiver upgrades to COMPLETE (double tick) on carrier delivery report.
         val values = ContentValues().apply {
@@ -549,6 +550,7 @@ object SmsHelper {
         getSmsManager(subscriptionId).sendTextMessage(address, null, body, sentIntent, deliveryIntent)
         DebugLog.log(ctx, DebugLog.CAT_SENT, address,
             "SMS queued · ${body.length} chars · row=$msgId${if (subscriptionId >= 0) " · subId=$subscriptionId" else ""}")
+        return msgId
     }
 
     fun sendGroupText(ctx: Context, threadId: Long, participants: List<String>, text: String, subId: Int = -1): Long {

@@ -43,6 +43,12 @@
     <!-- DND bypass for priority contacts -->
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY"/>
 
+    <!-- ── Optional Computer Bridge addon (dormant until enabled in Settings) ── -->
+    <!-- connectedDevice FGS type is not the ~6h/day-capped dataSync type (§7b) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
+    <!-- Ask to be exempted from OEM battery sleeping so background delivery is reliable (§7a) -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+
     <application
         android:name=".App"
         android:allowBackup="true"
@@ -50,7 +56,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@style/Theme.NexLink">
 
         <!-- ── Main entry (no launcher filter — handled by activity-aliases below) ── -->
@@ -97,6 +103,31 @@
             android:name=".ui.settings.DebugActivity"
             android:label="Debug"
             android:exported="false"/>
+
+        <!-- ── Optional Computer Bridge (dormant until enabled) ── -->
+        <activity
+            android:name=".ui.bridge.BridgeSettingsActivity"
+            android:label="Computer Bridge"
+            android:exported="false"/>
+        <activity
+            android:name=".ui.bridge.BridgeSetupActivity"
+            android:label="Set up Computer Bridge"
+            android:exported="false"/>
+
+        <service
+            android:name=".services.BridgePollingService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice"/>
+
+        <receiver
+            android:name=".receivers.BridgeBootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
 
         <!-- ── Share target: appear in Android share sheet ── -->
         <activity

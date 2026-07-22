@@ -94,6 +94,8 @@ class SmsReceiver : BroadcastReceiver() {
                             SmsNotifier.notify(context, sender, notif)
                             WearSync.pushConversations(context)
                             notifySessionEstablished(context, sender)
+                            // §6 — optional Computer Bridge forward. No-op unless the user enabled it.
+                            com.nexlink.app.services.BridgeHook.onIncomingSms(context, sender, bodyStr)
                         }
                     }
                 }

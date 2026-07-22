@@ -11,12 +11,12 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace 'com.nexlink.app'
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         applicationId "com.thvjq.nexlink"
         minSdk 26
-        targetSdk 35
+        targetSdk 36
         versionCode 28
         versionName "2.4.3"
     }
@@ -71,4 +71,12 @@ dependencies {
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0'
     implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.7.0'
+
+    // ── Computer Bridge (optional, off-by-default addon) ──────────────────────
+    // HTTP transport to the user's self-hosted server
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    // EncryptedSharedPreferences for the bridge transport keypair (crypto/BridgeKeyManager)
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+    // Background watchdog that revives the polling service if the OS kills it
+    implementation 'androidx.work:work-runtime-ktx:2.9.1'
 }

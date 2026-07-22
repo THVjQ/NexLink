@@ -16,6 +16,13 @@
         <TextView android:id="@+id/tvTime"
             android:layout_width="wrap_content" android:layout_height="wrap_content"
             android:textColor="@color/muted" android:textSize="11sp"/>
+        <ImageView android:id="@+id/ivPcSent"
+            android:layout_width="13dp" android:layout_height="13dp"
+            android:layout_marginStart="5dp"
+            android:src="@drawable/ic_pc_sent"
+            android:tint="@color/muted"
+            android:contentDescription="Sent from computer"
+            android:visibility="gone"/>
         <ImageView android:id="@+id/ivStatus"
             android:layout_width="14dp" android:layout_height="14dp"
             android:layout_marginStart="4dp"

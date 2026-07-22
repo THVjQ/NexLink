@@ -10,6 +10,7 @@ class App : Application() {
         const val CH_SMS          = "nexlink_sms"
         const val CH_SMS_PRIORITY = "nexlink_sms_priority"
         const val CH_SOCIAL       = "nexlink_social"
+        const val CH_BRIDGE       = "nexlink_bridge"
     }
 
     override fun onCreate() {
@@ -33,6 +34,10 @@ class App : Application() {
         nm.createNotificationChannel(
             NotificationChannel(CH_SOCIAL, "Social Messages", NotificationManager.IMPORTANCE_HIGH)
                 .apply { description = "Social app notifications" }
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CH_BRIDGE, "Computer Bridge", NotificationManager.IMPORTANCE_MIN)
+                .apply { description = "Persistent notification while the optional Computer Bridge is active" }
         )
     }
 }

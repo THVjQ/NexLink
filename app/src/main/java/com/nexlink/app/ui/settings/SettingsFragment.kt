@@ -266,10 +266,28 @@ class SettingsFragment : Fragment() {
         b.rowAppIcon.setOnClickListener { showAppIconDialog() }
         b.rowNotifIcon.setOnClickListener { showNotifIconDialog() }
 
+        // Connectivity — Computer Bridge
+        refreshBridgeSummary()
+        b.rowBridge.setOnClickListener {
+            startActivity(Intent(requireContext(), com.nexlink.app.ui.bridge.BridgeSettingsActivity::class.java))
+        }
+
         // Developer — Debug console
         refreshDebugSummary()
         b.rowDebug.setOnClickListener {
             startActivity(Intent(requireContext(), DebugActivity::class.java))
+        }
+    }
+
+    private fun refreshBridgeSummary() {
+        val ctx = context ?: return
+        b.tvBridgeSummary.text = when {
+            com.nexlink.app.db.BridgePrefs.isEnabled(ctx) && com.nexlink.app.db.BridgePrefs.isLinked(ctx) ->
+                "Connected — ${com.nexlink.app.db.BridgePrefs.serverHost(ctx)}"
+            com.nexlink.app.db.BridgePrefs.isDisclaimerAccepted(ctx) &&
+                com.nexlink.app.db.BridgePrefs.getServerUrl(ctx).isNotBlank() ->
+                "Setup incomplete"
+            else -> "Off"
         }
     }
 
@@ -292,6 +310,7 @@ class SettingsFragment : Fragment() {
         refreshDarkModeLabel()
         refreshIconLabels()
         refreshDebugSummary()
+        refreshBridgeSummary()
 
         // Refresh all switch states in case they were changed externally
         val ctx = context ?: return

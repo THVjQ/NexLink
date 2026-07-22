@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  §16.3 — cleartext HTTP is denied app-wide. Previously the manifest set
+  usesCleartextTraffic="true", which would let the Computer Bridge's x-api-key header and
+  message metadata travel in plaintext over http://. NexLink's own MMS transport goes through
+  the system SmsManager (not the app's HTTP stack), so it is unaffected by this policy.
+
+  If you genuinely need http:// for local-only testing, add a scoped <domain-config
+  cleartextTrafficPermitted="true"> for that specific host here — never re-enable it globally.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

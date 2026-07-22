@@ -1,13 +1,15 @@
 # Privacy Policy
 
 **App:** NexLink  
-**Last updated:** 8 June 2026
+**Last updated:** 22 July 2026
 
 ---
 
 ## 1. Overview
 
-NexLink is a private, local-first communications app for Android. It replaces your default SMS/MMS app, displays social app notifications in one inbox, and (when both parties use NexLink) encrypts messages end-to-end on your device. **NexLink does not operate any servers, does not collect personal data, and does not transmit any information to third parties.**
+NexLink is a private, local-first communications app for Android. It replaces your default SMS/MMS app, displays social app notifications in one inbox, and (when both parties use NexLink) encrypts messages end-to-end on your device. **By default, NexLink operates no servers, collects no personal data, and transmits no information to third parties.**
+
+**One optional exception — the Computer Bridge.** NexLink includes an optional feature, **off by default**, that lets you send and receive your own SMS from a computer by relaying them through **a server that you set up and run yourself**. It does nothing until you explicitly read a disclaimer, point the app at your own server, and enable it. The developer still operates no server and cannot see your data. See **Section 6a** for exactly what your server can and cannot see.
 
 ---
 
@@ -43,6 +45,8 @@ NexLink has **no analytics SDK, no crash-reporting SDK, no advertising SDK, and 
 | `ANSWER_PHONE_CALLS`, `MANAGE_OWN_CALLS` | In-call screen integration |
 | `FOREGROUND_SERVICE`, `WAKE_LOCK` | Keep call handling alive while a call is in progress |
 | `RECEIVE_BOOT_COMPLETED` | Restore notification listeners after a device reboot |
+| `FOREGROUND_SERVICE_CONNECTED_DEVICE` | *(Computer Bridge only, when enabled)* Keep the bridge relay running reliably in the background |
+| `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | *(Computer Bridge only, when enabled)* Ask to be exempt from battery sleeping so the bridge delivers reliably |
 
 ---
 
@@ -80,6 +84,24 @@ NexLink does **not** integrate with any third-party analytics, advertising, or d
 2. Sending MMS content to your mobile carrier's MMSC server
 
 Both operations go directly between your device and your carrier over your mobile data connection.
+
+---
+
+## 6a. Optional Computer Bridge (off by default)
+
+The Computer Bridge is an **opt-in** feature for reading and replying to your own texts from a computer. It is **disabled on a fresh install** and does nothing — no network activity, no background service, no extra permission prompts — until you complete a blocking disclaimer and setup wizard.
+
+**Who runs the server:** You do. NexLink provides **no** server and **no** cloud service. You point the app at a server you own and operate (a home server, VPS, or free tier). The developer runs no bridge infrastructure and cannot access your data.
+
+**What is transmitted, and to where:** When enabled, your outgoing and incoming SMS are relayed between your phone and your computer through **your** server. Message **contents are end-to-end encrypted** between your phone and your browser client using ECIES (P-256 ECDH → HKDF-SHA256 → AES-256-GCM), so **your server relays only ciphertext and cannot read your messages.**
+
+**What your server can still see (metadata):** phone numbers, timing, message sizes, and device identifiers used for routing. Keep your server private, patched, and behind HTTPS or a private tunnel.
+
+**Key exchange & verification:** Your phone and browser client exchange **public** keys through your server (private keys never leave their device). Because the server brokers this exchange, a *malicious* server could attempt a man-in-the-middle substitution. The setup wizard shows a **key fingerprint** you can compare against the one in your browser extension to rule this out.
+
+**Scope:** Text SMS only. Picture messages (MMS) are **not** carried over the bridge in this version — an MMS still arrives on your phone but is not forwarded.
+
+**Turning it off:** Disabling the bridge in Settings stops the relay service, cancels its background scheduling, and (optionally) forgets your stored server URL and keys. The app then behaves exactly as stock, on-device NexLink. Your NexLink message database and NexLink↔NexLink encryption keys are never affected by enabling or disabling the bridge.
 
 ---
 

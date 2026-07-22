@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace 'com.nexlink.wear'
-    compileSdk 35
+    compileSdk 36
 
     def keystorePropertiesFile = rootProject.file("keystore.properties")
     def keystoreProperties = new Properties()

@@ -186,6 +186,7 @@ class BubbleAdapter(
         val sender:       TextView?    = v.findViewById(R.id.tvSenderName)
         val btnPlay:      ImageButton? = v.findViewById<View>(R.id.btnPlay) as? ImageButton
         val status:       ImageView?   = v.findViewById(R.id.ivStatus)
+        val pcSent:       ImageView?   = v.findViewById(R.id.ivPcSent)
         val btnTranscript: TextView?   = v.findViewById(R.id.btnTranscript)
         val tvTranscript:  TextView?   = v.findViewById(R.id.tvTranscript)
     }
@@ -234,6 +235,14 @@ class BubbleAdapter(
         iv.imageTintList = if (applyTint) ColorStateList.valueOf(tint) else null
     }
 
+    /** Shows a small computer symbol on outgoing messages that were sent from the PC via the bridge. */
+    private fun bindPcSent(iv: ImageView?, ctx: Context, m: SmsMessage) {
+        if (iv == null) return
+        val pc = !m.isIncoming && m.id > 0 &&
+            com.nexlink.app.db.BridgePrefs.isBridgeSent(ctx, m.id)
+        iv.visibility = if (pc) View.VISIBLE else View.GONE
+    }
+
     private fun decryptBody(ctx: Context, m: SmsMessage): String {
         if (!CryptoStore.isEncrypted(m.body)) return m.body
         val key = CryptoStore.getSessionKey(ctx, m.address) ?: return "🔒 Encrypted message"
@@ -252,6 +261,7 @@ class BubbleAdapter(
             h.time.text = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(m.timestamp))
             bindSender(h.sender, m)
             h.status?.visibility = View.GONE
+            h.pcSent?.visibility = View.GONE
             h.btnPlay?.visibility = View.GONE
             h.btnTranscript?.visibility = View.GONE
             h.tvTranscript?.visibility = View.GONE
@@ -266,6 +276,7 @@ class BubbleAdapter(
         h.time.text   = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(m.timestamp))
         bindSender(h.sender, m)
         bindStatus(h.status, m)
+        bindPcSent(h.pcSent, ctx, m)
 
         // File attachment (non-image, non-video, non-voice MMS) → tap to open
         val isFileMms = m.isMms && m.mediaUri != null && !m.isVoice &&

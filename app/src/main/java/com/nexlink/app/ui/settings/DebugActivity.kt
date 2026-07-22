@@ -11,12 +11,21 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.print.PrintAttributes
+import android.print.PrintManager
 import android.provider.Settings
 import android.provider.Telephony
+import android.text.Editable
+import android.text.InputType
+import android.text.TextUtils
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.EditText
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -29,6 +38,7 @@ import com.nexlink.app.R
 import com.nexlink.app.db.DebugLog
 import com.nexlink.app.db.NotificationStore
 import com.nexlink.app.db.SmsHelper
+import com.nexlink.app.ui.applySystemBarInsetsPadding
 import com.nexlink.app.services.NexLinkAccessibilityService
 import com.nexlink.app.services.NexLinkNotificationListener
 
@@ -46,6 +56,8 @@ class DebugActivity : AppCompatActivity() {
     private lateinit var diagContainer: LinearLayout
     private val chipButtons = mutableMapOf<String, TextView>()
     private var activeFilter: String = FILTER_ALL
+    private var searchQuery: String = ""
+    private var printWebView: WebView? = null   // held so the print job survives
 
     private val dp by lazy { resources.displayMetrics.density }
     private fun Int.px() = (this * dp).toInt()
@@ -68,8 +80,10 @@ class DebugActivity : AppCompatActivity() {
         }
         scroll.addView(root)
         setContentView(scroll)
+        root.applySystemBarInsetsPadding()
 
         buildActionRow()
+        buildSearchBox()
         buildFilterChips()
 
         root.addView(sectionHeader("PIPELINE EVENTS"))
@@ -95,21 +109,69 @@ class DebugActivity : AppCompatActivity() {
         }
         fun action(label: String, onClick: () -> Unit): Button = Button(this).apply {
             text = label
-            textSize = 12f
+            textSize = 11f
             isAllCaps = false
+            maxLines = 1
+            minWidth = 0; minimumWidth = 0
+            setPadding(4.px(), 0, 4.px(), 0)
             backgroundTintList = ContextCompat.getColorStateList(this@DebugActivity, R.color.surface2)
             setTextColor(col(R.color.text))
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                .apply { marginEnd = 6.px() }
+                .apply { marginEnd = 5.px() }
             setOnClickListener { onClick() }
         }
         row.addView(action("Refresh") { refresh() })
         row.addView(action("Copy") { copyLog() })
         row.addView(action("Share") { shareLog() })
+        row.addView(action("Print") { printLog() })
         row.addView(action("Clear") { confirmClear() }.also {
             (it.layoutParams as LinearLayout.LayoutParams).marginEnd = 0
         })
         root.addView(row)
+    }
+
+    /** Live search box — filters the pipeline events after every keystroke (§ user request). */
+    private fun buildSearchBox() {
+        val box = EditText(this).apply {
+            hint = "Search events — text, number, category…"
+            setText(searchQuery)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            isSingleLine = true
+            textSize = 14f
+            setTextColor(col(R.color.text)); setHintTextColor(col(R.color.muted))
+            background = GradientDrawable().apply {
+                cornerRadius = 10f * dp; setColor(col(R.color.surface)); setStroke(1, col(R.color.divider))
+            }
+            setPadding(14.px(), 10.px(), 14.px(), 10.px())
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 10.px() }
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: Editable?) {
+                    searchQuery = s?.toString()?.trim().orEmpty()
+                    renderLog()   // re-filter only the log list; leave focus in the box
+                }
+            })
+        }
+        root.addView(box)
+    }
+
+    private fun printLog() {
+        val html = "<html><body style='font-family:monospace;font-size:11px;white-space:pre-wrap'>" +
+            TextUtils.htmlEncode(DebugLog.dump(this)) + "</body></html>"
+        val wv = WebView(this)
+        wv.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView, url: String?) {
+                val pm = getSystemService(Context.PRINT_SERVICE) as PrintManager
+                val adapter = view.createPrintDocumentAdapter("NexLink-debug-log")
+                pm.print("NexLink debug log", adapter, PrintAttributes.Builder().build())
+                printWebView = null   // release after handing off to the print framework
+            }
+        }
+        printWebView = wv
+        wv.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
     }
 
     private fun copyLog() {
@@ -190,7 +252,13 @@ class DebugActivity : AppCompatActivity() {
     private fun renderLog() {
         logContainer.removeAllViews()
         val all = DebugLog.all(this)
-        val filtered = if (activeFilter == FILTER_ALL) all else all.filter { it.category == activeFilter }
+        val q = searchQuery.lowercase()
+        val filtered = all
+            .filter { activeFilter == FILTER_ALL || it.category == activeFilter }
+            .filter { q.isEmpty() ||
+                it.tag.lowercase().contains(q) ||
+                it.message.lowercase().contains(q) ||
+                it.category.lowercase().contains(q) }
 
         // Counts summary line
         val counts = DebugLog.ALL_CATEGORIES.associateWith { c -> all.count { it.category == c } }
@@ -205,7 +273,10 @@ class DebugActivity : AppCompatActivity() {
 
         if (filtered.isEmpty()) {
             logContainer.addView(TextView(this).apply {
-                text = "No events yet. Send or receive a message, or wait for a social notification."
+                text = if (searchQuery.isNotEmpty() || activeFilter != FILTER_ALL)
+                    "No events match your search/filter."
+                else
+                    "No events yet. Send or receive a message, or wait for a social notification."
                 textSize = 13f
                 setTextColor(col(R.color.muted))
                 setPadding(4.px(), 12.px(), 4.px(), 12.px())
