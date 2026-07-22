@@ -265,6 +265,23 @@ class SettingsFragment : Fragment() {
         refreshIconLabels()
         b.rowAppIcon.setOnClickListener { showAppIconDialog() }
         b.rowNotifIcon.setOnClickListener { showNotifIconDialog() }
+
+        // Developer — Debug console
+        refreshDebugSummary()
+        b.rowDebug.setOnClickListener {
+            startActivity(Intent(requireContext(), DebugActivity::class.java))
+        }
+    }
+
+    private fun refreshDebugSummary() {
+        val ctx = context ?: return
+        val total = com.nexlink.app.db.DebugLog.all(ctx).size
+        b.tvDebugSummary.text = if (total == 0)
+            "Sent, received & shown messages, diagnostics"
+        else
+            "$total events · sent ${com.nexlink.app.db.DebugLog.count(ctx, com.nexlink.app.db.DebugLog.CAT_SENT)}, " +
+            "received ${com.nexlink.app.db.DebugLog.count(ctx, com.nexlink.app.db.DebugLog.CAT_RECEIVED)}, " +
+            "shown ${com.nexlink.app.db.DebugLog.count(ctx, com.nexlink.app.db.DebugLog.CAT_SHOWN)}"
     }
 
     override fun onResume() {
@@ -274,6 +291,7 @@ class SettingsFragment : Fragment() {
         refreshRecycleBinCount()
         refreshDarkModeLabel()
         refreshIconLabels()
+        refreshDebugSummary()
 
         // Refresh all switch states in case they were changed externally
         val ctx = context ?: return

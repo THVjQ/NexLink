@@ -92,6 +92,12 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize"/>
 
+        <!-- ── Debug console (Settings ▸ Debug) ── -->
+        <activity
+            android:name=".ui.settings.DebugActivity"
+            android:label="Debug"
+            android:exported="false"/>
+
         <!-- ── Share target: appear in Android share sheet ── -->
         <activity
             android:name=".ui.sms.ShareActivity"

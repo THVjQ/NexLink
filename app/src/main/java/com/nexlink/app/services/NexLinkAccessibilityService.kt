@@ -54,6 +54,9 @@ class NexLinkAccessibilityService : AccessibilityService() {
                 ),
                 applicationContext
             )
+            com.nexlink.app.db.DebugLog.log(applicationContext,
+                com.nexlink.app.db.DebugLog.CAT_SENT, "$platform · $title",
+                "outgoing (captured) · ${body.take(80).replace("\n", " ")}")
         }
     }
 

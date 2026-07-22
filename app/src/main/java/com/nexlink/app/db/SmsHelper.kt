@@ -547,6 +547,8 @@ object SmsHelper {
         ) else null
 
         getSmsManager(subscriptionId).sendTextMessage(address, null, body, sentIntent, deliveryIntent)
+        DebugLog.log(ctx, DebugLog.CAT_SENT, address,
+            "SMS queued · ${body.length} chars · row=$msgId${if (subscriptionId >= 0) " · subId=$subscriptionId" else ""}")
     }
 
     fun sendGroupText(ctx: Context, threadId: Long, participants: List<String>, text: String, subId: Int = -1): Long {
@@ -645,8 +647,14 @@ object SmsHelper {
         val pduBytes = try {
             MmsPduBuilder.build(ctx, recipients, parts, txId)
         } catch (e: Throwable) {
-            android.util.Log.e("NexLink_MMS", "sendViaMms: PduComposer FAILED", e); return
+            android.util.Log.e("NexLink_MMS", "sendViaMms: PduComposer FAILED", e)
+            DebugLog.log(ctx, DebugLog.CAT_ERROR, recipients.joinToString(","),
+                "MMS build failed: ${e.message}")
+            return
         }
+        DebugLog.log(ctx, DebugLog.CAT_SENT, recipients.joinToString(","),
+            "MMS queued · ${parts.size} part(s) [${parts.joinToString { it.contentType }}] · " +
+            "${pduBytes.size} B · txId=$txId")
         android.util.Log.d("NexLink_MMS", "sendViaMms: recipients=$recipients txId=$txId pdu=${pduBytes.size}B subId=$subId")
 
         val threadId = runCatching {

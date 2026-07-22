@@ -47,6 +47,9 @@ class SmsReceiver : BroadcastReceiver() {
                     val bodyStr = body.toString()
                     when {
                         CryptoStore.isKeyExchange(bodyStr) -> {
+                            com.nexlink.app.db.DebugLog.log(context,
+                                com.nexlink.app.db.DebugLog.CAT_CRYPTO, sender,
+                                "Key exchange received")
                             // Peer has NexLink — store their public key and establish a session.
                             val peerPub = CryptoStore.parseKeyExchange(bodyStr)
                             if (peerPub != null) {
@@ -70,6 +73,14 @@ class SmsReceiver : BroadcastReceiver() {
                         }
                         else -> {
                             val storedUri = SmsHelper.saveIncomingSms(context, sender, bodyStr)
+                            val encrypted = CryptoStore.isEncrypted(bodyStr)
+                            com.nexlink.app.db.DebugLog.log(context,
+                                if (storedUri == null) com.nexlink.app.db.DebugLog.CAT_ERROR
+                                else com.nexlink.app.db.DebugLog.CAT_RECEIVED,
+                                sender,
+                                "SMS received · ${bodyStr.length} chars" +
+                                    (if (encrypted) " · 🔒 encrypted" else "") +
+                                    (if (storedUri == null) " · NOT persisted!" else ""))
                             if (storedUri == null)
                                 Log.e("NexLink_SMS", "Incoming SMS NOT persisted (sender=$sender len=${bodyStr.length}) — notifying anyway")
                             // If the peer sends an encrypted message it proves they have our public key
@@ -190,6 +201,8 @@ class MmsDownloadReceiver : BroadcastReceiver() {
 
         if (rc != Activity.RESULT_OK) {
             Log.e("NexLink_MMS", "downloadMultimediaMessage failed: resultCode=$rc")
+            com.nexlink.app.db.DebugLog.log(ctx, com.nexlink.app.db.DebugLog.CAT_ERROR, "MMS",
+                "MMS download failed · resultCode=$rc")
             SmsNotifier.notify(ctx, "MMS", "📷 MMS (download failed, code=$rc)")
             return
         }
@@ -212,9 +225,13 @@ class MmsDownloadReceiver : BroadcastReceiver() {
             try {
                 val result = MmsDownloader.storeRawPdu(ctx, pduBytes)
                 if (result != null) {
+                    com.nexlink.app.db.DebugLog.log(ctx, com.nexlink.app.db.DebugLog.CAT_RECEIVED,
+                        result.sender ?: "Unknown", "MMS received · ${pduBytes.size} B · ${result.notifText}")
                     SmsNotifier.notify(ctx, result.sender ?: "Unknown", result.notifText)
                 } else {
                     Log.e("NexLink_MMS", "storePdu returned null — notifying generic")
+                    com.nexlink.app.db.DebugLog.log(ctx, com.nexlink.app.db.DebugLog.CAT_ERROR, "MMS",
+                        "MMS received but storePdu returned null · ${pduBytes.size} B")
                     SmsNotifier.notify(ctx, "Unknown", "📷 MMS received")
                 }
                 WearSync.pushConversations(ctx)
@@ -254,6 +271,12 @@ class MmsSentReceiver : BroadcastReceiver() {
 
         android.util.Log.d("NexLink_MMS",
             "MmsSentReceiver: httpOk=$isOk mmscStatus=$statusDesc(${status?.let{"0x%02X".format(it)}}) pdu=$hex")
+
+        com.nexlink.app.db.DebugLog.log(ctx,
+            if (status == 0x80 || (status == null && isOk)) com.nexlink.app.db.DebugLog.CAT_SENT
+            else com.nexlink.app.db.DebugLog.CAT_ERROR,
+            "MMS",
+            "MMS send result · httpOk=$isOk · MMSC=$statusDesc")
 
         val outboxId = intent.getLongExtra("outbox_id", -1L)
         if (status == 0x80 && outboxId > 0) {

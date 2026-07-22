@@ -15,6 +15,9 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         NotificationStore.load(applicationContext)
+        com.nexlink.app.db.DebugLog.log(applicationContext,
+            com.nexlink.app.db.DebugLog.CAT_SYSTEM, "app",
+            "App process started · default SMS=${com.nexlink.app.db.SmsHelper.isDefaultSmsApp(applicationContext)}")
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
             NotificationChannel(CH_SMS, "SMS Messages", NotificationManager.IMPORTANCE_HIGH)

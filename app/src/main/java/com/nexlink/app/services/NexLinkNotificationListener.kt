@@ -221,6 +221,10 @@ class NexLinkNotificationListener : NotificationListenerService() {
         if (!NotificationPrefs.isPlatformEnabled(ctx, n.platform)) return
 
         NotificationStore.add(n, applicationContext)
+        com.nexlink.app.db.DebugLog.log(ctx, com.nexlink.app.db.DebugLog.CAT_SHOWN,
+            "${n.platform} · ${n.sender}",
+            (if (n.isReaction) "reaction · " else "") +
+                n.text.take(80).replace("\n", " "))
 
         // Suppress source app notification when setting is enabled.
         // Voice messages are NEVER suppressed — the user must open the social app to play audio.
