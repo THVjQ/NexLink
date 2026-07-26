@@ -54,6 +54,13 @@ class BridgeSetupActivity : AppCompatActivity() {
     private var healthOk = false
     private var authOk = false
 
+    /**
+     * Pairing code entered at STEP_CONNECT and redeemed at STEP_ENABLE. The wizard rebuilds its
+     * whole view hierarchy on every step change, so this cannot live only in the EditText. It is
+     * deliberately never persisted — a code is single-use and expires in 15 minutes.
+     */
+    private var pairingCode: String = ""
+
     private val notifPermLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* proceed regardless */ }
 
@@ -67,12 +74,22 @@ class BridgeSetupActivity : AppCompatActivity() {
         private const val STEP_TEST       = 3
         private const val STEP_ENABLE     = 4
         private const val GUIDE_URL = "https://github.com/THVjQ/SMS-Brigde"
+
+        /** Skip straight to the connect step — set by Unlink & re-pair (§4.3). */
+        const val EXTRA_START_AT_CONNECT = "start_at_connect"
+
+        /** Server mints codes as 4 random bytes rendered as uppercase hex (`/generate-code`). */
+        private val PAIRING_CODE_RE = Regex("^[0-9A-F]{8}$")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = "Set up Computer Bridge"
-        step = if (BridgePrefs.isDisclaimerAccepted(this)) STEP_GUIDE else STEP_DISCLAIMER
+        step = when {
+            intent?.getBooleanExtra(EXTRA_START_AT_CONNECT, false) == true -> STEP_CONNECT
+            BridgePrefs.isDisclaimerAccepted(this)                         -> STEP_GUIDE
+            else                                                           -> STEP_DISCLAIMER
+        }
 
         val scroll = ScrollView(this).apply { setBackgroundColor(col(R.color.bg)); isFillViewport = true }
         root = LinearLayout(this).apply {
@@ -157,6 +174,21 @@ class BridgeSetupActivity : AppCompatActivity() {
         val etKey    = editField("API key", BridgePrefs.getApiKey(this), InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD)
         root.addView(etServer); root.addView(etKey)
 
+        // The pairing code is minted on the PC and is what actually registers this phone. It is a
+        // separate secret from the API key — passing the key here is what silently broke pairing.
+        addBody(
+            "You also need a one-time pairing code. On the PC, open the SOS POS tab, click the blue " +
+            "chat button, then Pair Device, then Generate Pairing Code. Enter that code here within " +
+            "15 minutes — after that it expires and you'll need a fresh one."
+        )
+        val etCode = editField(
+            "Pairing code (from the PC: Pair Device → Generate)",
+            pairingCode,
+            InputType.TYPE_CLASS_TEXT
+        )
+        etCode.filters = arrayOf(android.text.InputFilter.LengthFilter(8), android.text.InputFilter.AllCaps())
+        root.addView(etCode)
+
         val warn = TextView(this).apply {
             textSize = 12f; setTextColor(0xFFD48A00.toInt()); setPadding(2.px(), 6.px(), 0, 0)
             visibility = View.GONE
@@ -176,9 +208,16 @@ class BridgeSetupActivity : AppCompatActivity() {
         root.addView(primaryButton("Save & continue →") {
             val server = etServer.text.toString().trim()
             val key    = etKey.text.toString().trim()
+            val code   = etCode.text.toString().trim().uppercase()
             if (server.isEmpty() || key.isEmpty()) { toast("Enter both a server URL and an API key"); return@primaryButton }
+            if (code.isEmpty()) { toast("Enter the pairing code generated on the PC"); return@primaryButton }
+            if (!PAIRING_CODE_RE.matches(code)) {
+                toast("Pairing codes are 8 characters, digits and A–F only (e.g. 3F9A1C0B)")
+                return@primaryButton
+            }
             BridgePrefs.setServerUrl(this, server)
             BridgePrefs.setApiKey(this, key)
+            pairingCode = code
             healthOk = false; authOk = false
             step = STEP_TEST; render()
         })
@@ -246,16 +285,42 @@ class BridgeSetupActivity : AppCompatActivity() {
         }
         root.addView(status)
 
-        // Ensure a device keypair exists, then pair. Some servers issue the key/api-key via /link;
-        // if the server has no pairing step, verifyKey already proved the key works, so treat a
-        // link failure as non-fatal and still enable.
+        // Ensure a device keypair exists, then redeem the pairing code. A link failure is FATAL:
+        // without a paired_devices row the server has no public key for this phone, so outbound
+        // messages are either stored in plaintext or encrypted to a stale device and silently
+        // dropped here. Enabling the bridge on a failed link is what made "connected but dead"
+        // look like a working setup.
         BridgeKeyManager.getOrCreatePublicKey(this)
-        BridgeApiClient.linkDevice(this, BridgePrefs.getApiKey(this)) { ok, msg ->
+        BridgeApiClient.linkDevice(this, pairingCode) { ok, code, msg ->
             runOnUiThread {
-                status.text = if (ok) "✅ Linked." else "Linked (server has no pairing step: $msg)"
-                finishEnable()
+                if (ok) {
+                    status.text = "✅ Linked."
+                    finishEnable()
+                } else {
+                    status.setTextColor(0xFFC62828.toInt())
+                    status.text = "❌ Pairing failed: ${pairingError(code, msg)}"
+                    BridgePrefs.setLinked(this, false)
+                    BridgePrefs.setEnabled(this, false)
+                    root.addView(primaryButton("Enter a new code") {
+                        pairingCode = ""
+                        step = STEP_CONNECT; render()
+                    })
+                    root.addView(secondaryButton("Cancel") { finish() })
+                }
             }
         }
+    }
+
+    /**
+     * A 403 from `/link` means the code was not found in `pairing_codes`. Codes are deleted 15
+     * minutes after minting and consumed on first use, so an expired or already-used code is far
+     * more likely than a typo — say so rather than making the user doubt what they typed.
+     */
+    private fun pairingError(httpCode: Int, msg: String): String = when (httpCode) {
+        403  -> "that code has expired or was already used. Generate a fresh one on the PC and enter it within 15 minutes."
+        401  -> "the API key was rejected. Go back and check it."
+        400  -> "the server rejected the request ($msg)."
+        else -> msg
     }
 
     private fun finishEnable() {

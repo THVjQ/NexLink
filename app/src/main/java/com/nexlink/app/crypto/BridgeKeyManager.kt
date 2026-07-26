@@ -74,6 +74,14 @@ object BridgeKeyManager {
     /** The browser client's public key, or null if not yet linked. */
     fun getClientKey(ctx: Context): String? = getPrefs(ctx).getString(KEY_CLIENT, null)
 
+    /**
+     * Forget the peer key only, keeping this phone's own keypair — used by Unlink & re-pair (§4.3).
+     * The client key belongs to the pairing being discarded; the phone's identity does not.
+     */
+    fun clearClientKey(ctx: Context) {
+        getPrefs(ctx).edit().remove(KEY_CLIENT).apply()
+    }
+
     /** Wipe all bridge keys — called on Forget-server (§8). */
     fun clearKeys(ctx: Context) {
         getPrefs(ctx).edit().clear().apply()

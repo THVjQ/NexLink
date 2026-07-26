@@ -86,10 +86,15 @@ object BridgeApiClient {
     // ── Pairing ─────────────────────────────────────────────────────────────────
 
     /**
-     * Pairs the device with the server. Uploads the phone public key; expects the browser
-     * client's public key back (`client_key`, with `server_key` accepted for back-compat).
+     * Redeems a one-time pairing code minted on the PC (`POST /generate-code`) and registers this
+     * phone. Uploads the phone public key; expects the browser client's public key back
+     * (`client_key`, with `server_key` accepted for back-compat).
+     *
+     * [code] is the **pairing code**, not the API key — the two are different secrets and the
+     * server only ever looks the former up in `pairing_codes`. The HTTP status is surfaced so the
+     * caller can distinguish an expired code (403) from a bad key (401).
      */
-    fun linkDevice(ctx: Context, code: String, callback: (ok: Boolean, msg: String) -> Unit) {
+    fun linkDevice(ctx: Context, code: String, callback: (ok: Boolean, httpCode: Int, msg: String) -> Unit) {
         val devicePubKey = BridgeKeyManager.getOrCreatePublicKey(ctx)
         val body = JSONObject()
             .put("pairing_code", code)
@@ -98,9 +103,9 @@ object BridgeApiClient {
             .toString().toRequestBody(JSON)
 
         val r = runCatching { req(ctx, "/link").post(body).build() }
-            .getOrElse { callback(false, "Invalid server URL"); return }
+            .getOrElse { callback(false, -1, "Invalid server URL"); return }
         client.newCall(r).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) = callback(false, e.message ?: "Network error")
+            override fun onFailure(call: Call, e: IOException) = callback(false, -1, e.message ?: "Network error")
             override fun onResponse(call: Call, response: Response) {
                 val text = response.body?.string() ?: ""
                 val json = runCatching { JSONObject(text) }.getOrNull()
@@ -109,9 +114,9 @@ object BridgeApiClient {
                     // §14.4: peer key is the browser client's key. Accept legacy "server_key" field name.
                     val clientKey = json.optString("client_key").ifEmpty { json.optString("server_key") }
                     if (clientKey.isNotEmpty()) BridgeKeyManager.storeClientKey(ctx, clientKey)
-                    callback(true, "Linked")
+                    callback(true, response.code, "Linked")
                 } else {
-                    callback(false, json?.optString("error").orEmpty().ifEmpty { "Failed (${response.code})" })
+                    callback(false, response.code, json?.optString("error").orEmpty().ifEmpty { "Failed (${response.code})" })
                 }
             }
         })

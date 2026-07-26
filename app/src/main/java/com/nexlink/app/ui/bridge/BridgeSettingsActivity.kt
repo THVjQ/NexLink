@@ -118,8 +118,45 @@ class BridgeSettingsActivity : AppCompatActivity() {
             textSize = 12f; setTextColor(col(R.color.muted)); setPadding(0, 0, 0, 16.px())
         })
 
+        // Re-pair — the recovery path for a bad or stale pairing (§4.3). Without this the only way
+        // out of a broken link is clearing app data.
+        addSectionLabel("Pairing")
+        root.addView(TextView(this).apply {
+            text = "If the PC says this phone has no key, or you moved to a new server, unlink and " +
+                   "pair again with a fresh code."
+            textSize = 12f; setTextColor(col(R.color.muted)); setPadding(0, 0, 0, 6.px())
+        })
+        root.addView(secondaryButton("Unlink & re-pair") { confirmRepair() })
+
         // Disable
         root.addView(destructiveButton("Disable Computer Bridge") { confirmDisable() })
+    }
+
+    private fun confirmRepair() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Unlink & re-pair?")
+            .setMessage("The bridge stops until you finish pairing again. Your server URL and API key are " +
+                "kept — you'll only need a new pairing code from the PC. Generate it there first " +
+                "(chat button → Pair Device → Generate); codes expire after 15 minutes.")
+            .setPositiveButton("Unlink & re-pair") { _, _ -> repair() }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /**
+     * Stands the bridge down and returns to the wizard's connect step. The stored client key goes
+     * too: it belongs to the pairing being discarded, and keeping it would let inbound messages be
+     * encrypted to a peer that is no longer linked.
+     */
+    private fun repair() {
+        BridgePollingService.stop(this)
+        BridgeWatchdogWorker.cancel(this)
+        BridgePrefs.setEnabled(this, false)
+        BridgePrefs.setLinked(this, false)
+        BridgeKeyManager.clearClientKey(this)
+        startActivity(Intent(this, BridgeSetupActivity::class.java)
+            .putExtra(BridgeSetupActivity.EXTRA_START_AT_CONNECT, true))
+        finish()
     }
 
     private fun confirmDisable() {
@@ -176,6 +213,15 @@ class BridgeSettingsActivity : AppCompatActivity() {
         backgroundTintList = ContextCompat.getColorStateList(this@BridgeSettingsActivity, R.color.accent)
         setTextColor(Color.WHITE)
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        setOnClickListener { onClick() }
+    }
+
+    private fun secondaryButton(label: String, onClick: () -> Unit) = Button(this).apply {
+        text = label; isAllCaps = false; textSize = 14f
+        backgroundTintList = ContextCompat.getColorStateList(this@BridgeSettingsActivity, R.color.surface2)
+        setTextColor(col(R.color.text))
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = 8.px() }
         setOnClickListener { onClick() }
     }
 
