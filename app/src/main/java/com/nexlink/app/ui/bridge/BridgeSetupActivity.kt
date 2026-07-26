@@ -61,6 +61,10 @@ class BridgeSetupActivity : AppCompatActivity() {
      */
     private var pairingCode: String = ""
 
+    /** Reveals the optional API-key field at STEP_CONNECT. Off unless the user asks, or pairing
+     *  came back without a key because the server predates issuing one. */
+    private var showManualKey: Boolean = false
+
     private val notifPermLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* proceed regardless */ }
 
@@ -157,8 +161,9 @@ class BridgeSetupActivity : AppCompatActivity() {
         stepHeader(1, "Set up your server")
         addBody(
             "Before continuing, you need your bridge server running. Follow the self-host guide — it " +
-            "walks you through deploying the small server and generating your API key. Come back here " +
-            "once the server is up and you have its URL and API key."
+            "walks you through deploying the small server. Come back here once it's up and you know " +
+            "its address; this phone gets its own key when you pair, so you won't need to type the " +
+            "server's key here."
         )
         root.addView(primaryButton("Open the setup guide") {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GUIDE_URL)))
@@ -168,19 +173,20 @@ class BridgeSetupActivity : AppCompatActivity() {
 
     private fun renderConnect() {
         stepHeader(2, "Connect to your server")
-        addBody("Enter your server URL and API key, or import a config file exported from your server / browser extension.")
+        addBody(
+            "You need two things: your server's address, and a one-time pairing code from the PC.\n\n" +
+            "On the PC, open the SOS POS tab, click the blue chat button, then Pair Device, then " +
+            "Generate Pairing Code. Enter that code here within 15 minutes — after that it expires " +
+            "and you'll need a fresh one."
+        )
 
         val etServer = editField("Server URL (https://…)", BridgePrefs.getServerUrl(this), InputType.TYPE_TEXT_VARIATION_URI)
-        val etKey    = editField("API key", BridgePrefs.getApiKey(this), InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD)
-        root.addView(etServer); root.addView(etKey)
+        root.addView(etServer)
 
-        // The pairing code is minted on the PC and is what actually registers this phone. It is a
-        // separate secret from the API key — passing the key here is what silently broke pairing.
-        addBody(
-            "You also need a one-time pairing code. On the PC, open the SOS POS tab, click the blue " +
-            "chat button, then Pair Device, then Generate Pairing Code. Enter that code here within " +
-            "15 minutes — after that it expires and you'll need a fresh one."
-        )
+        // The pairing code is the only credential this phone needs. Redeeming it registers the
+        // device and the server mints a key for this phone alone, which arrives in the /link
+        // response — so the shared server API key never has to be typed on a handset, and a lost
+        // phone is revoked on its own without re-keying every other device.
         val etCode = editField(
             "Pairing code (from the PC: Pair Device → Generate)",
             pairingCode,
@@ -188,6 +194,18 @@ class BridgeSetupActivity : AppCompatActivity() {
         )
         etCode.filters = arrayOf(android.text.InputFilter.LengthFilter(8), android.text.InputFilter.AllCaps())
         root.addView(etCode)
+
+        // Escape hatch for a server old enough not to issue a key at pairing. Hidden by default:
+        // offering it up front invites people to type the shared key when they never need to.
+        var etKey: EditText? = null
+        if (showManualKey) {
+            addBody(
+                "Manual key entry is only needed for a server that doesn't issue one at pairing. " +
+                "If you're not sure, leave this and let pairing handle it."
+            )
+            etKey = editField("API key (optional)", BridgePrefs.getApiKey(this), InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD)
+            root.addView(etKey)
+        }
 
         val warn = TextView(this).apply {
             textSize = 12f; setTextColor(0xFFD48A00.toInt()); setPadding(2.px(), 6.px(), 0, 0)
@@ -198,7 +216,7 @@ class BridgeSetupActivity : AppCompatActivity() {
             val u = etServer.text.toString().trim()
             val insecure = u.startsWith("http://")
             warn.visibility = if (insecure) View.VISIBLE else View.GONE
-            if (insecure) warn.text = "⚠ Not HTTPS — your API key and contacts would be visible on the network. Use HTTPS or a private tunnel (Tailscale / Cloudflare Tunnel)."
+            if (insecure) warn.text = "⚠ Not HTTPS — your pairing code and contacts would be visible on the network. Use HTTPS or a private tunnel (Tailscale / Cloudflare Tunnel)."
         }
         etServer.setOnFocusChangeListener { _, _ -> checkHttp() }
 
@@ -207,28 +225,32 @@ class BridgeSetupActivity : AppCompatActivity() {
         })
         root.addView(primaryButton("Save & continue →") {
             val server = etServer.text.toString().trim()
-            val key    = etKey.text.toString().trim()
             val code   = etCode.text.toString().trim().uppercase()
-            if (server.isEmpty() || key.isEmpty()) { toast("Enter both a server URL and an API key"); return@primaryButton }
-            if (code.isEmpty()) { toast("Enter the pairing code generated on the PC"); return@primaryButton }
+            if (server.isEmpty()) { toast("Enter your server URL"); return@primaryButton }
+            if (code.isEmpty())   { toast("Enter the pairing code generated on the PC"); return@primaryButton }
             if (!PAIRING_CODE_RE.matches(code)) {
                 toast("Pairing codes are 8 characters, digits and A–F only (e.g. 3F9A1C0B)")
                 return@primaryButton
             }
             BridgePrefs.setServerUrl(this, server)
-            BridgePrefs.setApiKey(this, key)
+            etKey?.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { BridgePrefs.setApiKey(this, it) }
             pairingCode = code
             healthOk = false; authOk = false
             step = STEP_TEST; render()
         })
+        if (!showManualKey) {
+            root.addView(secondaryButton("Advanced — enter an API key manually") {
+                showManualKey = true; render()
+            })
+        }
         root.addView(secondaryButton("← Back") { step = STEP_GUIDE; render() })
     }
 
     private fun renderTest() {
         stepHeader(3, "Test the connection")
         addBody(
-            "NexLink will check the server is reachable and that your API key is accepted. Both must pass " +
-            "before the bridge can be enabled."
+            "NexLink will check the server is reachable. Your pairing code is checked in the next " +
+            "step, when this phone actually registers itself."
         )
         val status = TextView(this).apply {
             textSize = 14f; setTextColor(col(R.color.text)); setPadding(2.px(), 10.px(), 0, 10.px())
@@ -240,36 +262,23 @@ class BridgeSetupActivity : AppCompatActivity() {
         root.addView(result)
 
         val proceed = primaryButton("Enable bridge →") {
-            if (healthOk && authOk) { step = STEP_ENABLE; render() } else toast("Run a passing test first")
+            if (healthOk) { step = STEP_ENABLE; render() } else toast("Run a passing test first")
         }
-        proceed.isEnabled = healthOk && authOk
+        proceed.isEnabled = healthOk
 
         root.addView(primaryButton("Run test") {
             result.setTextColor(col(R.color.muted)); result.text = "Testing reachability…"
             BridgeApiClient.ping(this) { reach ->
                 runOnUiThread {
                     healthOk = reach
-                    if (!reach) {
-                        authOk = false
+                    if (reach) {
+                        result.setTextColor(0xFF2E7D32.toInt())
+                        result.text = "✅ Server reachable."
+                    } else {
                         result.setTextColor(0xFFC62828.toInt())
                         result.text = "❌ Can't reach the server. Check the URL, that the server is running, and that it uses HTTPS."
-                        proceed.isEnabled = false
-                        return@runOnUiThread
                     }
-                    result.setTextColor(col(R.color.muted)); result.text = "✓ Reachable. Verifying API key…"
-                    BridgeApiClient.verifyKey(this) { ok, code, reason ->
-                        runOnUiThread {
-                            authOk = ok
-                            if (ok) {
-                                result.setTextColor(0xFF2E7D32.toInt())
-                                result.text = "✅ Connected and API key accepted."
-                            } else {
-                                result.setTextColor(0xFFC62828.toInt())
-                                result.text = "❌ ${if (code == 401 || code == 403) "API key rejected — check you copied it correctly." else reason}"
-                            }
-                            proceed.isEnabled = healthOk && authOk
-                        }
-                    }
+                    proceed.isEnabled = healthOk
                 }
             }
         })
@@ -293,22 +302,49 @@ class BridgeSetupActivity : AppCompatActivity() {
         BridgeKeyManager.getOrCreatePublicKey(this)
         BridgeApiClient.linkDevice(this, pairingCode) { ok, code, msg ->
             runOnUiThread {
-                if (ok) {
-                    status.text = "✅ Linked."
-                    finishEnable()
-                } else {
-                    status.setTextColor(0xFFC62828.toInt())
-                    status.text = "❌ Pairing failed: ${pairingError(code, msg)}"
-                    BridgePrefs.setLinked(this, false)
-                    BridgePrefs.setEnabled(this, false)
-                    root.addView(primaryButton("Enter a new code") {
-                        pairingCode = ""
-                        step = STEP_CONNECT; render()
-                    })
-                    root.addView(secondaryButton("Cancel") { finish() })
+                if (!ok) {
+                    failPairing(status, "Pairing failed: ${pairingError(code, msg)}")
+                    return@runOnUiThread
+                }
+
+                // Redeeming the code is what earns this phone a credential: the server mints a key
+                // for this device and returns it, and linkDevice has just stored it. If none
+                // arrived the phone has nothing to poll with, so stop here rather than enabling a
+                // bridge that would report connected and never fetch anything.
+                if (BridgePrefs.getApiKey(this).isBlank()) {
+                    failPairing(status,
+                        "Linked, but the server didn't issue a key for this phone. It's probably " +
+                        "running an older version — update it, or enter the API key manually.")
+                    showManualKey = true
+                    return@runOnUiThread
+                }
+
+                status.text = "✅ Linked. Checking access…"
+                BridgeApiClient.verifyKey(this) { vOk, _, vReason ->
+                    runOnUiThread {
+                        if (vOk) {
+                            status.text = "✅ Linked."
+                            finishEnable()
+                        } else {
+                            failPairing(status, "Linked, but the key the server issued was rejected: $vReason")
+                        }
+                    }
                 }
             }
         }
+    }
+
+    /** Leaves the bridge off and offers a way back, rather than enabling a half-paired device. */
+    private fun failPairing(status: TextView, message: String) {
+        status.setTextColor(0xFFC62828.toInt())
+        status.text = "❌ $message"
+        BridgePrefs.setLinked(this, false)
+        BridgePrefs.setEnabled(this, false)
+        root.addView(primaryButton("Enter a new code") {
+            pairingCode = ""
+            step = STEP_CONNECT; render()
+        })
+        root.addView(secondaryButton("Cancel") { finish() })
     }
 
     /**
@@ -318,7 +354,8 @@ class BridgeSetupActivity : AppCompatActivity() {
      */
     private fun pairingError(httpCode: Int, msg: String): String = when (httpCode) {
         403  -> "that code has expired or was already used. Generate a fresh one on the PC and enter it within 15 minutes."
-        401  -> "the API key was rejected. Go back and check it."
+        409  -> "this phone is already paired to a different account on that server."
+        429  -> "too many attempts. Wait a minute, then generate a fresh code."
         400  -> "the server rejected the request ($msg)."
         else -> msg
     }

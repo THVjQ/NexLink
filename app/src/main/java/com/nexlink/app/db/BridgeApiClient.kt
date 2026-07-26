@@ -67,11 +67,18 @@ object BridgeApiClient {
         })
     }
 
-    /** §16.1 — authenticated check: GET /pending with the API key. 200 ⇒ key is valid. */
+    /**
+     * §16.1 — authenticated check: GET /stats with the API key. 200 ⇒ key is valid.
+     *
+     * Deliberately NOT /pending. Since the server began claiming rows, polling /pending marks up to
+     * ten queued messages as taken — so a connection test would quietly swallow real texts and
+     * leave them undeliverable until the reaper released them minutes later. A liveness probe must
+     * not consume the queue it is probing.
+     */
     fun verifyKey(ctx: Context, callback: (ok: Boolean, code: Int, reason: String) -> Unit) {
         if (BridgePrefs.getServerUrl(ctx).isBlank()) { callback(false, -1, "No server URL set"); return }
         if (BridgePrefs.getApiKey(ctx).isBlank())    { callback(false, -1, "No API key set"); return }
-        val r = runCatching { req(ctx, "/pending").get().build() }
+        val r = runCatching { req(ctx, "/stats").get().build() }
             .getOrElse { callback(false, -1, "Invalid server URL"); return }
         client.newCall(r).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) =
