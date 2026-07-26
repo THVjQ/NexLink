@@ -40,6 +40,13 @@ class BridgePollingService : Service() {
     private val executor = Executors.newSingleThreadScheduledExecutor()
     private var task: ScheduledFuture<*>? = null
 
+    /**
+     * A PC that registers its key after this phone paired would otherwise never be discovered — the
+     * key set is only fetched when it is empty, so a second desktop silently receives no replies.
+     * Re-reading it periodically bounds how long a newly added PC stays invisible.
+     */
+    @Volatile private var lastKeyRefresh = 0L
+
     override fun onCreate() {
         super.onCreate()
         // Do not start the FGS without POST_NOTIFICATIONS on 13+ — startForeground would throw an
@@ -74,6 +81,14 @@ class BridgePollingService : Service() {
     private fun poll() {
         val ctx = applicationContext
         if (BridgePrefs.getServerUrl(ctx).isBlank() || BridgePrefs.getApiKey(ctx).isBlank()) return
+
+        // Pick up desktops added since pairing, so replies reach every PC on the account and not
+        // just whichever ones existed when this phone linked.
+        val now = System.currentTimeMillis()
+        if (now - lastKeyRefresh >= KEY_REFRESH_MS) {
+            lastKeyRefresh = now
+            BridgeApiClient.refreshClientKeys(ctx)
+        }
 
         // Replies held back because no PC had registered a key, or because the network was down.
         // Retried on every poll so a customer's answer is delayed rather than lost.
@@ -114,6 +129,9 @@ class BridgePollingService : Service() {
 
     companion object {
         const val NOTIF_ID = 4201
+
+        /** How stale the desktop key set may get. A new PC starts receiving replies within this. */
+        private const val KEY_REFRESH_MS = 5 * 60 * 1000L
 
         fun start(ctx: Context) {
             if (!BridgePrefs.isEnabled(ctx) || !BridgePrefs.isLinked(ctx)) return
