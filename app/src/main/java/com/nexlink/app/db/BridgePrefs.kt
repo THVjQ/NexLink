@@ -83,12 +83,47 @@ object BridgePrefs {
         return (p(ctx).getString("pc_sent_ids", "") ?: "").split(",").contains(smsRowId.toString())
     }
 
+    /**
+     * Replies that could not be forwarded yet — no desktop key known, or the network was down.
+     * Persisted so a reboot does not lose them; previously such a reply was dropped outright, which
+     * meant a customer's answer could vanish with no trace at either end.
+     *
+     * Bounded: the oldest go first if the bridge stays broken long enough to fill it. The contents
+     * are message bodies, so they are cleared by the Forget-server teardown along with everything
+     * else. They are stored unencrypted in app-private storage, which is the same protection the
+     * SMS database itself has on the device.
+     */
+    private const val INCOMING_QUEUE_MAX = 200
+
+    fun queueIncoming(ctx: Context, from: String, message: String) {
+        val arr = runCatching { org.json.JSONArray(p(ctx).getString("incoming_queue", "[]")) }
+            .getOrDefault(org.json.JSONArray())
+        arr.put(org.json.JSONObject().put("from", from).put("message", message).put("ts", System.currentTimeMillis()))
+        while (arr.length() > INCOMING_QUEUE_MAX) arr.remove(0)
+        p(ctx).edit().putString("incoming_queue", arr.toString()).apply()
+    }
+
+    /** Removes and returns everything queued. The caller re-queues whatever it fails to send. */
+    fun takeQueuedIncoming(ctx: Context): List<Pair<String, String>> {
+        val raw = p(ctx).getString("incoming_queue", "[]") ?: "[]"
+        if (raw == "[]") return emptyList()
+        p(ctx).edit().remove("incoming_queue").apply()
+        return runCatching {
+            val arr = org.json.JSONArray(raw)
+            (0 until arr.length()).map { arr.getJSONObject(it).let { o -> o.getString("from") to o.getString("message") } }
+        }.getOrDefault(emptyList())
+    }
+
+    fun queuedIncomingCount(ctx: Context): Int =
+        runCatching { org.json.JSONArray(p(ctx).getString("incoming_queue", "[]")).length() }.getOrDefault(0)
+
     /** Full teardown for the Disable / Forget-server path (§8). Optionally clears server config. */
     fun clearAll(ctx: Context, forgetServer: Boolean) {
         val e = p(ctx).edit()
         e.putBoolean("enabled", false).putBoolean("is_linked", false)
         if (forgetServer) {
             e.remove("server_url").remove("api_key").remove("handled_ids").remove("pc_sent_ids")
+             .remove("incoming_queue")
         }
         e.apply()
     }

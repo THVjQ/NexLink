@@ -20,9 +20,14 @@ import java.util.concurrent.TimeUnit
  *
  *  • §16.1 — a real authenticated check ([verifyKey]) so the wizard can't pass with a
  *    wrong API key. [ping] stays as an unauthenticated reachability probe.
- *  • §14.4 — [forwardIncoming] encrypts to the browser CLIENT's public key and NEVER
- *    falls back to plaintext. If the client key is missing it reports failure so the
- *    caller can retry rather than leaking cleartext to the server.
+ *  • §14.4 — [forwardIncoming] encrypts to the browser CLIENTS' public keys — one
+ *    envelope per PC on the account — and never falls back to plaintext. If no key is
+ *    known the reply is queued and retried rather than dropped.
+ *
+ *    This is now true in both directions. It was not before: the server only ever
+ *    returned its OWN key, so inbound was encrypted to the server and decrypted by it
+ *    on the way out. A server that still answers only `server_key` puts this back into
+ *    that state, which is why the fallback is marked where it happens.
  *  • Context-threaded config via [BridgePrefs] instead of a static ambient Prefs object.
  *
  * Nothing here has a hardcoded server, key or identity — all config is per-user runtime.
@@ -111,13 +116,62 @@ object BridgeApiClient {
                 val json = runCatching { JSONObject(text) }.getOrNull()
                 if (response.isSuccessful && json?.optBoolean("ok") == true) {
                     json.optString("api_key").takeIf { it.isNotEmpty() }?.let { BridgePrefs.setApiKey(ctx, it) }
-                    // §14.4: peer key is the browser client's key. Accept legacy "server_key" field name.
-                    val clientKey = json.optString("client_key").ifEmpty { json.optString("server_key") }
-                    if (clientKey.isNotEmpty()) BridgeKeyManager.storeClientKey(ctx, clientKey)
+                    storePeerKeys(ctx, json)
                     callback(true, response.code, "Linked")
                 } else {
                     callback(false, response.code, json?.optString("error").orEmpty().ifEmpty { "Failed (${response.code})" })
                 }
+            }
+        })
+    }
+
+    /**
+     * Records the desktop keys a reply must be encrypted to.
+     *
+     * `client_keys` is the current form — one entry per PC on the account, since an account can
+     * hold several. `client_key` and `server_key` are the older single-key fields; `server_key` is
+     * the server's OWN key, so falling back to it means the server can read the reply. Accepted
+     * only so an updated phone still works against a server that has not been upgraded yet.
+     */
+    private fun storePeerKeys(ctx: Context, json: JSONObject) {
+        val arr = json.optJSONArray("client_keys")
+        if (arr != null && arr.length() > 0) {
+            val keys = (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                val pub = o.optString("public_key")
+                if (pub.isEmpty()) null else (o.optString("key_id").ifEmpty { BridgeCrypto.keyId(pub) } to pub)
+            }
+            if (keys.isNotEmpty()) { BridgeKeyManager.storeClientKeys(ctx, keys); return }
+        }
+        val single = json.optString("client_key").ifEmpty { json.optString("server_key") }
+        if (single.isNotEmpty()) BridgeKeyManager.storeClientKey(ctx, single)
+    }
+
+    /**
+     * Refreshes the desktop keys from the server. A PC that registers after the phone paired is
+     * invisible until this runs, and a reply that arrives in the meantime has nowhere to go — the
+     * polling service calls this before flushing the queue for exactly that reason.
+     */
+    fun refreshClientKeys(ctx: Context, callback: ((Boolean) -> Unit)? = null) {
+        val r = runCatching { req(ctx, "/client-keys").get().build() }
+            .getOrElse { callback?.invoke(false); return }
+        client.newCall(r).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) { callback?.invoke(false) }
+            override fun onResponse(call: Call, response: Response) {
+                val text = response.body?.string().orEmpty()
+                response.close()
+                if (!response.isSuccessful) { callback?.invoke(false); return }
+                val keys = runCatching {
+                    val arr = JSONObject(text).getJSONArray("keys")
+                    (0 until arr.length()).mapNotNull { i ->
+                        val o = arr.getJSONObject(i)
+                        val pub = o.optString("public_key")
+                        if (pub.isEmpty()) null else (o.optString("key_id").ifEmpty { BridgeCrypto.keyId(pub) } to pub)
+                    }
+                }.getOrNull()
+                if (keys == null) { callback?.invoke(false); return }
+                BridgeKeyManager.storeClientKeys(ctx, keys)
+                callback?.invoke(keys.isNotEmpty())
             }
         })
     }
@@ -165,28 +219,69 @@ object BridgeApiClient {
     // ── Inbound (phone → computer), §14.4 full-chain E2E ────────────────────────
 
     /**
-     * Forwards an incoming SMS to the server as ciphertext addressed to the browser client.
-     * Returns false (never sends plaintext) if the client key is missing — the caller may retry.
+     * Forwards an incoming SMS as ciphertext addressed to each PC on the account — one envelope per
+     * desktop key, so the server relays something it holds no key for.
+     *
+     * There is still no plaintext fallback, but a reply is no longer thrown away when the keys are
+     * missing: it is queued and retried. Previously a reply that arrived before any PC had
+     * registered was lost permanently, which is a worse outcome than a delay.
      */
     fun forwardIncoming(ctx: Context, from: String, message: String, callback: ((Boolean) -> Unit)? = null) {
-        val clientKey = BridgeKeyManager.getClientKey(ctx)
-        if (clientKey.isNullOrEmpty()) {
-            // §14.4 — no plaintext fallback. Without the client key we cannot encrypt; do not leak.
-            android.util.Log.w("NexLink_Bridge", "forwardIncoming: no client key — dropping (not sending plaintext)")
+        val keys = BridgeKeyManager.getClientKeys(ctx)
+        if (keys.isEmpty()) {
+            android.util.Log.w("NexLink_Bridge", "forwardIncoming: no desktop key yet — queuing for retry")
+            BridgePrefs.queueIncoming(ctx, from, message)
+            // Ask the server who the PCs are; the polling service flushes the queue once we know.
+            refreshClientKeys(ctx)
             callback?.invoke(false); return
         }
-        val envelope = runCatching { BridgeCrypto.encrypt(message, clientKey) }.getOrNull()
-        if (envelope == null) { callback?.invoke(false); return }
+
+        val envelopes = JSONObject()
+        for ((keyId, pub) in keys) {
+            val envelope = runCatching { BridgeCrypto.encrypt(message, pub) }.getOrNull()
+            if (envelope != null) envelopes.put(keyId, JSONObject(envelope))
+            else android.util.Log.w("NexLink_Bridge", "forwardIncoming: could not encrypt to key $keyId")
+        }
+        if (envelopes.length() == 0) {
+            BridgePrefs.queueIncoming(ctx, from, message)
+            callback?.invoke(false); return
+        }
 
         val bodyObj = JSONObject()
             .put("from", from)
             .put("device_id", BridgePrefs.getDeviceId(ctx))
-            .put("encrypted_message", JSONObject(envelope))
+            .put("envelopes", envelopes)
         val r = req(ctx, "/incoming").post(bodyObj.toString().toRequestBody(JSON)).build()
         client.newCall(r).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) { callback?.invoke(false) }
-            override fun onResponse(call: Call, response: Response) { val ok = response.isSuccessful; response.close(); callback?.invoke(ok) }
+            override fun onFailure(call: Call, e: IOException) {
+                // The network, not the crypto — hold onto it and try again on the next poll.
+                BridgePrefs.queueIncoming(ctx, from, message)
+                callback?.invoke(false)
+            }
+            override fun onResponse(call: Call, response: Response) {
+                val ok = response.isSuccessful
+                response.close()
+                if (!ok) BridgePrefs.queueIncoming(ctx, from, message)
+                callback?.invoke(ok)
+            }
         })
+    }
+
+    /**
+     * Retries replies that could not be forwarded earlier. Called from the polling service, so a
+     * queued reply goes out as soon as a PC registers its key or the network returns.
+     */
+    fun flushIncomingQueue(ctx: Context) {
+        val queued = BridgePrefs.takeQueuedIncoming(ctx)
+        if (queued.isEmpty()) return
+        if (BridgeKeyManager.getClientKeys(ctx).isEmpty()) {
+            refreshClientKeys(ctx) { gotKeys ->
+                // Put them back either way; forwardIncoming re-queues anything that still fails.
+                queued.forEach { (from, msg) -> if (gotKeys) forwardIncoming(ctx, from, msg) else BridgePrefs.queueIncoming(ctx, from, msg) }
+            }
+            return
+        }
+        queued.forEach { (from, msg) -> forwardIncoming(ctx, from, msg) }
     }
 
     data class PendingMessage(val id: Int, val phone: String, val message: String)

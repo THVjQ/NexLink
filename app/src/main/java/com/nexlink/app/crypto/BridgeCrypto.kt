@@ -119,6 +119,17 @@ object BridgeCrypto {
         return cipher.doFinal(ct + tag).toString(Charsets.UTF_8)
     }
 
+    /**
+     * Stable short name for a peer key: first 8 bytes of SHA-256 over its DER, as lowercase hex.
+     * Computed identically by the server (clientKeys.js) and the userscript, so all three agree
+     * which envelope in an inbound message belongs to which PC without being told.
+     */
+    fun keyId(publicKeyB64: String): String {
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        md.update(Base64.decode(publicKeyB64, Base64.NO_WRAP))
+        return md.digest().copyOf(8).joinToString("") { "%02x".format(it) }
+    }
+
     /** SHA-256 fingerprint of `phone_pubkey || client_pubkey`, first 8 bytes as hex groups (§14.5). */
     fun fingerprint(phonePubB64: String, clientPubB64: String): String {
         val md = java.security.MessageDigest.getInstance("SHA-256")

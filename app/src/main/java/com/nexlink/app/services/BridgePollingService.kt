@@ -74,6 +74,11 @@ class BridgePollingService : Service() {
     private fun poll() {
         val ctx = applicationContext
         if (BridgePrefs.getServerUrl(ctx).isBlank() || BridgePrefs.getApiKey(ctx).isBlank()) return
+
+        // Replies held back because no PC had registered a key, or because the network was down.
+        // Retried on every poll so a customer's answer is delayed rather than lost.
+        BridgeApiClient.flushIncomingQueue(ctx)
+
         BridgeApiClient.getPending(ctx) { messages ->
             for (msg in messages) {
                 // §16.2 — skip anything already handed to the SMS stack (survives a dropped mark-sent).

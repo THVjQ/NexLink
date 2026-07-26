@@ -7,9 +7,14 @@ package com.nexlink.app.crypto
 //  public key (received at link time). Distinct from any NexLink key storage and
 //  from db/CryptoStore — this is bridge-only.
 //
-//  §14.4 change vs. the reference: inbound (phone → computer) is now end-to-end
-//  encrypted to the browser CLIENT's public key, so the peer key stored here is
-//  the client key, not a server key. The server holds NO message-content keypair.
+//  §14.4 change vs. the reference: inbound (phone → computer) is end-to-end
+//  encrypted to the browser CLIENTS' public keys, so the peer keys stored here are
+//  desktop keys, not server keys — the server relays ciphertext it cannot open.
+//
+//  An account can hold several PCs, each with its own keypair in its own browser
+//  profile, so [getClientKeys] returns a set and a reply is encrypted once per key.
+//  The single-key slot is kept in step for the fingerprint display and for pairing
+//  against a server old enough to return only one key.
 //
 //  §16.4 note — why EncryptedSharedPreferences and not the Android Keystore:
 //  a hardware-backed Keystore EC key would be non-exportable, but Keystore ECDH
@@ -25,13 +30,15 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import org.json.JSONObject
 
 object BridgeKeyManager {
 
-    private const val PREF_FILE  = "e2e_keys"           // kept for continuity with the reference
-    private const val KEY_PRIV   = "device_private_key"
-    private const val KEY_PUB    = "device_public_key"
-    private const val KEY_CLIENT = "client_public_key"  // peer (browser client) key — was "server_public_key"
+    private const val PREF_FILE   = "e2e_keys"           // kept for continuity with the reference
+    private const val KEY_PRIV    = "device_private_key"
+    private const val KEY_PUB     = "device_public_key"
+    private const val KEY_CLIENT  = "client_public_key"  // peer (browser client) key — was "server_public_key"
+    private const val KEY_CLIENTS = "client_public_keys" // §Stage 3: JSON [{key_id, public_key}] — one per PC
 
     @Volatile private var prefs: SharedPreferences? = null
 
@@ -75,11 +82,42 @@ object BridgeKeyManager {
     fun getClientKey(ctx: Context): String? = getPrefs(ctx).getString(KEY_CLIENT, null)
 
     /**
+     * All desktop keys on the account, as (key_id, public_key) pairs. An account can hold several
+     * PCs — each generates its own keypair in its own browser profile — so an incoming reply is
+     * encrypted once per key and each PC opens the envelope filed under its own id.
+     */
+    fun storeClientKeys(ctx: Context, keys: List<Pair<String, String>>) {
+        val arr = org.json.JSONArray()
+        keys.forEach { (id, pub) -> arr.put(JSONObject().put("key_id", id).put("public_key", pub)) }
+        getPrefs(ctx).edit().putString(KEY_CLIENTS, arr.toString()).apply()
+        // Keep the single-key slot in step so the fingerprint display keeps working when there is
+        // exactly one PC, which is the common case.
+        if (keys.size == 1) storeClientKey(ctx, keys[0].second) else if (keys.isEmpty()) clearClientKey(ctx)
+    }
+
+    fun getClientKeys(ctx: Context): List<Pair<String, String>> {
+        val raw = getPrefs(ctx).getString(KEY_CLIENTS, null)
+        if (!raw.isNullOrEmpty()) {
+            runCatching {
+                val arr = org.json.JSONArray(raw)
+                return (0 until arr.length()).map {
+                    val o = arr.getJSONObject(it)
+                    o.getString("key_id") to o.getString("public_key")
+                }
+            }
+        }
+        // Fall back to the single key from an older pairing, so an app updated before its server
+        // still has somewhere to send replies.
+        val single = getClientKey(ctx) ?: return emptyList()
+        return listOf(BridgeCrypto.keyId(single) to single)
+    }
+
+    /**
      * Forget the peer key only, keeping this phone's own keypair — used by Unlink & re-pair (§4.3).
      * The client key belongs to the pairing being discarded; the phone's identity does not.
      */
     fun clearClientKey(ctx: Context) {
-        getPrefs(ctx).edit().remove(KEY_CLIENT).apply()
+        getPrefs(ctx).edit().remove(KEY_CLIENT).remove(KEY_CLIENTS).apply()
     }
 
     /** Wipe all bridge keys — called on Forget-server (§8). */
