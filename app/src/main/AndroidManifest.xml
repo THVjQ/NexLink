@@ -46,6 +46,10 @@
     <!-- ── Optional Computer Bridge addon (dormant until enabled in Settings) ── -->
     <!-- connectedDevice FGS type is not the ~6h/day-capped dataSync type (§7b) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
+    <!-- Fallback only. connectedDevice is satisfied by CHANGE_NETWORK_STATE above and is what the
+         service normally starts with; an OEM that refuses it would throw out of startForeground and
+         crash the app, so the service degrades to dataSync — which has to be declared to be legal. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
     <!-- Ask to be exempted from OEM battery sleeping so background delivery is reliable (§7a) -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
 
@@ -117,7 +121,7 @@
         <service
             android:name=".services.BridgePollingService"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice"/>
+            android:foregroundServiceType="connectedDevice|dataSync"/>
 
         <receiver
             android:name=".receivers.BridgeBootReceiver"
@@ -128,6 +132,9 @@
                 <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
+
+        <!-- ── Doze-safe poll tick ── the FGS executor is frozen with the screen off -->
+        <receiver android:name=".receivers.BridgePollAlarmReceiver" android:exported="false"/>
 
         <!-- ── Share target: appear in Android share sheet ── -->
         <activity

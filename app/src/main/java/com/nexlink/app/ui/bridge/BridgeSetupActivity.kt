@@ -65,8 +65,17 @@ class BridgeSetupActivity : AppCompatActivity() {
      *  came back without a key because the server predates issuing one. */
     private var showManualKey: Boolean = false
 
+    /**
+     * Starting the foreground service before this dialog is answered is what crashed the app on
+     * first enable: the launch is asynchronous, so the service came up with POST_NOTIFICATIONS
+     * still ungranted. The service start waits for the outcome and happens here instead.
+     */
     private val notifPermLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* proceed regardless */ }
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) startBridgeServices()
+            else toast("Notifications are off, so the bridge can't run in the background. " +
+                       "Allow notifications for NexLink, then turn the bridge on again.")
+        }
 
     private val importLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { importConfig(it) } }
@@ -364,16 +373,15 @@ class BridgeSetupActivity : AppCompatActivity() {
         BridgePrefs.setLinked(this, true)
         BridgePrefs.setEnabled(this, true)
 
-        // Runtime permissions the bridge needs (§7a)
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
+        // Runtime permissions the bridge needs (§7a). If the notification prompt is still to come,
+        // the launcher's callback starts the services once the user has answered — see above.
+        val needsNotifPrompt = Build.VERSION.SDK_INT >= 33 &&
+            (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED)
+        if (needsNotifPrompt) notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         requestBatteryExemption()
 
-        BridgeWatchdogWorker.schedule(this)
-        BridgePollingService.start(this)
+        if (!needsNotifPrompt) startBridgeServices()
 
         // Fingerprint (§14.5) + final manual OEM steps (§9 / §12)
         val phonePub = BridgeKeyManager.getOrCreatePublicKey(this)
@@ -402,6 +410,12 @@ class BridgeSetupActivity : AppCompatActivity() {
             "arrives on the phone but won't appear on the computer."
         )
         root.addView(primaryButton("Done") { finish() })
+    }
+
+    /** Watchdog + poll service, started only once the notification permission is settled. */
+    private fun startBridgeServices() {
+        BridgeWatchdogWorker.schedule(this)
+        BridgePollingService.start(this)
     }
 
     private fun requestBatteryExemption() {

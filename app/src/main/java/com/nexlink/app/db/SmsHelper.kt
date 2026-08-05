@@ -6,6 +6,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.ContactsContract
 import android.provider.Telephony
 import androidx.core.content.ContextCompat
@@ -520,8 +521,17 @@ object SmsHelper {
         } catch (_: Exception) {}
     }
 
-    /** Sends an SMS and returns the inserted telephony row id (or -1). */
+    /** Sends an SMS (auto-splitting long bodies) and returns the inserted telephony row id (or -1). */
     fun sendSms(ctx: Context, address: String, body: String, subscriptionId: Int = -1): Long {
+        // Callers reached from outside the compose screen (Wear, RespondViaMessageService) don't
+        // check SEND_SMS first, and the dispatch below would throw SecurityException at them. Fail
+        // legibly instead, and before the row is inserted so the thread shows no phantom sent message.
+        if (ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.SEND_SMS)
+                != PackageManager.PERMISSION_GRANTED) {
+            DebugLog.log(ctx, DebugLog.CAT_ERROR, address, "SMS not sent · SEND_SMS not granted")
+            return -1L
+        }
+
         // Insert with STATUS_NONE (single tick) — SmsSentReceiver upgrades to FAILED on error,
         // SmsDeliveredReceiver upgrades to COMPLETE (double tick) on carrier delivery report.
         val values = ContentValues().apply {
@@ -533,23 +543,41 @@ object SmsHelper {
         val msgUri = try { ctx.contentResolver.insert(Telephony.Sms.Sent.CONTENT_URI, values) } catch (_: Exception) { null }
         val msgId  = msgUri?.lastPathSegment?.toLongOrNull() ?: -1L
 
+        // sendTextMessage only carries a single ≤160-char segment (≤70 with any Unicode) and does
+        // not auto-split, so an over-length body was silently never leaving the radio.
+        val sm    = getSmsManager(ctx, subscriptionId)
+        val parts = sm.divideMessage(body)
+        val base  = (msgId and Int.MAX_VALUE.toLong()).toInt()
         val flags = android.app.PendingIntent.FLAG_MUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
-        val sentIntent = if (msgId > 0) android.app.PendingIntent.getBroadcast(
-            ctx.applicationContext,
-            (msgId and Int.MAX_VALUE.toLong()).toInt() xor 0x10000,
-            android.content.Intent("${ctx.packageName}.SMS_SENT").setPackage(ctx.packageName).putExtra("message_id", msgId),
-            flags
-        ) else null
-        val deliveryIntent = if (msgId > 0) android.app.PendingIntent.getBroadcast(
-            ctx.applicationContext,
-            (msgId and Int.MAX_VALUE.toLong()).toInt(),
-            android.content.Intent("${ctx.packageName}.SMS_DELIVERED").setPackage(ctx.packageName).putExtra("message_id", msgId),
-            flags
-        ) else null
 
-        getSmsManager(subscriptionId).sendTextMessage(address, null, body, sentIntent, deliveryIntent)
+        fun bc(action: String, reqCode: Int, tagRow: Boolean) = android.app.PendingIntent.getBroadcast(
+            ctx.applicationContext, reqCode,
+            android.content.Intent("${ctx.packageName}.$action").setPackage(ctx.packageName)
+                .apply { if (tagRow) putExtra("message_id", msgId) },
+            flags)
+
+        if (parts.size <= 1) {
+            val sentIntent     = if (msgId > 0) bc("SMS_SENT",      base xor 0x10000, true) else null
+            val deliveryIntent = if (msgId > 0) bc("SMS_DELIVERED", base,             true) else null
+            sm.sendTextMessage(address, null, body, sentIntent, deliveryIntent)
+        } else {
+            // Only the LAST part carries the row-status callback, so one dropped middle part
+            // doesn't flip the whole row to FAILED before the tail even tries.
+            val sentIntents = ArrayList<android.app.PendingIntent>(parts.size)
+            val deldIntents = ArrayList<android.app.PendingIntent>(parts.size)
+            for (i in parts.indices) {
+                val last = i == parts.size - 1
+                sentIntents.add(if (msgId > 0 && last) bc("SMS_SENT",      base xor 0x10000,  true)
+                                else                   bc("SMS_SENT_PART", base + 0x20000 + i, false))
+                deldIntents.add(if (msgId > 0 && last) bc("SMS_DELIVERED",      base,           true)
+                                else                   bc("SMS_DELIVERED_PART", base + 0x40000 + i, false))
+            }
+            sm.sendMultipartTextMessage(address, null, parts, sentIntents, deldIntents)
+        }
+
         DebugLog.log(ctx, DebugLog.CAT_SENT, address,
-            "SMS queued · ${body.length} chars · row=$msgId${if (subscriptionId >= 0) " · subId=$subscriptionId" else ""}")
+            "SMS queued · ${body.length} chars · ${parts.size} part(s) · row=$msgId" +
+            (if (subscriptionId >= 0) " · subId=$subscriptionId" else ""))
         return msgId
     }
 
@@ -675,7 +703,7 @@ object SmsHelper {
             putBoolean(android.telephony.SmsManager.MMS_CONFIG_GROUP_MMS_ENABLED, true)
             putInt(android.telephony.SmsManager.MMS_CONFIG_MAX_MESSAGE_SIZE, 1_200_000)
         }
-        getSmsManager(subId).sendMultimediaMessage(
+        getSmsManager(ctx, subId).sendMultimediaMessage(
             ctx.applicationContext, contentUri, null, configOverrides, makeSentIntent(ctx, outboxId))
         android.os.Handler(android.os.Looper.getMainLooper())
             .postDelayed({ java.io.File(ctx.cacheDir, contentUri.lastPathSegment ?: "").delete() }, 180_000L)
@@ -733,10 +761,27 @@ object SmsHelper {
         else                      -> "file.dat"
     }
 
+    /**
+     * On API 31+ the deprecated [android.telephony.SmsManager.getDefault] can bind to no valid
+     * subscription on dual-SIM / eSIM handsets and drop the send with no exception and no sent
+     * broadcast. Resolve the default SMS subscription explicitly instead.
+     */
     @Suppress("DEPRECATION")
-    private fun getSmsManager(subId: Int) =
-        if (subId >= 0) android.telephony.SmsManager.getSmsManagerForSubscriptionId(subId)
-        else android.telephony.SmsManager.getDefault()
+    private fun getSmsManager(ctx: Context, subId: Int): android.telephony.SmsManager {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val basemgr = ctx.getSystemService(android.telephony.SmsManager::class.java)
+            val sub     = if (subId >= 0) subId else defaultSmsSubId()
+            return if (sub >= 0) basemgr.createForSubscriptionId(sub) else basemgr
+        }
+        return if (subId >= 0) android.telephony.SmsManager.getSmsManagerForSubscriptionId(subId)
+               else            android.telephony.SmsManager.getDefault()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun defaultSmsSubId(): Int = runCatching {
+        val a = android.telephony.SmsManager.getDefaultSmsSubscriptionId()
+        if (a >= 0) a else android.telephony.SubscriptionManager.getDefaultSmsSubscriptionId()
+    }.getOrDefault(-1)
 
     private fun makeSentIntent(ctx: Context, outboxId: Long = -1L) = android.app.PendingIntent.getBroadcast(
         ctx.applicationContext,

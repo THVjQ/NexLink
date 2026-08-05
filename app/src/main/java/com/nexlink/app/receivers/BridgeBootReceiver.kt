@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import com.nexlink.app.db.BridgePrefs
+import com.nexlink.app.services.BridgePollAlarm
 import com.nexlink.app.services.BridgePollingService
 import com.nexlink.app.services.BridgeWatchdogWorker
 
@@ -30,5 +31,8 @@ class BridgeBootReceiver : BroadcastReceiver() {
 
         BridgeWatchdogWorker.schedule(ctx)
         BridgePollingService.start(ctx)
+        // Belt and braces: onStartCommand arms this too, but a boot where the FGS fails to come up
+        // would otherwise leave no wake source at all.
+        BridgePollAlarm.arm(ctx)
     }
 }
