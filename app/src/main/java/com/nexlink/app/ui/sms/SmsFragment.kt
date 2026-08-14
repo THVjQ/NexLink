@@ -40,8 +40,16 @@ class SmsFragment : Fragment() {
     private var filterUnreadOnly = false
     private var activeCategoryId: String? = null
 
+    private val refreshHandler = Handler(Looper.getMainLooper())
+    private val refreshRunnable = Runnable { loadConversations() }
+
+    // Watches SMS *and* MMS — an MMS-only thread (group chats, picture messages) never
+    // touches the SMS table, so watching that alone left those conversations stale.
     private val smsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
-        override fun onChange(selfChange: Boolean) { loadConversations() }
+        override fun onChange(selfChange: Boolean) {
+            refreshHandler.removeCallbacks(refreshRunnable)
+            refreshHandler.postDelayed(refreshRunnable, 250)
+        }
     }
 
     override fun onCreateView(i: LayoutInflater, c: ViewGroup?, s: Bundle?): View {
@@ -91,12 +99,15 @@ class SmsFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        requireContext().contentResolver.registerContentObserver(Telephony.Sms.CONTENT_URI, true, smsObserver)
+        val cr = requireContext().contentResolver
+        cr.registerContentObserver(Telephony.Sms.CONTENT_URI, true, smsObserver)
+        cr.registerContentObserver(Telephony.Mms.CONTENT_URI, true, smsObserver)
         loadConversations()
     }
 
     override fun onPause() {
         super.onPause()
+        refreshHandler.removeCallbacks(refreshRunnable)
         requireContext().contentResolver.unregisterContentObserver(smsObserver)
     }
 
@@ -114,11 +125,13 @@ class SmsFragment : Fragment() {
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_SMS)
             != PackageManager.PERMISSION_GRANTED) return
         val ctx = context ?: return
+        if (_b == null) return
         b.swipe.isRefreshing = true
         Thread {
             val convs = SmsHelper.getConversations(ctx)
             if (!isAdded) return@Thread
             activity?.runOnUiThread {
+                if (_b == null) return@runOnUiThread
                 allConversations = convs
                 filterConversations(b.etSearch.text?.toString() ?: "")
                 b.swipe.isRefreshing = false
@@ -419,5 +432,9 @@ class SmsFragment : Fragment() {
     }
 
 
-    override fun onDestroyView() { super.onDestroyView(); _b = null }
+    override fun onDestroyView() {
+        super.onDestroyView()
+        refreshHandler.removeCallbacks(refreshRunnable)
+        _b = null
+    }
 }

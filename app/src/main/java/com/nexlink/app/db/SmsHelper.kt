@@ -22,10 +22,14 @@ object SmsHelper {
 
     // ── Conversations ─────────────────────────────────────────────────────────
 
-    fun getConversations(ctx: Context, limit: Int = 250): List<Conversation> {
+    fun getConversations(ctx: Context, limit: Int = 500): List<Conversation> {
         val canonMap  = buildCanonicalAddressMap(ctx)
         val unreadMap = buildUnreadByThread(ctx)
         val list      = mutableListOf<Conversation>()
+        // Deduplicate: the same participants stored in different formats (0412… vs +61412…
+        // vs 61412…) can end up as two threads. Key on *every* participant, so a group chat
+        // is never collapsed into a 1:1 chat that happens to share its first member.
+        val seenAt = mutableMapOf<String, Int>()
         try {
             ctx.contentResolver.query(
                 Uri.parse("content://mms-sms/conversations?simple=true"),
@@ -37,19 +41,37 @@ object SmsHelper {
                     val dateIdx    = c.getColumnIndex("date")
                     val snippetIdx = c.getColumnIndex("snippet")
                     val recipIdx   = c.getColumnIndex("recipient_ids")
-                    if (tidIdx < 0 || recipIdx < 0) continue
+                    if (tidIdx < 0) continue
                     val threadId   = c.getLong(tidIdx)
                     val rawDate    = if (dateIdx >= 0) c.getLong(dateIdx) else 0L
                     val date       = if (rawDate < 1_000_000_000_000L) rawDate * 1000L else rawDate
                     val snippet    = if (snippetIdx >= 0) c.getString(snippetIdx) ?: "" else ""
-                    val recipIds   = c.getString(recipIdx) ?: continue
-                    val parts      = recipIds.trim().split(" ")
-                        .mapNotNull { sid -> canonMap[sid.toLongOrNull() ?: -1L] }
-                        .filter { addr -> addr.isNotBlank() && addr.any { it.isDigit() } }
+                    val recipIds   = if (recipIdx >= 0) c.getString(recipIdx) ?: "" else ""
+                    // Keep alphanumeric sender IDs ("Telstra", "MyGov", …) — they are real
+                    // conversations, they just have no digits in the address.
+                    var parts      = recipIds.trim().split(" ")
+                        .mapNotNull { sid -> canonMap[sid.toLongOrNull() ?: -1L]?.trim() }
+                        .filter { it.isNotBlank() }
+                    // A thread whose recipient ids are missing from the canonical-address
+                    // table still has messages — read them off the thread instead of
+                    // dropping the conversation entirely.
+                    if (parts.isEmpty()) parts = addressesForThread(ctx, threadId)
                     if (parts.isEmpty()) continue
+
+                    val key = parts.map { addressKey(it) }.sorted().joinToString("|")
+                    val at  = seenAt[key]
+                    if (at != null) {
+                        // Rows arrive newest-first, so the kept entry is the live one;
+                        // just carry the duplicate thread's unread count across.
+                        val kept = list[at]
+                        list[at] = kept.copy(unreadCount = kept.unreadCount + (unreadMap[threadId] ?: 0))
+                        continue
+                    }
+
                     val primary    = parts.first()
                     val name       = if (parts.size > 1) parts.joinToString(", ") { getContactName(ctx, it) }
                                      else getContactName(ctx, primary)
+                    seenAt[key] = list.size
                     list += Conversation(
                         threadId    = threadId,
                         address     = primary,
@@ -63,14 +85,46 @@ object SmsHelper {
             }
         } catch (_: Exception) {}
         if (list.isEmpty()) return getConversationsFallback(ctx, limit)
-        // Deduplicate: same number in different formats (0412… vs +61412… vs 61412…) gets one entry.
-        // Match on last 9 digits — robust across all Australian/international format variants.
-        val seen = mutableSetOf<String>()
-        return list.filter { conv ->
-            val digits = conv.address.replace("[^\\d]".toRegex(), "")
-            val key = if (digits.length >= 9) digits.takeLast(9) else digits.ifEmpty { conv.address }
-            seen.add(key)
+        return list
+    }
+
+    /**
+     * Collapses the many written forms of one address to a single comparable key.
+     * Numbers reduce to their last 9 digits; alphanumeric sender IDs keep their text.
+     */
+    private fun addressKey(address: String): String {
+        val digits = address.replace("[^\\d]".toRegex(), "")
+        return when {
+            digits.length >= 9  -> digits.takeLast(9)
+            digits.isNotEmpty() -> digits
+            else                -> address.trim().lowercase()
         }
+    }
+
+    /** Recipient lookup for threads that the canonical-address table doesn't cover. */
+    private fun addressesForThread(ctx: Context, threadId: Long): List<String> {
+        val found = LinkedHashSet<String>()
+        try {
+            ctx.contentResolver.query(Telephony.Sms.CONTENT_URI, arrayOf(Telephony.Sms.ADDRESS),
+                "${Telephony.Sms.THREAD_ID} = ?", arrayOf(threadId.toString()),
+                "${Telephony.Sms.DATE} DESC")?.use { c ->
+                while (c.moveToNext() && found.size < 20)
+                    c.getString(0)?.trim()?.takeIf { it.isNotBlank() }?.let { found += it }
+            }
+        } catch (_: Exception) {}
+        if (found.isEmpty()) {
+            // MMS-only thread — take the sender off its newest messages.
+            try {
+                ctx.contentResolver.query(Telephony.Mms.CONTENT_URI, arrayOf(Telephony.Mms._ID),
+                    "${Telephony.Mms.THREAD_ID} = ?", arrayOf(threadId.toString()),
+                    "${Telephony.Mms.DATE} DESC")?.use { c ->
+                    while (c.moveToNext() && found.size < 5)
+                        getMmsSenderAddress(ctx, c.getLong(0))?.trim()
+                            ?.takeIf { it.isNotBlank() }?.let { found += it }
+                }
+            } catch (_: Exception) {}
+        }
+        return found.toList()
     }
 
     private fun getConversationsFallback(ctx: Context, limit: Int): List<Conversation> {
@@ -83,9 +137,8 @@ object SmsHelper {
                 "${Telephony.Sms.DATE} DESC")?.use { c ->
                 while (c.moveToNext()) {
                     if (limit > 0 && seen.size >= limit) break
-                    val addr = c.getString(0) ?: continue
-                    if (addr in seen) continue
-                    seen += addr
+                    val addr = c.getString(0)?.trim()?.takeIf { it.isNotBlank() } ?: continue
+                    if (!seen.add(addressKey(addr))) continue
                     list += Conversation(
                         threadId    = c.getLong(3),
                         address     = addr,
