@@ -19,6 +19,12 @@ internal fun TimelineItemContent.toAppContent(): TimelineContent? {
     return when (val kind = msgLike.content.kind) {
         is MsgLikeKind.Message -> when (val m = kind.content.msgType) {
             is MessageType.Text -> TimelineContent.Text(m.content.body)
+            is MessageType.Image -> TimelineContent.Image(
+                mediaId = m.content.source.toJson(),
+                caption = m.content.caption,
+                width = m.content.info?.width?.toInt(),
+                height = m.content.info?.height?.toInt()
+            )
             else -> TimelineContent.Text(kind.content.body)
         }
         is MsgLikeKind.Redacted -> TimelineContent.Redacted

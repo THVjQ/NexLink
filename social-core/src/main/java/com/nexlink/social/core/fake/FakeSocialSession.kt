@@ -66,6 +66,8 @@ class FakeSocialSession(
 
     override suspend fun sendImage(roomId: RoomId, localUri: String): Result<Unit> = Result.success(Unit)
 
+    override suspend fun loadMedia(mediaId: String): Result<ByteArray> = Result.success(ByteArray(0))
+
     override suspend fun edit(roomId: RoomId, eventId: EventId, newText: String): Result<Unit> = Result.success(Unit)
 
     override suspend fun delete(roomId: RoomId, eventId: EventId, reason: String?): Result<Unit> = Result.success(Unit)

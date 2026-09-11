@@ -44,6 +44,16 @@ interface SocialSession {
     suspend fun sendImage(roomId: RoomId, localUri: String): Result<Unit>
 
     /**
+     * §14.5.2 — fetch and decrypt media for display.
+     *
+     * Returns the decrypted bytes rather than a file path deliberately.
+     * §12.6.1's plaintext problem: decrypted media on disk is the one place
+     * message content exists in the clear on the device. Keeping it in memory
+     * for rendering avoids creating that file at all.
+     */
+    suspend fun loadMedia(mediaId: String): Result<ByteArray>
+
+    /**
      * §14.6 — edit a message you sent. Propagated to everyone; the original is
      * replaced in every client that renders relations.
      */

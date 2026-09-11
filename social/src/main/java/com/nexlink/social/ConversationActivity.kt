@@ -23,7 +23,9 @@ import com.nexlink.social.core.session.Timeline
 import com.nexlink.social.core.session.TimelineContent
 import com.nexlink.social.core.session.TimelineItem
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.nexlink.social.ui.R as UiR
 
 /**
@@ -140,7 +142,12 @@ class ConversationActivity : AppCompatActivity() {
     /** §14.6 — flat replies. Threads are out of scope (§1.6). */
     private var replyingTo: TimelineItem? = null
 
-    override fun onDestroy() { timeline?.close(); super.onDestroy() }
+    override fun onDestroy() {
+        timeline?.close()
+        // §12.6.1 — drop decrypted media from memory with the screen.
+        mediaCache.clear()
+        super.onDestroy()
+    }
 
     private fun render(items: List<TimelineItem>, error: String? = null) {
         list.removeAllViews()
@@ -169,6 +176,11 @@ class ConversationActivity : AppCompatActivity() {
         addView(text(item.senderDisplayName, 12f, UiR.color.social_muted))
         when (val c = item.content) {
             is TimelineContent.Text -> addView(text(c.body, 16f, UiR.color.social_text))
+            is TimelineContent.Image -> {
+                addView(imageView(c))
+                c.caption?.takeIf { it.isNotBlank() }
+                    ?.let { addView(text(it, 15f, UiR.color.social_text2)) }
+            }
             is TimelineContent.Redacted ->
                 addView(text("Message deleted", 15f, UiR.color.social_muted))
             // §14.2.3 — say what happened and why it is usually expected. An
@@ -325,6 +337,45 @@ class ConversationActivity : AppCompatActivity() {
             }
         }
     }
+
+    /**
+     * §14.5.2 — render an inline image.
+     *
+     * §12.6.1: the decrypted bytes are held in memory and handed straight to a
+     * bitmap. They are deliberately never written to a file — a decrypted photo
+     * on disk is the one place message content would exist in the clear on the
+     * device, reachable by another app or a backup.
+     *
+     * A tiny in-memory cache keeps scrolling from re-downloading, and is cleared
+     * with the activity.
+     */
+    private fun imageView(c: TimelineContent.Image): View {
+        val iv = android.widget.ImageView(this).apply {
+            adjustViewBounds = true
+            maxHeight = dp(320)
+            scaleType = android.widget.ImageView.ScaleType.FIT_START
+            contentDescription = c.caption ?: "Image"
+        }
+        mediaCache[c.mediaId]?.let { iv.setImageBitmap(it); return iv }
+
+        lifecycleScope.launch {
+            val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
+            s.loadMedia(c.mediaId)
+                .onSuccess { bytes ->
+                    val bmp = withContext(Dispatchers.Default) {
+                        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    }
+                    if (bmp != null) { mediaCache[c.mediaId] = bmp; iv.setImageBitmap(bmp) }
+                }
+                .onFailure {
+                    // §14.2.2 — say what happened rather than showing a blank box.
+                    iv.contentDescription = "Image unavailable"
+                }
+        }
+        return iv
+    }
+
+    private val mediaCache = mutableMapOf<String, android.graphics.Bitmap>()
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 

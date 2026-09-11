@@ -22,6 +22,7 @@ import org.matrix.rustcomponents.sdk.AuthDataPasswordDetails
 import org.matrix.rustcomponents.sdk.Client
 import org.matrix.rustcomponents.sdk.ClientBuilder
 import org.matrix.rustcomponents.sdk.LatestEventValue
+import org.matrix.rustcomponents.sdk.MediaSource
 import org.matrix.rustcomponents.sdk.RoomListService
 import org.matrix.rustcomponents.sdk.SqliteStoreBuilder
 import org.matrix.rustcomponents.sdk.SlidingSyncVersionBuilder
@@ -122,6 +123,10 @@ class RustSocialSession private constructor(
         return (timeline(roomId) as RustTimeline)
             .sendImage(prepared.file, prepared.width, prepared.height, prepared.mimeType)
             .also { runCatching { prepared.file.delete() } }
+    }
+
+    override suspend fun loadMedia(mediaId: String): Result<ByteArray> = runCatching {
+        client.getMediaContent(MediaSource.fromJson(mediaId))
     }
 
     override suspend fun edit(roomId: RoomId, eventId: EventId, newText: String): Result<Unit> =

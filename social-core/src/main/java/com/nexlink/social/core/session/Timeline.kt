@@ -35,7 +35,18 @@ data class TimelineItem(
 
 sealed interface TimelineContent {
     data class Text(val body: String) : TimelineContent
-    data class Image(val url: String, val caption: String?, val width: Int?, val height: Int?) : TimelineContent
+    /**
+     * [mediaId] is an opaque handle the app hands back to fetch the bytes —
+     * never a URL the UI can fetch itself. §12.6.1: media is encrypted on the
+     * server, so only the SDK can decrypt it, and the decrypted bytes must not
+     * land anywhere another app or a backup can read.
+     */
+    data class Image(
+        val mediaId: String,
+        val caption: String?,
+        val width: Int?,
+        val height: Int?
+    ) : TimelineContent
     data class Video(val url: String, val caption: String?, val durationMs: Long?) : TimelineContent
     data class Audio(val url: String, val durationMs: Long?) : TimelineContent
     data class File(val url: String, val displayName: String, val sizeBytes: Long?) : TimelineContent
