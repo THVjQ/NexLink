@@ -329,8 +329,12 @@ Work done so far, all of it without a device:
 | AAB size, per ABI | **Measured.** ~24.5 MB per device, 95.2 MB universal (§11.7.0) |
 | `SocialSession` implemented against the SDK | **Compiles.** `RustSocialSession`, `RustRecovery` |
 | §11.6 seam holds | **Enforced.** `tools/check-invariants.sh` passes with a real SDK present |
-| Steps 1–3: login, list rooms, send encrypted | Written; **not yet run** |
-| **Steps 4–6: the decision gate** | **Blocked on a second device** |
+| Step 1: login | **PASS** on hardware 2026-09-11 |
+| Step 2: list rooms | **PASS** |
+| Step 3: send encrypted | Sent; the test's assertion was wrong (§11.7.4) |
+| **Step 4: cross-signing + recovery key — the gate** | **PASS** |
+| Steps 5–6: second device, history restore | Outstanding — needs Element Web |
+| Step 7: multi-code-point reaction | **PASS** |
 
 **API friction (a §11.7.1 measure), recorded while it is fresh:** the API shape
 was derived by running `javap` over the published AAR, and the implementation

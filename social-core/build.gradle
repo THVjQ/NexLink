@@ -16,7 +16,12 @@ android {
     namespace 'com.nexlink.social.core'
     compileSdk libs.versions.compileSdk.get().toInteger()
 
-    defaultConfig { minSdk libs.versions.minSdk.get().toInteger() }
+    defaultConfig {
+        minSdk libs.versions.minSdk.get().toInteger()
+        // §11.7's decision procedure runs as an instrumented test against the
+        // real homeserver — the SDK is native code and cannot run on the JVM.
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -36,7 +41,14 @@ dependencies {
     // :social, :social-ui or :social-contract (§11.6). That seam is what makes
     // a wrong answer in §11 a one-module rewrite instead of an application one.
     implementation libs.matrix.rust.sdk
+    // Mandatory companion to the SDK — see :rustls-tls/VENDORED.md.
+    implementation project(':rustls-tls')
 
     testImplementation libs.junit
     testImplementation libs.kotlinx.coroutines.test
+
+    androidTestImplementation libs.androidx.test.ext.junit
+    androidTestImplementation libs.kotlinx.coroutines.test
+    androidTestImplementation 'androidx.test:runner:1.5.2'
+    androidTestImplementation 'androidx.test:rules:1.5.0'
 }

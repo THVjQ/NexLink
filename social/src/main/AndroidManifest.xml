@@ -10,7 +10,7 @@
       the same point about mediaProjection specifically.
 
       Arriving in later phases:
-        phase 3  INTERNET, POST_NOTIFICATIONS, FOREGROUND_SERVICE_DATA_SYNC
+        phase 3  POST_NOTIFICATIONS, FOREGROUND_SERVICE_DATA_SYNC
         phase 4  FOREGROUND_SERVICE_MICROPHONE / _CAMERA / _MEDIA_PROJECTION,
                  MANAGE_OWN_CALLS (§19.2.2), USE_FULL_SCREEN_INTENT (§19.5.1)
 
@@ -23,6 +23,14 @@
       which both apps depend on. :social holds it so that it can enforce the
       guard on its bridge service in phase 3; NexLink holds it to bind.
     -->
+    <!--
+      Added in phase 2 (§33.3): the SDK bake-off has to reach the homeserver.
+      This is the FIRST permission :social holds, and it is the least
+      interesting one Play will ever be asked about.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <uses-permission android:name="com.thvjq.nexlink.permission.SOCIAL_BRIDGE" />
 
     <application

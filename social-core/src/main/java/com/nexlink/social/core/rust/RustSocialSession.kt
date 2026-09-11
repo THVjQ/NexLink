@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.matrix.rustcomponents.sdk.Client
 import org.matrix.rustcomponents.sdk.ClientBuilder
 import org.matrix.rustcomponents.sdk.RoomListService
+import org.matrix.rustcomponents.sdk.SlidingSyncVersionBuilder
 import org.matrix.rustcomponents.sdk.SyncService
 
 /**
@@ -99,6 +100,9 @@ class RustSocialSession private constructor(
             val client = ClientBuilder()
                 .homeserverUrl(homeserverUrl)
                 .sessionPaths(sessionPath, cachePath)
+                // §13.2.3 — mandatory. Without it the room list fails with
+                // "Sliding sync version is missing" (found in phase 2).
+                .slidingSyncVersionBuilder(SlidingSyncVersionBuilder.DISCOVER_NATIVE)
                 .build()
 
             client.login(username, password, deviceDisplayName, null)

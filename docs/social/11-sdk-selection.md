@@ -274,6 +274,55 @@ and cross-signing, which are complete. It is a bounded piece of extra work in on
 module, and it is exactly the kind of thing §11.6's seam exists to absorb. But it
 is real, it was not budgeted, and it belongs in the phase 3 estimate.
 
+### 11.7.4 Bake-off run on hardware, 2026-09-11
+
+Run as an instrumented test (`SdkBakeOffTest`) on a Samsung SM-G990E, Android 16,
+against the live phase-1 homeserver.
+
+| §11.7 step | Result |
+|---|---|
+| 1. Log in with username and password | **PASS** |
+| 2. List rooms | **PASS** |
+| 3. Send an encrypted message | Sent; **the test's own assertion was wrong** — see below |
+| **4. Cross-signing and a recovery key** | **PASS — this is the gate** |
+| 5. Second device, verify by QR | Outstanding — needs Element Web (§33.3.2) |
+| 6. Restore history from key backup | Outstanding — same |
+| 7. Multi-code-point reaction | **PASS** |
+
+**Step 3 was a test defect, not a product one.** `Room.encryptionState()` returned
+`NOT_ENCRYPTED` when read immediately after `awaitRoomRemoteEcho`, because the
+`m.room.encryption` state event had not synced yet. Checked server-side, the room
+is `m.megolm.v1.aes-sha2`. **The lesson generalises: `encryptionState()` is a
+view of synced state, so it must never be used as a pre-send safety check** —
+a client that gates sending on it would refuse to send in exactly the moments
+right after room creation. §2.8's invariant is enforced by the server config
+(`encryption_enabled_by_default_for_room_type: all`) and by the SDK, not by a
+client-side poll.
+
+#### Three undocumented requirements, none in the SDK's README
+
+Each failed with an error that named something other than the missing piece, and
+together they cost most of the bake-off's time:
+
+1. **`initPlatform(TracingConfiguration, Boolean)` must be called before any
+   network call.** Symptom: `InternalException: Expect rustls-platform-verifier
+   to be initialized`. Belongs in `Application.onCreate`, once.
+2. **`rustls-platform-verifier`'s Android class must be on the classpath** — the
+   Rust side finds it by JNI class name. It is **not** bundled in the AAR and
+   **not** on Maven Central; upstream ships it inside a Rust crate. Symptom
+   *after* fixing (1): `failed to call native verifier: Error`. Element X Android
+   vendors the single file as its own module and so do we — `:rustls-tls`, see
+   its `VENDORED.md`. It needs its own module because the file reads
+   `BuildConfig` unqualified, so `BuildConfig` must be generated into the
+   package `org.rustls.platformverifier`.
+3. **`slidingSyncVersionBuilder(DISCOVER_NATIVE)` is mandatory** or every
+   room-list call fails with `Sliding sync version is missing`. Synapse has
+   served MSC4186 natively since 1.114, so discovery resolves to native.
+
+None of these is a reason to reject the SDK, but all three are the kind of thing
+§11.3 meant by *"documentation: thinner, moves faster"*. They are recorded here
+so the second developer does not rediscover them.
+
 ### 11.7.1 Recorded for each candidate
 
 | Measure | How |

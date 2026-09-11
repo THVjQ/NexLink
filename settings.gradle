@@ -23,6 +23,7 @@ include ':wear'                // Wear OS companion, NexLink only
 // ── NexLink Social (docs/social/10-modules.md §10.3) ──────────────────────
 // :app may depend on :social-contract and NOTHING else from this list.
 // The rule is enforced in the root build.gradle — see §10.4.
+include ':rustls-tls'          // VENDORED — the SDK's TLS verifier. See its VENDORED.md.
 include ':social-contract'     // IPC types shared with :app. No SDK, no network.
 include ':social-core'         // Matrix session, store, crypto, sync
 include ':social-ui'           // chat, onboarding, settings screens

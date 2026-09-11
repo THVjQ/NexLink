@@ -1,0 +1,39 @@
+// :rustls-tls — VENDORED, not our code. See VENDORED.md.
+//
+// The Android half of rustls-platform-verifier, which the Matrix Rust SDK calls
+// BY JNI CLASS NAME to validate TLS against Android's trust store. Without it on
+// the classpath every network call the SDK makes fails.
+//
+// It gets its own module for one concrete reason: the file reads `BuildConfig`
+// unqualified, so `BuildConfig` must be generated into the package
+// `org.rustls.platformverifier`. That means this module's namespace has to be
+// that package — which is exactly why Element X Android carries it as a
+// separate `libraries/rustls-tls` module too.
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+}
+
+android {
+    namespace 'org.rustls.platformverifier'
+    compileSdk libs.versions.compileSdk.get().toInteger()
+
+    defaultConfig {
+        minSdk libs.versions.minSdk.get().toInteger()
+        // The vendored source branches on BuildConfig.TEST, which upstream uses
+        // to swap in a mock keystore. Always false here.
+        buildConfigField "boolean", "TEST", "false"
+    }
+
+    buildFeatures { buildConfig true }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions { jvmTarget = '1.8' }
+}
+
+dependencies {
+    implementation libs.androidx.core.ktx
+}
