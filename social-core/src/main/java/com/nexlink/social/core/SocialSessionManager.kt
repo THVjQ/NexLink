@@ -51,7 +51,8 @@ class SocialSessionManager(private val context: Context) {
                 password = password,
                 sessionPath = data,
                 cachePath = cache,
-                deviceDisplayName = "NexLink Social (${android.os.Build.MODEL})"
+                deviceDisplayName = "NexLink Social (${android.os.Build.MODEL})",
+                storeKey = store.storeKey()
             )
             s.persistTo(store)
             session = s
@@ -67,7 +68,7 @@ class SocialSessionManager(private val context: Context) {
             SocialPlatform.init()
             _state.value = SessionState.Restoring
             val (data, cache) = paths()
-            val s = RustSocialSession.restore(saved, data, cache)
+            val s = RustSocialSession.restore(saved, data, cache, store.storeKey())
             session = s
             s.startSync()
             s.publishSignedInState()

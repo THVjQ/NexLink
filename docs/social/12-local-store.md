@@ -117,6 +117,42 @@ security disclosure (§3.7) rather than presented as stronger than it is.
 
 ---
 
+## 12.4.5 Implemented and measured, 2026-09-12
+
+`ClientBuilder.sqliteStore(SqliteStoreBuilder(data, cache).key(bytes))` is the
+mechanism. The key is 32 random bytes, generated once and held in
+`EncryptedSharedPreferences` behind a Keystore master key (`SessionStore.storeKey`).
+
+**What it actually protects — measured on device, not assumed:**
+
+| | |
+|---|---|
+| SQLite file header | **Readable** — still `SQLite format 3` |
+| Table names | **Readable** — `inbound_group_session`, `secrets`, … |
+| Row values | **Encrypted** |
+| The account's MXID | **0 occurrences** in the crypto store |
+| `curve25519` / `ed25519` / `megolm` key material | **0 occurrences** |
+| Room names, display names | **0 occurrences** in the state store |
+
+So this is **value-level encryption, not whole-file encryption.** An attacker who
+obtains the file learns the schema and roughly how many sessions and rooms exist.
+They do not learn any key, identifier, or message content.
+
+That is the right security property for §12.4.1's threat — someone with the
+device and time but not the screen lock — and it should be described that way.
+Claiming "the local database is encrypted" would be the same kind of
+overclaiming §9.6.1 forbids in the user-facing copy: true enough to sound
+reassuring, wrong in a way that matters if anyone relies on it.
+
+**Migration (§12.8): there is none.** A store created without a key cannot be
+opened with one. Any existing install must sign in again, which also means
+re-verifying the device (§8.4) and restoring history from backup (§8.5). That is
+acceptable now, when the only accounts are test ones. **It stops being
+acceptable the moment real users exist**, so this had to land before phase 6 and
+did.
+
+---
+
 ## 12.5 Size management
 
 A messenger's local store grows without limit unless designed not to. Users

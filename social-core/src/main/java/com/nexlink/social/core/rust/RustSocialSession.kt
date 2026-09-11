@@ -21,6 +21,7 @@ import org.matrix.rustcomponents.sdk.AuthDataPasswordDetails
 import org.matrix.rustcomponents.sdk.Client
 import org.matrix.rustcomponents.sdk.ClientBuilder
 import org.matrix.rustcomponents.sdk.RoomListService
+import org.matrix.rustcomponents.sdk.SqliteStoreBuilder
 import org.matrix.rustcomponents.sdk.SlidingSyncVersionBuilder
 import org.matrix.rustcomponents.sdk.SyncService
 
@@ -224,11 +225,15 @@ class RustSocialSession private constructor(
             password: String,
             sessionPath: String,
             cachePath: String,
-            deviceDisplayName: String
+            deviceDisplayName: String,
+            storeKey: ByteArray
         ): RustSocialSession {
             val client = ClientBuilder()
                 .homeserverUrl(homeserverUrl)
-                .sessionPaths(sessionPath, cachePath)
+                // §12.4 — the SDK's SQLite store is encrypted at rest with a
+                // key held in the Keystore. sessionPaths() alone leaves it in
+                // the clear inside the app sandbox.
+                .sqliteStore(SqliteStoreBuilder(sessionPath, cachePath).key(storeKey))
                 // §13.2.3 — mandatory. Without it the room list fails with
                 // "Sliding sync version is missing" (found in phase 2).
                 .slidingSyncVersionBuilder(SlidingSyncVersionBuilder.DISCOVER_NATIVE)
@@ -244,11 +249,12 @@ class RustSocialSession private constructor(
         suspend fun restore(
             session: org.matrix.rustcomponents.sdk.Session,
             sessionPath: String,
-            cachePath: String
+            cachePath: String,
+            storeKey: ByteArray
         ): RustSocialSession {
             val client = ClientBuilder()
                 .homeserverUrl(session.homeserverUrl)
-                .sessionPaths(sessionPath, cachePath)
+                .sqliteStore(SqliteStoreBuilder(sessionPath, cachePath).key(storeKey))
                 .slidingSyncVersionBuilder(SlidingSyncVersionBuilder.DISCOVER_NATIVE)
                 .build()
             client.restoreSession(session)
