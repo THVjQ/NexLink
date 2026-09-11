@@ -126,6 +126,10 @@ class HomeActivity : AppCompatActivity() {
     private fun row(r: RoomSummary): View = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(0, dp(10), 0, dp(10))
+        isClickable = true
+        setOnClickListener {
+            startActivity(ConversationActivity.intent(this@HomeActivity, r.id.value, r.title))
+        }
         addView(LinearLayout(this@HomeActivity).apply {
             orientation = LinearLayout.HORIZONTAL
             addView(text(r.title, 16f, bold = true).apply {
