@@ -57,6 +57,11 @@
         </activity>
 
         <activity
+            android:name=".CreateAccountActivity"
+            android:exported="false"
+            android:label="@string/app_name" />
+
+        <activity
             android:name=".ConversationActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />

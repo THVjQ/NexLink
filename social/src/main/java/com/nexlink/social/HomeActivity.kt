@@ -37,13 +37,8 @@ class HomeActivity : AppCompatActivity() {
     private val gate = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { r ->
-        note = if (r.resultCode == RESULT_OK) {
-            // §22.10 — the gate is complete; phase 3's remaining work is to
-            // redeem the token against the homeserver's UIA flow and create the
-            // account. Until that lands, the gate proves its own contract.
-            "Gate passed for invite ${r.data?.getStringExtra(AcceptanceGateActivity.EXTRA_INVITE_CODE)}. " +
-                "Account creation is the next piece (§22.10.2)."
-        } else "Gate cancelled. No account was created."
+        note = if (r.resultCode == RESULT_OK) null
+        else "No account was created."
         render()
     }
 
@@ -84,7 +79,7 @@ class HomeActivity : AppCompatActivity() {
                 root.addView(gap(12))
                 root.addView(button("Sign in") { signIn.launch(SignInActivity.intent(this)) })
                 root.addView(button("I have an invite code") {
-                    gate.launch(AcceptanceGateActivity.intent(this))
+                    gate.launch(CreateAccountActivity.intent(this))
                 })
             }
             is SessionState.Restoring ->

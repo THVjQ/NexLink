@@ -47,6 +47,10 @@ dependencies {
     // §12.4 — the session tokens are encrypted at rest with a Keystore-backed
     // key. NexLink already depends on this library (§10.7).
     implementation libs.androidx.security.crypto
+    // §11.7.3 / §22.10 — registration and device management are not in the SDK,
+    // so :social-core also speaks the raw Client-Server API. NexLink already
+    // carries OkHttp (§10.7).
+    implementation libs.okhttp
 
     testImplementation libs.junit
     testImplementation libs.kotlinx.coroutines.test

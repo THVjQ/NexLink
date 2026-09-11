@@ -67,6 +67,8 @@ class AcceptanceGateActivity : AppCompatActivity() {
         scroll.addView(root)
         setContentView(scroll)
 
+        intent.getStringExtra(EXTRA_REDEEMED_INVITE)?.let { state.startWithRedeemedInvite(it) }
+
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (!state.back()) finish() else render()
@@ -359,6 +361,12 @@ class AcceptanceGateActivity : AppCompatActivity() {
         private const val POLICY_TERMS = "Terms of Service"
         private const val POLICY_PRIVACY = "Privacy Policy"
 
+        /** Whoever redeemed the token passes it in; the gate then starts at screen 1. */
+        const val EXTRA_REDEEMED_INVITE = "redeemed_invite"
+
         fun intent(context: Context) = Intent(context, AcceptanceGateActivity::class.java)
+
+        fun intent(context: Context, redeemedInvite: String) =
+            intent(context).putExtra(EXTRA_REDEEMED_INVITE, redeemedInvite)
     }
 }

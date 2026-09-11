@@ -42,6 +42,8 @@ class AcceptanceGateState {
     var inviteCode: String = ""
         private set
 
+    private var skipInviteStep = false
+
     var termsOpened = false;   private set
     var privacyOpened = false; private set
 
@@ -54,6 +56,18 @@ class AcceptanceGateState {
     var dobYear: Int? = null;  private set
 
     // ── invite ───────────────────────────────────────────────────────────────
+
+    /**
+     * Start the gate with a code that has already been validated and redeemed
+     * elsewhere (§22.10). The gate proper is §9.6.1's five consent screens; the
+     * invite step is the door, and when the caller has already opened it there
+     * is no reason to ask twice.
+     */
+    fun startWithRedeemedInvite(normalisedCode: String) {
+        inviteCode = normalisedCode
+        skipInviteStep = true
+        step = Step.WHAT_THIS_IS
+    }
 
     fun submitInvite(raw: String): Boolean {
         if (!InviteCode.isValid(raw)) return false
@@ -115,7 +129,10 @@ class AcceptanceGateState {
     fun back(): Boolean {
         step = when (step) {
             Step.INVITE -> return false
-            Step.WHAT_THIS_IS -> Step.INVITE
+            // When the code came in already redeemed there is no invite screen
+            // to go back to — back leaves the gate, and the caller decides what
+            // that means (§9.6: abandoning creates no account).
+            Step.WHAT_THIS_IS -> if (skipInviteStep) return false else Step.INVITE
             Step.WHAT_WE_SEE -> Step.WHAT_THIS_IS
             Step.YOUR_DATA -> Step.WHAT_WE_SEE
             Step.TERMS -> Step.YOUR_DATA
