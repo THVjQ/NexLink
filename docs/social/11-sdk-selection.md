@@ -285,8 +285,8 @@ against the live phase-1 homeserver.
 | 2. List rooms | **PASS** |
 | 3. Send an encrypted message | Sent; **the test's own assertion was wrong** — see below |
 | **4. Cross-signing and a recovery key** | **PASS — this is the gate** |
-| 5. Second device, verify by QR | Outstanding — needs Element Web (§33.3.2) |
-| 6. Restore history from key backup | Outstanding — same |
+| 5. Second device, verify by QR | Outstanding — needs two screens |
+| **6. Restore history from key backup** | **PASS** — `RecoveryRestoreTest`, see §7.4.4 |
 | 7. Multi-code-point reaction | **PASS** |
 
 **Step 3 was a test defect, not a product one.** `Room.encryptionState()` returned

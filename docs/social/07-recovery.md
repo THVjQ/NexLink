@@ -219,6 +219,59 @@ retracts sent messages is a misrepresentation.
 See §6.5 — reuse enables impersonation of a departed user, and the cost of
 retaining a string forever is nil.
 
+## 7.4.4 Verified on hardware, 2026-09-11 — and two things that must be got right
+
+§11.7 step 6 **passes**: a recovery key, and nothing else, restored history on a
+genuinely new device (SM-G990E, live homeserver, `RecoveryRestoreTest`). §7's
+central promise holds.
+
+Getting there exposed two requirements that are **product requirements, not test
+details**. Both produce the same user-visible symptom — *"I typed my recovery key
+and my messages are still unreadable"* — which is the single worst outcome §7 can
+produce, because the user did everything right.
+
+### 1. Setting up recovery MUST bootstrap cross-signing, not just key backup
+
+Calling `enableRecovery()` on a fresh account creates a key backup and puts its
+key into 4S, but creates **no cross-signing identity**. The consequence on a
+second device:
+
+```
+recover(key) succeeds, throws nothing
+  backup:        UNKNOWN -> ENABLED      (the key was restored)
+  verification:  UNVERIFIED              (device is not trusted)
+  recoveryState: INCOMPLETE              (secrets missing from 4S)
+  history:       never decrypts
+```
+
+The device holds the backup key and still cannot read anything, indefinitely.
+After bootstrapping a cross-signing identity first (`resetIdentity()`, which
+needs UIA), the same flow gives `VERIFIED` / `ENABLED` and history decrypts.
+
+**Requirement:** the recovery-setup flow in §7.4 creates a cross-signing identity
+*and* a key backup, in that order, as one user-facing step. It must never be
+possible to finish onboarding with one and not the other.
+
+### 2. "Backup complete" must mean the backup contains keys
+
+`waitForBackupUploadSteadyState()` returns `Done` when nothing is *currently*
+queued. Called immediately after sending a message, that is true and meaningless
+— the new megolm session has not been queued yet. Observed: the wait reported
+`Done`, and the server showed `room_keys/version` → **`count: 0`**, an empty
+backup. The second device was then correct to fail.
+
+**Requirement for §8.5.2's backup health:** health is *"the backup contains keys
+for the sessions this device knows about"*, not *"a steady state was observed
+once"*. A client that tells the user their history is safe on the strength of a
+single `Done` is telling them something false, and they will only discover it on
+the day they replace their phone.
+
+This is also why §7.3's warnings are not enough on their own. The warning says
+*keep your key*. It cannot help a user whose key is fine and whose backup is
+empty.
+
+---
+
 ## 7.7 Open questions
 
 - Should the email path *also* mandate the recovery-key gate, or offer it as a
