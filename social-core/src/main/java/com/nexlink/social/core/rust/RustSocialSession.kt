@@ -23,6 +23,9 @@ import org.matrix.rustcomponents.sdk.Client
 import org.matrix.rustcomponents.sdk.ClientBuilder
 import org.matrix.rustcomponents.sdk.LatestEventValue
 import org.matrix.rustcomponents.sdk.MediaSource
+import org.matrix.rustcomponents.sdk.RoomListEntriesListener
+import org.matrix.rustcomponents.sdk.RoomListEntriesUpdate
+import org.matrix.rustcomponents.sdk.RoomListEntriesWithDynamicAdaptersResult
 import org.matrix.rustcomponents.sdk.RoomListService
 import org.matrix.rustcomponents.sdk.SqliteStoreBuilder
 import org.matrix.rustcomponents.sdk.SlidingSyncVersionBuilder
@@ -71,20 +74,44 @@ class RustSocialSession private constructor(
         )
     }
 
+    private var roomListHandle: RoomListEntriesWithDynamicAdaptersResult? = null
+
     suspend fun startSync() {
         syncService.start()
-        // §13.2 — sliding sync delivers the room list asynchronously. Polling is
-        // a first cut: RoomListService exposes a listener, and moving to it is a
-        // phase-3 refinement rather than a rewrite (§14.9).
-        scope.launch {
-            while (isActive) {
-                runCatching { refreshRooms() }
-                delay(2000)
+        observeRoomList()
+    }
+
+    /**
+     * §13.2 — observe the room list instead of polling it.
+     *
+     * The first cut polled every two seconds, which is a real battery cost
+     * (§13.7) for a list that changes rarely. `entriesWithDynamicAdapters`
+     * pushes a diff when something actually changes.
+     *
+     * The diff carries room handles, not summaries, and building a summary
+     * requires suspending calls (`roomInfo()`, `latestEvent()`). So the listener
+     * signals and a coroutine rebuilds — still event-driven, just not
+     * synchronous inside the callback.
+     */
+    private suspend fun observeRoomList() {
+        val all = roomListService.allRooms()
+        roomListHandle = all.entriesWithDynamicAdapters(
+            pageSize = 100u,
+            listener = object : RoomListEntriesListener {
+                override fun onUpdate(roomEntriesUpdate: List<RoomListEntriesUpdate>) {
+                    if (roomEntriesUpdate.isEmpty()) return
+                    scope.launch { runCatching { refreshRooms() } }
+                }
             }
-        }
+        )
+        // Seed once — the listener only fires on change, and an empty inbox on
+        // first launch would look like an empty account.
+        runCatching { refreshRooms() }
     }
     suspend fun stopSync() {
         scope.coroutineContext.cancelChildren()
+        runCatching { roomListHandle?.controller()?.destroy() }
+        roomListHandle = null
         syncService.stop()
     }
 
