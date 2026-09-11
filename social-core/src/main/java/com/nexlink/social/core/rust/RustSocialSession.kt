@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.matrix.rustcomponents.sdk.AuthData
+import org.matrix.rustcomponents.sdk.CreateRoomParameters
+import org.matrix.rustcomponents.sdk.RoomPreset
+import org.matrix.rustcomponents.sdk.RoomVisibility
 import org.matrix.rustcomponents.sdk.AuthDataPasswordDetails
 import org.matrix.rustcomponents.sdk.Client
 import org.matrix.rustcomponents.sdk.ClientBuilder
@@ -104,6 +107,38 @@ class RustSocialSession private constructor(
 
     override suspend fun react(eventId: EventId, emoji: String): Result<Unit> =
         Result.failure(NotImplementedError("§14.4 — needs the room, not just the event id"))
+
+    override suspend fun findUsers(query: String): Result<List<UserSummary>> = runCatching {
+        // §6.6 — the search is server-side over this homeserver's directory
+        // only. Federation is off (§2.6), so there is nowhere else to look.
+        client.searchUsers(query, 20uL).results.map {
+            UserSummary(UserId(it.userId), it.displayName, it.avatarUrl)
+        }
+    }
+
+    override suspend fun startDirectMessage(userId: UserId): Result<RoomId> = runCatching {
+        // Reuse an existing DM rather than creating a second one. Two rooms with
+        // the same person is confusing and splits history for no reason.
+        client.getDmRoom(userId.value)?.let { return@runCatching RoomId(it.id()) }
+
+        val id = client.createRoom(
+            CreateRoomParameters(
+                name = null,
+                topic = null,
+                isEncrypted = true,
+                isDirect = true,
+                visibility = RoomVisibility.Private,
+                preset = RoomPreset.TRUSTED_PRIVATE_CHAT,
+                invite = listOf(userId.value),
+                avatar = null,
+                powerLevelContentOverride = null,
+                joinRuleOverride = null,
+                historyVisibilityOverride = null,
+                canonicalAlias = null
+            )
+        )
+        RoomId(id)
+    }
 
     /** Poll the room list into the flow. §13.2.3's sliding sync drives the data. */
     suspend fun refreshRooms() {

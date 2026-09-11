@@ -111,6 +111,9 @@ class HomeActivity : AppCompatActivity() {
                         rooms = emptyList(); watching = false; render()
                     }
                 })
+                root.addView(button("New conversation") {
+                    startActivity(NewChatActivity.intent(this))
+                })
                 root.addView(gap(12)); root.addView(divider()); root.addView(gap(8))
                 if (rooms.isEmpty()) {
                     root.addView(text("No conversations yet.", 14f, c = UiR.color.social_muted))

@@ -41,6 +41,19 @@ interface SocialSession {
     fun devices(): Flow<List<DeviceInfo>>
 
     suspend fun verifyDevice(deviceId: DeviceId): VerificationFlow
+
+    /**
+     * §6.6 — find another user. Exact-match lookup within this homeserver, which
+     * is the whole discovery mechanism: there is no phone number to match on and
+     * no public directory to browse (§1.3).
+     */
+    suspend fun findUsers(query: String): Result<List<UserSummary>>
+
+    /**
+     * §14.8 — open (or reuse) a one-to-one conversation. Encrypted by default,
+     * which the server enforces (§22.4) rather than the client asking nicely.
+     */
+    suspend fun startDirectMessage(userId: UserId): Result<RoomId>
 }
 
 /**
@@ -95,6 +108,13 @@ sealed interface MessageBody {
     data class Audio(val localUri: String) : MessageBody
     data class File(val localUri: String, val displayName: String) : MessageBody
 }
+
+/** §6.6 — one result from a directory lookup. */
+data class UserSummary(
+    val id: UserId,
+    val displayName: String?,
+    val avatarUrl: String?
+)
 
 /** §8.6 — the device-management surface. */
 data class DeviceInfo(

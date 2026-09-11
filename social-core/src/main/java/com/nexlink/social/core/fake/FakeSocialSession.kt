@@ -70,6 +70,12 @@ class FakeSocialSession(
 
     override suspend fun verifyDevice(deviceId: DeviceId): VerificationFlow = FakeVerificationFlow()
 
+    override suspend fun findUsers(query: String): Result<List<UserSummary>> =
+        Result.success(emptyList())
+
+    override suspend fun startDirectMessage(userId: UserId): Result<RoomId> =
+        Result.success(RoomId("!fake:example"))
+
     // ── test/dev controls ────────────────────────────────────────────────────
 
     fun setState(state: SessionState) { _state.value = state }
