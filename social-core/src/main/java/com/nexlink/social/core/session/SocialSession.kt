@@ -26,7 +26,13 @@ interface SocialSession {
 
     fun rooms(): Flow<List<RoomSummary>>
 
-    fun timeline(roomId: RoomId): Timeline
+    /**
+     * Suspends. §11.6 sketched this as a plain function; the SDK's own
+     * `Room.timeline()` suspends and the listener must be attached before any
+     * item exists, so it cannot be. Changed deliberately in phase 3 — see
+     * §14.2.4.
+     */
+    suspend fun timeline(roomId: RoomId): Timeline
 
     suspend fun send(roomId: RoomId, body: MessageBody): Result<EventId>
 

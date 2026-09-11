@@ -1,6 +1,13 @@
 package com.nexlink.social.core.rust
 
 import com.nexlink.social.core.session.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,6 +38,8 @@ class RustSocialSession private constructor(
     private val roomListService: RoomListService
 ) : SocialSession {
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private val _state = MutableStateFlow<SessionState>(SessionState.Restoring)
     override val state: Flow<SessionState> = _state.asStateFlow()
 
@@ -51,18 +60,68 @@ class RustSocialSession private constructor(
         )
     }
 
-    suspend fun startSync() = syncService.start()
-    suspend fun stopSync() = syncService.stop()
+    suspend fun startSync() {
+        syncService.start()
+        // §13.2 — sliding sync delivers the room list asynchronously. Polling is
+        // a first cut: RoomListService exposes a listener, and moving to it is a
+        // phase-3 refinement rather than a rewrite (§14.9).
+        scope.launch {
+            while (isActive) {
+                runCatching { refreshRooms() }
+                delay(2000)
+            }
+        }
+    }
+    suspend fun stopSync() {
+        scope.coroutineContext.cancelChildren()
+        syncService.stop()
+    }
 
-    override fun timeline(roomId: RoomId): Timeline =
-        throw NotImplementedError("phase 3 — §14.2")
+    /** The last published state, for callers that need it synchronously. */
+    fun currentState(): SessionState = _state.value
+
+    /** §12.4 — persist the credentials, encrypted at rest. */
+    fun persistTo(store: com.nexlink.social.core.SessionStore) {
+        store.save(client.session())
+    }
+
+    private val timelines = mutableMapOf<String, RustTimeline>()
+
+    override suspend fun timeline(roomId: RoomId): Timeline {
+        synchronized(timelines) { timelines[roomId.value] }?.let { return it }
+        val room = roomListService.room(roomId.value)
+        val t = RustTimeline(room.timeline())
+        t.start()
+        synchronized(timelines) { timelines[roomId.value] = t }
+        return t
+    }
 
     /** §11.7 step 3 — send an encrypted text message. */
     override suspend fun send(roomId: RoomId, body: MessageBody): Result<EventId> =
-        Result.failure(NotImplementedError("phase 3 — wired once the timeline lands"))
+        (timeline(roomId) as RustTimeline).send(body)
 
     override suspend fun react(eventId: EventId, emoji: String): Result<Unit> =
-        Result.failure(NotImplementedError("phase 3 — §14.4"))
+        Result.failure(NotImplementedError("§14.4 — needs the room, not just the event id"))
+
+    /** Poll the room list into the flow. §13.2.3's sliding sync drives the data. */
+    suspend fun refreshRooms() {
+        val summaries = client.rooms().mapNotNull { room ->
+            runCatching {
+                val info = room.roomInfo()
+                RoomSummary(
+                    id = RoomId(room.id()),
+                    title = info.displayName ?: room.id(),
+                    avatarUrl = info.avatarUrl,
+                    lastMessagePreview = null,
+                    lastMessageAt = 0L,
+                    unreadCount = info.numUnreadMessages.toInt(),
+                    isGroup = !info.isDirect,
+                    isMuted = false
+                )
+            }.getOrNull()
+        }
+        _rooms.value = summaries
+    }
 
     /**
      * §8.6 — deliberately empty, and this is a finding rather than a stub.
@@ -107,6 +166,22 @@ class RustSocialSession private constructor(
 
             client.login(username, password, deviceDisplayName, null)
 
+            val sync = client.syncService().finish()
+            return RustSocialSession(client, sync, sync.roomListService())
+        }
+
+        /** Re-open a stored session without asking for the password again. */
+        suspend fun restore(
+            session: org.matrix.rustcomponents.sdk.Session,
+            sessionPath: String,
+            cachePath: String
+        ): RustSocialSession {
+            val client = ClientBuilder()
+                .homeserverUrl(session.homeserverUrl)
+                .sessionPaths(sessionPath, cachePath)
+                .slidingSyncVersionBuilder(SlidingSyncVersionBuilder.DISCOVER_NATIVE)
+                .build()
+            client.restoreSession(session)
             val sync = client.syncService().finish()
             return RustSocialSession(client, sync, sync.roomListService())
         }

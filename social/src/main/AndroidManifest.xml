@@ -34,6 +34,7 @@
     <uses-permission android:name="com.thvjq.nexlink.permission.SOCIAL_BRIDGE" />
 
     <application
+        android:name=".SocialApplication"
         android:allowBackup="false"
         android:label="@string/app_name"
         android:supportsRtl="true"
@@ -54,6 +55,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".SignInActivity"
+            android:exported="false"
+            android:label="@string/app_name" />
 
         <activity
             android:name="com.nexlink.social.ui.onboarding.AcceptanceGateActivity"

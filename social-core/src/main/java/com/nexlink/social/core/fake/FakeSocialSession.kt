@@ -33,7 +33,7 @@ class FakeSocialSession(
 
     override fun rooms(): Flow<List<RoomSummary>> = _rooms.asStateFlow()
 
-    override fun timeline(roomId: RoomId): Timeline =
+    override suspend fun timeline(roomId: RoomId): Timeline =
         timelines.getOrPut(roomId.value) { FakeTimeline() }
 
     override suspend fun send(roomId: RoomId, body: MessageBody): Result<EventId> {

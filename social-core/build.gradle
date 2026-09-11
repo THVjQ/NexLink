@@ -43,6 +43,10 @@ dependencies {
     implementation libs.matrix.rust.sdk
     // Mandatory companion to the SDK — see :rustls-tls/VENDORED.md.
     implementation project(':rustls-tls')
+    implementation libs.androidx.core.ktx
+    // §12.4 — the session tokens are encrypted at rest with a Keystore-backed
+    // key. NexLink already depends on this library (§10.7).
+    implementation libs.androidx.security.crypto
 
     testImplementation libs.junit
     testImplementation libs.kotlinx.coroutines.test

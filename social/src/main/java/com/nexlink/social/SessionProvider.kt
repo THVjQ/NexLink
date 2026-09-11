@@ -1,21 +1,16 @@
 package com.nexlink.social
 
-import com.nexlink.social.core.fake.FakeSocialSession
-import com.nexlink.social.core.session.SocialSession
+import android.content.Context
+import com.nexlink.social.core.SocialSessionManager
 
 /**
- * The one place that decides which [SocialSession] implementation the app runs
- * against — §11.6.
+ * The one place that hands out the live session — §11.6.
  *
- * In phase 0 it is always the fake: §11 is unresolved and §33.3 resolves it.
- * When a real implementation lands in `:social-core`, **this file is the only
- * one that changes.** That is the seam working; if selecting the real session
- * turns out to require edits elsewhere, an SDK type has leaked across the
- * module boundary and §11.6 has been violated.
+ * Phase 0 returned a fake here. Phase 2 resolved §11 and phase 3 replaced it
+ * with the real one, and **this file was the only change required outside
+ * `:social-core`.** That is the seam working exactly as §11.6 intended.
  */
 object SessionProvider {
-
-    private val fake by lazy { FakeSocialSession.withSampleData() }
-
-    fun session(): SocialSession = fake
+    fun manager(context: Context): SocialSessionManager =
+        (context.applicationContext as SocialApplication).sessions
 }
