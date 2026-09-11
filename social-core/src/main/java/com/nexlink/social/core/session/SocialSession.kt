@@ -96,6 +96,22 @@ interface SocialSession {
     suspend fun findUsers(query: String): Result<List<UserSummary>>
 
     /**
+     * §14.9 — search your own messages.
+     *
+     * §1.3 rules out server-side search as *"incompatible with the encryption
+     * posture"*, and that is not a limitation to work around: the server holds
+     * ciphertext, so it could not search even if asked. This searches a local
+     * index built from messages this device has decrypted.
+     *
+     * Two consequences the UI must be honest about:
+     *  - it only finds what **this device** has; a message from before the
+     *    device existed is not there (§8.5);
+     *  - the index is on the device, so it inherits §12.4's protection and
+     *    §12.5's size question.
+     */
+    fun searchMessages(query: String): kotlinx.coroutines.flow.Flow<List<MessageSearchHit>>
+
+    /**
      * §14.8 — open (or reuse) a one-to-one conversation. Encrypted by default,
      * which the server enforces (§22.4) rather than the client asking nicely.
      */
@@ -205,6 +221,16 @@ sealed interface MessageBody {
     data class Audio(val localUri: String) : MessageBody
     data class File(val localUri: String, val displayName: String) : MessageBody
 }
+
+/** §14.9 — one search hit. */
+data class MessageSearchHit(
+    val eventId: EventId,
+    val roomId: RoomId?,
+    val sender: UserId,
+    val senderDisplayName: String?,
+    val body: String,
+    val timestamp: Long
+)
 
 /** §14.8 — one participant. [membership] distinguishes joined from invited. */
 data class RoomMemberSummary(

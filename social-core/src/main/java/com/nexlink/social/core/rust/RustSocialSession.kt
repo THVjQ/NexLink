@@ -334,6 +334,89 @@ class RustSocialSession private constructor(
         return flow.asStateFlow()
     }
 
+    private var searchService: org.matrix.rustcomponents.sdk.SearchService? = null
+    private var searchHandle: org.matrix.rustcomponents.sdk.TaskHandle? = null
+    private val searchResults = MutableStateFlow<List<MessageSearchHit>>(emptyList())
+
+    override fun searchMessages(query: String): Flow<List<MessageSearchHit>> {
+        // The FFI blocks (§11.7.5), so never on the caller's thread.
+        scope.launch {
+            runCatching {
+                if (searchService == null) {
+                    val svc = client.searchService()
+                    searchHandle = svc.subscribeToResults(
+                        object : org.matrix.rustcomponents.sdk.SearchServiceResultsListener {
+                            override fun onUpdate(
+                                results: List<org.matrix.rustcomponents.sdk.SearchServiceResultsUpdate>
+                            ) {
+                                synchronized(searchAccum) {
+                                    results.forEach { applySearchUpdate(it) }
+                                    searchResults.value = searchAccum.mapNotNull { it.toHit() }
+                                }
+                            }
+                        }
+                    )
+                    searchService = svc
+                }
+                if (query.isBlank()) {
+                    synchronized(searchAccum) { searchAccum.clear() }
+                    searchResults.value = emptyList()
+                } else {
+                    searchService?.setQuery(query)
+                    searchService?.paginate()
+                }
+            }
+        }
+        return searchResults.asStateFlow()
+    }
+
+    private val searchAccum =
+        mutableListOf<org.matrix.rustcomponents.sdk.SearchServiceResult>()
+
+    private fun applySearchUpdate(u: org.matrix.rustcomponents.sdk.SearchServiceResultsUpdate) {
+        when (u) {
+            is org.matrix.rustcomponents.sdk.SearchServiceResultsUpdate.Append ->
+                searchAccum.addAll(u.values)
+            is org.matrix.rustcomponents.sdk.SearchServiceResultsUpdate.Reset -> {
+                searchAccum.clear(); searchAccum.addAll(u.values)
+            }
+            is org.matrix.rustcomponents.sdk.SearchServiceResultsUpdate.PushBack ->
+                searchAccum.add(u.value)
+            is org.matrix.rustcomponents.sdk.SearchServiceResultsUpdate.PushFront ->
+                searchAccum.add(0, u.value)
+            is org.matrix.rustcomponents.sdk.SearchServiceResultsUpdate.Insert ->
+                searchAccum.add(u.index.toInt().coerceIn(0, searchAccum.size), u.value)
+            is org.matrix.rustcomponents.sdk.SearchServiceResultsUpdate.Set -> {
+                val i = u.index.toInt()
+                if (i in searchAccum.indices) searchAccum[i] = u.value else searchAccum.add(u.value)
+            }
+            is org.matrix.rustcomponents.sdk.SearchServiceResultsUpdate.Remove -> {
+                val i = u.index.toInt(); if (i in searchAccum.indices) searchAccum.removeAt(i)
+            }
+            is org.matrix.rustcomponents.sdk.SearchServiceResultsUpdate.PopBack ->
+                if (searchAccum.isNotEmpty()) searchAccum.removeAt(searchAccum.size - 1)
+            is org.matrix.rustcomponents.sdk.SearchServiceResultsUpdate.PopFront ->
+                if (searchAccum.isNotEmpty()) searchAccum.removeAt(0)
+            else -> searchAccum.clear()
+        }
+    }
+
+    private fun org.matrix.rustcomponents.sdk.SearchServiceResult.toHit(): MessageSearchHit? {
+        val msg = this as? org.matrix.rustcomponents.sdk.SearchServiceResult.Message ?: return null
+        val m = msg.result
+        val body = (m.content.toAppContent() as? com.nexlink.social.core.session.TimelineContent.Text)
+            ?.body ?: return null
+        return MessageSearchHit(
+            eventId = EventId(m.eventId),
+            roomId = RoomId(msg.roomId),
+            sender = UserId(m.sender),
+            senderDisplayName = (m.senderProfile as? org.matrix.rustcomponents.sdk.ProfileDetails.Ready)
+                ?.displayName,
+            body = body,
+            timestamp = m.timestamp.toLong()
+        )
+    }
+
     override suspend fun loadMedia(mediaId: String): Result<ByteArray> = ioCatching {
         client.getMediaContent(MediaSource.fromJson(mediaId))
     }
@@ -575,6 +658,10 @@ class RustSocialSession private constructor(
             val client = ClientBuilder()
                 .homeserverUrl(session.homeserverUrl)
                 .sqliteStore(SqliteStoreBuilder(sessionPath, cachePath).key(storeKey))
+                .withSearchIndexStore(
+                    java.io.File(sessionPath, "search").apply { mkdirs() }.absolutePath,
+                    java.io.File(cachePath, "search").apply { mkdirs() }.absolutePath
+                )
                 .slidingSyncVersionBuilder(SlidingSyncVersionBuilder.DISCOVER_NATIVE)
                 .build()
             client.restoreSession(session)

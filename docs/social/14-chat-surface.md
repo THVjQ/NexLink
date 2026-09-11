@@ -230,6 +230,27 @@ Client-side only, over the local store (§1.3). Consequences to surface honestly
 
 ---
 
+## 14.9.1 Implemented 2026-09-12
+
+The Rust SDK provides a local search index (`ClientBuilder.withSearchIndexStore`
+plus `Client.searchService()`), so §14.9 did not need a bespoke index over the
+local store.
+
+**Trap: give the index its own directory.** Passing `withSearchIndexStore` the
+same paths as `sqliteStore` produced **no index and an empty room list**, with
+nothing in logcat and no exception — the client built and synced, and simply
+never delivered a room. It cost half an hour to isolate because the symptom
+(an empty inbox) looks nothing like the cause (a search setting).
+
+What the screen tells the user, and why it must: search covers **only what this
+device has decrypted**. A message from before the device was added (§8.5) is
+genuinely not findable, and a user who does not know that will reasonably
+conclude search is broken. §1.3's server-side-search exclusion is not a
+limitation being worked around — the server holds ciphertext and could not
+search if asked — so saying so plainly is both honest and reassuring.
+
+---
+
 ## 14.10 Accessibility
 
 Not a late pass. Requirements:

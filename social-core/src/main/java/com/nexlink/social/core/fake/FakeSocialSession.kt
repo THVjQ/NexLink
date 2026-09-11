@@ -86,6 +86,9 @@ class FakeSocialSession(
     override fun typingUsers(roomId: RoomId): Flow<List<String>> =
         MutableStateFlow(emptyList<String>()).asStateFlow()
 
+    override fun searchMessages(query: String): Flow<List<MessageSearchHit>> =
+        MutableStateFlow(emptyList<MessageSearchHit>()).asStateFlow()
+
     override suspend fun loadMedia(mediaId: String): Result<ByteArray> = Result.success(ByteArray(0))
 
     override suspend fun edit(roomId: RoomId, eventId: EventId, newText: String): Result<Unit> = Result.success(Unit)

@@ -111,6 +111,7 @@ class HomeActivity : AppCompatActivity() {
                         rooms = emptyList(); watching = false; render()
                     }
                 })
+                root.addView(button("Search") { startActivity(SearchActivity.intent(this)) })
                 root.addView(button("Your devices") {
                     startActivity(DevicesActivity.intent(this))
                 })
