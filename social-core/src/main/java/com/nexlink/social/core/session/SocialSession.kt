@@ -44,6 +44,13 @@ interface SocialSession {
     suspend fun sendImage(roomId: RoomId, localUri: String): Result<Unit>
 
     /**
+     * §14.5.3 — send any other file. Returns a failure naming the limit if it is
+     * over the cap, rather than letting the upload fail at the edge with a 413
+     * after the user has waited (§25.2).
+     */
+    suspend fun sendFile(roomId: RoomId, localUri: String): Result<Unit>
+
+    /**
      * §14.5.2 — fetch and decrypt media for display.
      *
      * Returns the decrypted bytes rather than a file path deliberately.

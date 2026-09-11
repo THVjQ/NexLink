@@ -346,6 +346,57 @@ class RustSocialSession private constructor(
         (timeline(roomId) as RustTimeline).redact(eventId, reason)
     }
 
+    override suspend fun sendFile(roomId: RoomId, localUri: String): Result<Unit> = io {
+        val ctx = appContext ?: return@io Result.failure(IllegalStateException("no context"))
+        val uri = android.net.Uri.parse(localUri)
+        val resolver = ctx.contentResolver
+
+        var name = "file"
+        var size = 0L
+        runCatching {
+            resolver.query(uri, null, null, null, null)?.use { c ->
+                if (c.moveToFirst()) {
+                    val ni = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    val si = c.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                    if (ni >= 0) name = c.getString(ni) ?: name
+                    if (si >= 0) size = c.getLong(si)
+                }
+            }
+        }
+
+        // §25.2 — the cap is Cloudflare's 100 MB request limit, not a
+        // preference. Fail here with a clear message rather than letting the
+        // user wait through an upload that the edge will reject.
+        if (size > MAX_UPLOAD_BYTES) {
+            return@io Result.failure(
+                IllegalArgumentException(
+                    "That file is ${size / (1024 * 1024)} MB. The limit is " +
+                        "${MAX_UPLOAD_BYTES / (1024 * 1024)} MB."
+                )
+            )
+        }
+
+        // Copy to a private temp file: the SDK needs a real path, and a
+        // content:// URI may not have one.
+        //
+        // The file keeps its ORIGINAL name inside a unique directory, rather
+        // than getting a unique name. The SDK sends the file's basename, so
+        // prefixing it made the recipient see "upload-1789170276946-report.pdf"
+        // — an internal detail leaking into someone else's conversation.
+        val dir = java.io.File(ctx.cacheDir, "upload-${System.currentTimeMillis()}").apply { mkdirs() }
+        val tmp = java.io.File(dir, name)
+        runCatching {
+            resolver.openInputStream(uri)?.use { input ->
+                tmp.outputStream().use { input.copyTo(it) }
+            }
+        }.getOrElse { return@io Result.failure(it) }
+
+        val mime = resolver.getType(uri) ?: "application/octet-stream"
+        (timeline(roomId) as RustTimeline)
+            .sendFile(tmp, name, mime)
+            .also { runCatching { tmp.delete(); dir.delete() } }
+    }
+
     override suspend fun react(roomId: RoomId, eventId: EventId, emoji: String): Result<Unit> = io {
         (timeline(roomId) as RustTimeline).toggleReaction(eventId, emoji)
     }
@@ -472,6 +523,9 @@ class RustSocialSession private constructor(
     }
 
     companion object {
+        /** §25.2 — Cloudflare's request cap, with headroom for the envelope. */
+        const val MAX_UPLOAD_BYTES = 95L * 1024 * 1024
+
         /**
          * §11.7 step 1 — log in with username and password.
          *

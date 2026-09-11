@@ -73,7 +73,14 @@ class ConversationActivity : AppCompatActivity() {
         val attach = Button(this).apply { text = "+"; isAllCaps = false }
         val send = Button(this).apply { text = "Send"; isAllCaps = false }
         composer.addView(people); composer.addView(attach); composer.addView(input); composer.addView(send)
-        attach.setOnClickListener { pickImage.launch("image/*") }
+        attach.setOnClickListener {
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setItems(arrayOf("Photo", "File")) { _, i ->
+                    if (i == 0) pickImage.launch("image/*") else pickFile.launch("*/*")
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
 
         // §14.7 — announce typing while there is text, and stop when it is sent
         // or cleared. Debounced to one notice per few seconds.
@@ -173,6 +180,21 @@ class ConversationActivity : AppCompatActivity() {
         }
     }
 
+    /** §14.5.3 — anything that is not a photo. Sent as-is, size-capped. */
+    private val pickFile = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        val rid = roomId ?: return@registerForActivityResult
+        if (uri == null) return@registerForActivityResult
+        lifecycleScope.launch {
+            val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
+            sending = true; render(lastItems, null)
+            s.sendFile(rid, uri.toString())
+                .onFailure { render(lastItems, error = it.message ?: "Couldn't send that file.") }
+            sending = false
+        }
+    }
+
     private var lastItems: List<TimelineItem> = emptyList()
     private var sending = false
     /** §14.6 — flat replies. Threads are out of scope (§1.6). */
@@ -247,6 +269,16 @@ class ConversationActivity : AppCompatActivity() {
                 c.caption?.takeIf { it.isNotBlank() }
                     ?.let { addView(text(it, 15f, UiR.color.social_text2)) }
             }
+            is TimelineContent.File ->
+                addView(text(
+                    "📎 ${c.displayName}" + (c.sizeBytes?.let { " · " + humanSize(it) } ?: ""),
+                    16f, UiR.color.social_text))
+            is TimelineContent.Video ->
+                addView(text("🎬 Video" + (c.durationMs?.let { " · ${it / 1000}s" } ?: ""),
+                    16f, UiR.color.social_text))
+            is TimelineContent.Audio ->
+                addView(text("🎵 Audio" + (c.durationMs?.let { " · ${it / 1000}s" } ?: ""),
+                    16f, UiR.color.social_text))
             is TimelineContent.Redacted ->
                 addView(text("Message deleted", 15f, UiR.color.social_muted))
             // §14.2.3 — say what happened and why it is usually expected. An
@@ -501,6 +533,13 @@ class ConversationActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    /** "0 KB" for a real file is a bug report waiting to happen. */
+    private fun humanSize(bytes: Long): String = when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        else -> String.format("%.1f MB", bytes / 1024.0 / 1024.0)
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()

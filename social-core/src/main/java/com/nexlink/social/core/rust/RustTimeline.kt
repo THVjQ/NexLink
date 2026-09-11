@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.matrix.rustcomponents.sdk.EditedContent
 import org.matrix.rustcomponents.sdk.EventOrTransactionId
+import org.matrix.rustcomponents.sdk.FileInfo
 import org.matrix.rustcomponents.sdk.ImageInfo
 import org.matrix.rustcomponents.sdk.UploadParameters
 import org.matrix.rustcomponents.sdk.UploadSource
@@ -145,6 +146,36 @@ internal class RustTimeline(private val inner: SdkTimeline) : Timeline {
     suspend fun sendReply(text: String, replyToEventId: EventId): Result<Unit> = runCatching {
         inner.sendReply(messageEventContentFromMarkdown(text), replyToEventId.value)
         Unit
+    }
+
+    /**
+     * §14.5.3 — send any other file.
+     *
+     * Unlike an image this is sent as-is: there is nothing safe to strip from an
+     * arbitrary file without corrupting it, and re-encoding a document is not
+     * something a messenger should do silently. The size cap (§25.2) is the only
+     * gate, and the caller enforces it before getting here.
+     */
+    suspend fun sendFile(
+        file: java.io.File,
+        displayName: String,
+        mimeType: String
+    ): Result<Unit> = runCatching {
+        val info = FileInfo(
+            mimetype = mimeType,
+            size = file.length().toULong(),
+            thumbnailInfo = null,
+            thumbnailSource = null
+        )
+        val params = UploadParameters(
+            source = UploadSource.File(file.absolutePath),
+            caption = displayName,
+            formattedCaption = null,
+            mentions = null,
+            inReplyTo = null,
+            extraContentJson = null
+        )
+        inner.sendFile(params, info).join()
     }
 
     suspend fun send(body: MessageBody): Result<EventId> = runCatching {

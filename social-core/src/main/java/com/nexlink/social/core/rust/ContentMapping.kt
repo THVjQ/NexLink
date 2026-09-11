@@ -19,6 +19,20 @@ internal fun TimelineItemContent.toAppContent(): TimelineContent? {
     return when (val kind = msgLike.content.kind) {
         is MsgLikeKind.Message -> when (val m = kind.content.msgType) {
             is MessageType.Text -> TimelineContent.Text(m.content.body)
+            is MessageType.File -> TimelineContent.File(
+                url = m.content.source.toJson(),
+                displayName = m.content.filename,
+                sizeBytes = m.content.info?.size?.toLong()
+            )
+            is MessageType.Video -> TimelineContent.Video(
+                url = m.content.source.toJson(),
+                caption = m.content.caption,
+                durationMs = m.content.info?.duration?.toMillis()
+            )
+            is MessageType.Audio -> TimelineContent.Audio(
+                url = m.content.source.toJson(),
+                durationMs = m.content.info?.duration?.toMillis()
+            )
             is MessageType.Image -> TimelineContent.Image(
                 mediaId = m.content.source.toJson(),
                 caption = m.content.caption,
