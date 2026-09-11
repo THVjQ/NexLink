@@ -72,6 +72,24 @@ class ConversationActivity : AppCompatActivity() {
         val send = Button(this).apply { text = "Send"; isAllCaps = false }
         composer.addView(attach); composer.addView(input); composer.addView(send)
         attach.setOnClickListener { pickImage.launch("image/*") }
+
+        // §14.7 — announce typing while there is text, and stop when it is sent
+        // or cleared. Debounced to one notice per few seconds.
+        input.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+            override fun afterTextChanged(s: android.text.Editable?) {
+                val rid = roomId ?: return
+                val typing = !s.isNullOrBlank()
+                val now = System.currentTimeMillis()
+                if (typing && now - lastTypingNotice < 4000) return
+                lastTypingNotice = now
+                lifecycleScope.launch {
+                    SessionProvider.manager(this@ConversationActivity).current()
+                        ?.setTyping(rid, typing)
+                }
+            }
+        })
         root.addView(composer)
         setContentView(root)
 
@@ -94,6 +112,10 @@ class ConversationActivity : AppCompatActivity() {
             input.setText("")
             val reply = replyingTo?.eventId
             replyingTo = null
+            lastTypingNotice = 0L
+            lifecycleScope.launch {
+                SessionProvider.manager(this@ConversationActivity).current()?.setTyping(rid, false)
+            }
             lifecycleScope.launch {
                 val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
                 // §13.5.1 — a failed send is surfaced, never swallowed. The
@@ -106,6 +128,14 @@ class ConversationActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
+            s.typingUsers(rid).collectLatest { who ->
+                typingNow = who.filter { it != myUserId() }
+                render(lastItems)
+            }
+        }
+
+        lifecycleScope.launch {
+            val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
             val t = s.timeline(rid)
             timeline = t
             t.paginateBack(30)
@@ -113,6 +143,10 @@ class ConversationActivity : AppCompatActivity() {
                 lastItems = items
                 render(items)
                 scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+                // §14.7 — the conversation is open and on screen, so it has been
+                // read. Marking on arrival rather than on scroll keeps the
+                // unread count honest for the common case.
+                if (isResumed && items.isNotEmpty()) s.markRead(rid)
             }
         }
     }
@@ -141,6 +175,30 @@ class ConversationActivity : AppCompatActivity() {
     private var sending = false
     /** §14.6 — flat replies. Threads are out of scope (§1.6). */
     private var replyingTo: TimelineItem? = null
+    private var lastTypingNotice = 0L
+    private var typingNow: List<String> = emptyList()
+
+    private var isResumed = false
+
+    override fun onResume() {
+        super.onResume()
+        isResumed = true
+        val rid = roomId ?: return
+        lifecycleScope.launch {
+            SessionProvider.manager(this@ConversationActivity).current()?.markRead(rid)
+        }
+    }
+
+    override fun onPause() {
+        isResumed = false
+        // §14.7 — stop claiming to type the moment the screen is not in front of
+        // the user. A typing indicator that outlives the screen is a small lie.
+        val rid = roomId
+        if (rid != null) lifecycleScope.launch {
+            SessionProvider.manager(this@ConversationActivity).current()?.setTyping(rid, false)
+        }
+        super.onPause()
+    }
 
     override fun onDestroy() {
         timeline?.close()
@@ -161,6 +219,12 @@ class ConversationActivity : AppCompatActivity() {
                     ((r.content as? TimelineContent.Text)?.body?.take(60) ?: "message") +
                     "  — long-press again to cancel",
                 13f, UiR.color.social_accent))
+        }
+        if (typingNow.isNotEmpty()) {
+            val who = typingNow.joinToString(", ") { it.substringAfter('@').substringBefore(':') }
+            list.addView(text(
+                if (typingNow.size == 1) "$who is typing…" else "$who are typing…",
+                14f, UiR.color.social_muted))
         }
         if (sending) list.addView(text("Sending image…", 14f, UiR.color.social_muted))
         error?.let { list.addView(text(it, 14f, UiR.color.social_danger)) }

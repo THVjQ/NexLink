@@ -10,6 +10,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,6 +24,7 @@ import org.matrix.rustcomponents.sdk.Client
 import org.matrix.rustcomponents.sdk.ClientBuilder
 import org.matrix.rustcomponents.sdk.LatestEventValue
 import org.matrix.rustcomponents.sdk.MediaSource
+import org.matrix.rustcomponents.sdk.ReceiptType
 import org.matrix.rustcomponents.sdk.Membership
 import org.matrix.rustcomponents.sdk.Room as SdkRoom
 import org.matrix.rustcomponents.sdk.RoomListEntriesListener
@@ -55,6 +57,26 @@ class RustSocialSession private constructor(
 ) : SocialSession {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * Every call into the SDK goes through here.
+     *
+     * The bindings are FFI: most calls block the calling thread, including ones
+     * declared `suspend` in Kotlin, because `suspend` describes the Kotlin side
+     * and not what the Rust side does with the thread. Calling them from a
+     * `lifecycleScope` coroutine — which defaults to the **main** dispatcher —
+     * froze the app on opening a conversation, twice, with an ANR and nothing in
+     * the crash log.
+     *
+     * **The rule: this class never assumes its caller is off the main thread.**
+     * §11.6's seam is called from UI code by design, so the hop belongs here
+     * rather than at every call site, where it would eventually be forgotten.
+     */
+    private suspend fun <T> io(block: suspend () -> T): T =
+        withContext(Dispatchers.IO) { block() }
+
+    private suspend fun <T> ioCatching(block: suspend () -> T): Result<T> =
+        withContext(Dispatchers.IO) { runCatching { block() } }
 
     private val _state = MutableStateFlow<SessionState>(SessionState.Restoring)
     override val state: Flow<SessionState> = _state.asStateFlow()
@@ -147,6 +169,10 @@ class RustSocialSession private constructor(
     }
     suspend fun stopSync() {
         scope.coroutineContext.cancelChildren()
+        synchronized(typingHandles) {
+            typingHandles.values.forEach { runCatching { it.cancel() } }
+            typingHandles.clear()
+        }
         runCatching { roomListHandle?.controller()?.destroy() }
         roomListHandle = null
         syncService.stop()
@@ -162,34 +188,35 @@ class RustSocialSession private constructor(
 
     private val timelines = mutableMapOf<String, RustTimeline>()
 
-    override suspend fun timeline(roomId: RoomId): Timeline {
-        synchronized(timelines) { timelines[roomId.value] }?.let { return it }
+    override suspend fun timeline(roomId: RoomId): Timeline = io {
+        synchronized(timelines) { timelines[roomId.value] }?.let { return@io it }
         val room = roomListService.room(roomId.value)
         val t = RustTimeline(room.timeline())
         t.start()
         synchronized(timelines) { timelines[roomId.value] = t }
-        return t
+        t
     }
 
     /** §11.7 step 3 — send an encrypted text message. */
-    override suspend fun send(roomId: RoomId, body: MessageBody): Result<EventId> =
+    override suspend fun send(roomId: RoomId, body: MessageBody): Result<EventId> = io {
         (timeline(roomId) as RustTimeline).send(body)
+    }
 
     /** Set by [SocialSessionManager] so image prep can reach a Context. */
     var appContext: android.content.Context? = null
 
-    override suspend fun sendImage(roomId: RoomId, localUri: String): Result<Unit> {
-        val ctx = appContext ?: return Result.failure(IllegalStateException("no context"))
+    override suspend fun sendImage(roomId: RoomId, localUri: String): Result<Unit> = io {
+        val ctx = appContext ?: return@io Result.failure(IllegalStateException("no context"))
         // §14.5.1 — downscale and strip EXIF BEFORE upload. Once it is encrypted
         // and on the server it is too late to remove the GPS coordinates.
         val prepared = ImagePrep.prepare(ctx, android.net.Uri.parse(localUri))
-            .getOrElse { return Result.failure(it) }
-        return (timeline(roomId) as RustTimeline)
+            .getOrElse { return@io Result.failure(it) }
+        (timeline(roomId) as RustTimeline)
             .sendImage(prepared.file, prepared.width, prepared.height, prepared.mimeType)
             .also { runCatching { prepared.file.delete() } }
     }
 
-    override suspend fun acceptInvite(roomId: RoomId): Result<Unit> = runCatching {
+    override suspend fun acceptInvite(roomId: RoomId): Result<Unit> = ioCatching {
         roomListService.room(roomId.value).join()
         // The room-list listener does eventually report the membership change,
         // but "eventually" here is seconds and the user has just tapped Accept.
@@ -197,25 +224,79 @@ class RustSocialSession private constructor(
         refreshRooms()
     }
 
-    override suspend fun leaveRoom(roomId: RoomId): Result<Unit> = runCatching {
+    override suspend fun leaveRoom(roomId: RoomId): Result<Unit> = ioCatching {
         roomListService.room(roomId.value).leave()
         refreshRooms()
     }
 
-    override suspend fun loadMedia(mediaId: String): Result<ByteArray> = runCatching {
+    override suspend fun markRead(roomId: RoomId): Result<Unit> = ioCatching {
+        // READ_PRIVATE clears the unread count without telling the other
+        // participants when you opened it — see the interface doc.
+        roomListService.room(roomId.value).markAsRead(ReceiptType.READ_PRIVATE)
+        refreshRooms()
+    }
+
+    override suspend fun setTyping(roomId: RoomId, typing: Boolean): Result<Unit> = ioCatching {
+        roomListService.room(roomId.value).typingNotice(typing)
+    }
+
+    private val typing = mutableMapOf<String, MutableStateFlow<List<String>>>()
+    private val typingHandles = mutableMapOf<String, org.matrix.rustcomponents.sdk.TaskHandle>()
+
+    /**
+     * §14.7 — who else is typing.
+     *
+     * **The subscription happens off the main thread**, deliberately. Both
+     * `roomListService.room()` and `subscribeToTypingNotifications()` are
+     * blocking FFI calls; doing them inline in this non-suspend function meant
+     * they ran on whatever thread the collector was on — the main one — and the
+     * app ANR'd on opening a conversation.
+     *
+     * The general rule this is an instance of: **nothing in this class may
+     * assume its caller is on a background thread.** The seam is called from UI
+     * code, and an FFI hop is not free.
+     */
+    override fun typingUsers(roomId: RoomId): Flow<List<String>> {
+        val flow = synchronized(typing) {
+            typing.getOrPut(roomId.value) { MutableStateFlow(emptyList()) }
+        }
+        val alreadySubscribed = synchronized(typingHandles) { typingHandles.containsKey(roomId.value) }
+        if (!alreadySubscribed) {
+            scope.launch {
+                runCatching {
+                    val handle = roomListService.room(roomId.value).subscribeToTypingNotifications(
+                        object : org.matrix.rustcomponents.sdk.TypingNotificationsListener {
+                            override fun call(typingUserIds: List<String>) {
+                                // §6.7 — the MXID is what the SDK reports, and it
+                                // is what should be shown anyway.
+                                flow.value = typingUserIds
+                            }
+                        }
+                    )
+                    synchronized(typingHandles) { typingHandles[roomId.value] = handle }
+                }
+            }
+        }
+        return flow.asStateFlow()
+    }
+
+    override suspend fun loadMedia(mediaId: String): Result<ByteArray> = ioCatching {
         client.getMediaContent(MediaSource.fromJson(mediaId))
     }
 
-    override suspend fun edit(roomId: RoomId, eventId: EventId, newText: String): Result<Unit> =
+    override suspend fun edit(roomId: RoomId, eventId: EventId, newText: String): Result<Unit> = io {
         (timeline(roomId) as RustTimeline).edit(eventId, newText)
+    }
 
-    override suspend fun delete(roomId: RoomId, eventId: EventId, reason: String?): Result<Unit> =
+    override suspend fun delete(roomId: RoomId, eventId: EventId, reason: String?): Result<Unit> = io {
         (timeline(roomId) as RustTimeline).redact(eventId, reason)
+    }
 
-    override suspend fun react(roomId: RoomId, eventId: EventId, emoji: String): Result<Unit> =
+    override suspend fun react(roomId: RoomId, eventId: EventId, emoji: String): Result<Unit> = io {
         (timeline(roomId) as RustTimeline).toggleReaction(eventId, emoji)
+    }
 
-    override suspend fun findUsers(query: String): Result<List<UserSummary>> = runCatching {
+    override suspend fun findUsers(query: String): Result<List<UserSummary>> = ioCatching {
         // §6.6 — the search is server-side over this homeserver's directory
         // only. Federation is off (§2.6), so there is nowhere else to look.
         client.searchUsers(query, 20uL).results.map {
@@ -223,10 +304,10 @@ class RustSocialSession private constructor(
         }
     }
 
-    override suspend fun startDirectMessage(userId: UserId): Result<RoomId> = runCatching {
+    override suspend fun startDirectMessage(userId: UserId): Result<RoomId> = ioCatching {
         // Reuse an existing DM rather than creating a second one. Two rooms with
         // the same person is confusing and splits history for no reason.
-        client.getDmRoom(userId.value)?.let { return@runCatching RoomId(it.id()) }
+        client.getDmRoom(userId.value)?.let { return@ioCatching RoomId(it.id()) }
 
         val id = client.createRoom(
             CreateRoomParameters(
@@ -253,7 +334,7 @@ class RustSocialSession private constructor(
      * Each room contributes its own latest event, so a row can show what was
      * actually said rather than "No messages yet" next to a busy conversation.
      */
-    suspend fun refreshRooms() {
+    suspend fun refreshRooms() = io {
         val snapshot = synchronized(entries) { entries.toList() }
         val source = if (snapshot.isNotEmpty()) snapshot else client.rooms()
         val summaries = source.mapNotNull { handle ->
@@ -305,7 +386,7 @@ class RustSocialSession private constructor(
         DeviceManager(client.session().homeserverUrl, client.session().accessToken)
 
     /** Returns the failure so the UI can show it — §14.2.2, never swallow. */
-    suspend fun refreshDevices(): Result<Unit> = runCatching {
+    suspend fun refreshDevices(): Result<Unit> = ioCatching {
         deviceManager().list(client.deviceId()).onFailure { throw it }.onSuccess { list ->
             // §8.3.2 — the server's view of which devices exist is useful; its
             // view of which are TRUSTED is precisely what must not be believed.
@@ -331,8 +412,8 @@ class RustSocialSession private constructor(
      * so the user's password is required; that is the platform's rule, not a
      * design choice, and §8.6 hits the same requirement for device deletion.
      */
-    suspend fun bootstrapCrossSigning(username: String, password: String) {
-        val handle = client.encryption().resetIdentity() ?: return
+    suspend fun bootstrapCrossSigning(username: String, password: String) = io {
+        val handle = client.encryption().resetIdentity() ?: return@io
         handle.reset(AuthData.Password(AuthDataPasswordDetails(username, password)))
     }
 

@@ -70,6 +70,13 @@ class FakeSocialSession(
 
     override suspend fun leaveRoom(roomId: RoomId): Result<Unit> = Result.success(Unit)
 
+    override suspend fun markRead(roomId: RoomId): Result<Unit> = Result.success(Unit)
+
+    override suspend fun setTyping(roomId: RoomId, typing: Boolean): Result<Unit> = Result.success(Unit)
+
+    override fun typingUsers(roomId: RoomId): Flow<List<String>> =
+        MutableStateFlow(emptyList<String>()).asStateFlow()
+
     override suspend fun loadMedia(mediaId: String): Result<ByteArray> = Result.success(ByteArray(0))
 
     override suspend fun edit(roomId: RoomId, eventId: EventId, newText: String): Result<Unit> = Result.success(Unit)

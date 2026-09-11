@@ -106,6 +106,26 @@ interface SocialSession {
 
     /** §14.8 — decline an invitation, or leave a conversation. */
     suspend fun leaveRoom(roomId: RoomId): Result<Unit>
+
+    /**
+     * §14.7 — mark a conversation read.
+     *
+     * Uses a **private** read receipt. §3.7 and §9.6.1 tell users what the
+     * operator can see; a public read receipt additionally tells *other
+     * participants* exactly when you opened a message, which is a disclosure
+     * this product has never promised and users have not asked for. Private
+     * receipts clear the unread count without broadcasting.
+     *
+     * §14.7 lists read state and typing indicators together; they are separate
+     * decisions and this one defaults to the quieter option.
+     */
+    suspend fun markRead(roomId: RoomId): Result<Unit>
+
+    /** §14.7 — tell the room you are typing. Opt-in, see [markRead]'s reasoning. */
+    suspend fun setTyping(roomId: RoomId, typing: Boolean): Result<Unit>
+
+    /** §14.7 — who else is typing, by display name. Empty when nobody is. */
+    fun typingUsers(roomId: RoomId): kotlinx.coroutines.flow.Flow<List<String>>
 }
 
 /**

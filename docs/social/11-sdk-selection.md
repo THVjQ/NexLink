@@ -323,6 +323,30 @@ None of these is a reason to reject the SDK, but all three are the kind of thing
 §11.3 meant by *"documentation: thinner, moves faster"*. They are recorded here
 so the second developer does not rediscover them.
 
+### 11.7.5 The FFI blocks, even where Kotlin says `suspend`
+
+Found in phase 3, after two ANRs with **nothing in the crash log**.
+
+Most SDK calls block the calling thread. That includes calls declared `suspend`
+in the generated Kotlin: `suspend` describes the Kotlin side and says nothing
+about what the Rust side does with the thread it was handed. Some calls
+(`roomListService.room()`, `subscribeToTypingNotifications()`) are not even
+declared `suspend` and block outright.
+
+Called from a `lifecycleScope` coroutine — which defaults to the **main**
+dispatcher — this freezes the UI. The symptom is "isn't responding", and because
+an ANR is not a crash there is no stack trace to follow.
+
+**The rule adopted: `:social-core` never assumes its caller is off the main
+thread.** Every SDK call goes through an `io { }` / `ioCatching { }` helper that
+hops to `Dispatchers.IO`. The hop belongs in the seam rather than at each call
+site, where it would eventually be forgotten by whoever adds the next screen.
+
+This is a genuine cost of the FFI that §11.2.2 anticipated in general terms
+("a stack trace that crosses a language boundary") but not this specific one.
+It is not a reason to reject the SDK. It **is** something a second developer
+must know on day one, because the failure mode teaches nothing on its own.
+
 ### 11.7.1 Recorded for each candidate
 
 | Measure | How |
