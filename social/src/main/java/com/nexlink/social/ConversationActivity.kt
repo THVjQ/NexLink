@@ -68,9 +68,11 @@ class ConversationActivity : AppCompatActivity() {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
             layoutParams = LinearLayout.LayoutParams(0, WRAP, 1f)
         }
+        val people = Button(this).apply { text = "☰"; isAllCaps = false }
+        people.setOnClickListener { showParticipants() }
         val attach = Button(this).apply { text = "+"; isAllCaps = false }
         val send = Button(this).apply { text = "Send"; isAllCaps = false }
-        composer.addView(attach); composer.addView(input); composer.addView(send)
+        composer.addView(people); composer.addView(attach); composer.addView(input); composer.addView(send)
         attach.setOnClickListener { pickImage.launch("image/*") }
 
         // §14.7 — announce typing while there is text, and stop when it is sent
@@ -440,6 +442,66 @@ class ConversationActivity : AppCompatActivity() {
     }
 
     private val mediaCache = mutableMapOf<String, android.graphics.Bitmap>()
+
+    /**
+     * §14.8 — who is in this conversation.
+     *
+     * Invited-but-not-joined is shown distinctly. In an encrypted room that
+     * distinction is not cosmetic: someone who has not joined cannot read what
+     * is being said, and a member list that implies otherwise would mislead
+     * people about who their messages are reaching.
+     */
+    private fun showParticipants() {
+        val rid = roomId ?: return
+        lifecycleScope.launch {
+            val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
+            s.members(rid)
+                .onSuccess { list ->
+                    val lines = list
+                        .filter { it.membership == "joined" || it.membership == "invited" }
+                        .sortedBy { it.membership }
+                        .map {
+                            val who = it.displayName ?: it.id.value
+                            val tag = when {
+                                it.isSelf -> " (you)"
+                                it.membership == "invited" -> " — invited, hasn't joined"
+                                else -> ""
+                            }
+                            "$who$tag\n${it.id.value}"
+                        }
+                    androidx.appcompat.app.AlertDialog.Builder(this@ConversationActivity)
+                        .setTitle("In this conversation")
+                        .setItems(lines.toTypedArray(), null)
+                        .setNeutralButton("Add someone") { _, _ -> promptInvite(rid) }
+                        .setPositiveButton("Close", null)
+                        .show()
+                }
+                .onFailure { render(lastItems, error = "Couldn't load participants: ${it.message}") }
+        }
+    }
+
+    private fun promptInvite(rid: com.nexlink.social.core.session.RoomId) {
+        val input = EditText(this).apply { hint = "username" }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Add to this conversation")
+            // §14.8 — adding someone does not give them the past. Say so, rather
+            // than letting people assume either way.
+            .setMessage("They'll be invited. They won't be able to read messages sent before they join.")
+            .setView(input)
+            .setPositiveButton("Invite") { _, _ ->
+                val name = input.text.toString().trim()
+                if (name.isEmpty()) return@setPositiveButton
+                lifecycleScope.launch {
+                    val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
+                    val mxid = if (name.startsWith("@")) name
+                               else "@$name:${SignInActivity.HOMESERVER.substringAfter("://")}"
+                    s.inviteToRoom(rid, com.nexlink.social.core.session.UserId(mxid))
+                        .onFailure { render(lastItems, error = "Couldn't invite: ${it.message}") }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 

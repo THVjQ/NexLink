@@ -216,6 +216,60 @@ class RustSocialSession private constructor(
             .also { runCatching { prepared.file.delete() } }
     }
 
+    override suspend fun createGroup(name: String, invite: List<UserId>): Result<RoomId> = ioCatching {
+        val id = client.createRoom(
+            CreateRoomParameters(
+                name = name,
+                topic = null,
+                isEncrypted = true,          // §2.8 #1 — never optional
+                isDirect = false,
+                visibility = RoomVisibility.Private,
+                // §2.5 — invite-only. A group is not discoverable and cannot be
+                // joined by knowing its id.
+                preset = RoomPreset.PRIVATE_CHAT,
+                invite = invite.map { it.value },
+                avatar = null,
+                powerLevelContentOverride = null,
+                joinRuleOverride = null,
+                historyVisibilityOverride = null,
+                canonicalAlias = null
+            )
+        )
+        refreshRooms()
+        RoomId(id)
+    }
+
+    override suspend fun inviteToRoom(roomId: RoomId, userId: UserId): Result<Unit> = ioCatching {
+        roomListService.room(roomId.value).inviteUserById(userId.value)
+    }
+
+    override suspend fun members(roomId: RoomId): Result<List<RoomMemberSummary>> = ioCatching {
+        val me = client.userId()
+        roomListService.room(roomId.value).members().use { it ->
+            buildList {
+                var m = it.nextChunk(50u)
+                while (m != null && m.isNotEmpty()) {
+                    m.forEach { member ->
+                        add(RoomMemberSummary(
+                            id = UserId(member.userId),
+                            displayName = member.displayName,
+                            membership = when (member.membership) {
+                                is org.matrix.rustcomponents.sdk.MembershipState.Join -> "joined"
+                                is org.matrix.rustcomponents.sdk.MembershipState.Invite -> "invited"
+                                is org.matrix.rustcomponents.sdk.MembershipState.Leave -> "left"
+                                is org.matrix.rustcomponents.sdk.MembershipState.Ban -> "banned"
+                                is org.matrix.rustcomponents.sdk.MembershipState.Knock -> "knocked"
+                                else -> "unknown"
+                            },
+                            isSelf = member.userId == me
+                        ))
+                    }
+                    m = it.nextChunk(50u)
+                }
+            }
+        }
+    }
+
     override suspend fun acceptInvite(roomId: RoomId): Result<Unit> = ioCatching {
         roomListService.room(roomId.value).join()
         // The room-list listener does eventually report the membership change,

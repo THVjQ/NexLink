@@ -66,6 +66,13 @@ class FakeSocialSession(
 
     override suspend fun sendImage(roomId: RoomId, localUri: String): Result<Unit> = Result.success(Unit)
 
+    override suspend fun createGroup(name: String, invite: List<UserId>): Result<RoomId> =
+        Result.success(RoomId("!fakegroup:example"))
+
+    override suspend fun inviteToRoom(roomId: RoomId, userId: UserId): Result<Unit> = Result.success(Unit)
+
+    override suspend fun members(roomId: RoomId): Result<List<RoomMemberSummary>> = Result.success(emptyList())
+
     override suspend fun acceptInvite(roomId: RoomId): Result<Unit> = Result.success(Unit)
 
     override suspend fun leaveRoom(roomId: RoomId): Result<Unit> = Result.success(Unit)

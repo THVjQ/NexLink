@@ -102,6 +102,21 @@ interface SocialSession {
      * member of the service can still be added to a conversation they did not
      * ask for, which is why declining has to be as easy as accepting.
      */
+    /**
+     * §14.8 — create a group conversation.
+     *
+     * A group is named because it has no other identity: a DM can be titled
+     * after the other person, a group cannot. Everyone invited starts as an
+     * invitation they must accept (§14.8's accept/decline path).
+     */
+    suspend fun createGroup(name: String, invite: List<UserId>): Result<RoomId>
+
+    /** §14.8 — add someone to an existing conversation. */
+    suspend fun inviteToRoom(roomId: RoomId, userId: UserId): Result<Unit>
+
+    /** §14.8 — who is in this conversation, and in what state. */
+    suspend fun members(roomId: RoomId): Result<List<RoomMemberSummary>>
+
     suspend fun acceptInvite(roomId: RoomId): Result<Unit>
 
     /** §14.8 — decline an invitation, or leave a conversation. */
@@ -183,6 +198,14 @@ sealed interface MessageBody {
     data class Audio(val localUri: String) : MessageBody
     data class File(val localUri: String, val displayName: String) : MessageBody
 }
+
+/** §14.8 — one participant. [membership] distinguishes joined from invited. */
+data class RoomMemberSummary(
+    val id: UserId,
+    val displayName: String?,
+    val membership: String,
+    val isSelf: Boolean
+)
 
 /** §6.6 — one result from a directory lookup. */
 data class UserSummary(

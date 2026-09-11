@@ -39,6 +39,21 @@ class NewChatActivity : AppCompatActivity() {
     private var results: List<UserSummary> = emptyList()
     private var status: String? = null
     private var query: String = ""
+    private var selected: List<UserSummary> = emptyList()
+    private var groupName: String = ""
+
+    private fun createGroup() {
+        status = "Creating group…"; render()
+        lifecycleScope.launch {
+            val s = SessionProvider.manager(this@NewChatActivity).current() ?: return@launch
+            s.createGroup(groupName, selected.map { it.id })
+                .onSuccess { rid ->
+                    startActivity(ConversationActivity.intent(this@NewChatActivity, rid.value, groupName))
+                    finish()
+                }
+                .onFailure { status = it.message ?: "Couldn't create the group."; render() }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,6 +85,40 @@ class NewChatActivity : AppCompatActivity() {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
         }
         root.addView(field)
+
+        // §14.8 — a group needs a name, because unlike a DM it has no other
+        // identity to fall back on.
+        if (selected.isNotEmpty()) {
+            root.addView(gap(12))
+            root.addView(text("Group members", 14f, UiR.color.social_accent, bold = true))
+            selected.forEach { u ->
+                root.addView(LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    addView(text(u.displayName ?: u.id.value, 15f, UiR.color.social_text).apply {
+                        layoutParams = LinearLayout.LayoutParams(0, WRAP, 1f)
+                    })
+                    addView(Button(this@NewChatActivity).apply {
+                        text = "Remove"; isAllCaps = false
+                        setOnClickListener { selected = selected - u; render() }
+                    })
+                })
+            }
+            val nameField = EditText(this).apply {
+                hint = "Group name"; setText(groupName)
+            }
+            root.addView(nameField)
+            root.addView(Button(this).apply {
+                text = "Create group"
+                isAllCaps = false
+                layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = dp(8) }
+                setOnClickListener {
+                    groupName = nameField.text.toString().trim()
+                    if (groupName.isEmpty()) { status = "Give the group a name."; render(); return@setOnClickListener }
+                    createGroup()
+                }
+            })
+            root.addView(gap(8)); root.addView(divider())
+        }
 
         root.addView(Button(this).apply {
             text = "Search"
@@ -111,6 +160,15 @@ class NewChatActivity : AppCompatActivity() {
         // §6.7 — the full MXID is always shown. A display name is chosen by its
         // owner and is not unique; showing only that is how impersonation works.
         addView(text(u.id.value, 13f, UiR.color.social_muted))
+        // §14.8 — tap opens a one-to-one; "Add" builds a group instead. Two
+        // actions on one row, because the user does not know which they want
+        // until they have found the first person.
+        addView(Button(this@NewChatActivity).apply {
+            text = if (selected.contains(u)) "Added" else "Add to group"
+            isAllCaps = false
+            isEnabled = !selected.contains(u)
+            setOnClickListener { selected = selected + u; render() }
+        })
         setOnClickListener {
             status = "Opening…"; render()
             lifecycleScope.launch {
