@@ -1,6 +1,7 @@
 package com.nexlink.social.core.rust
 
 import com.nexlink.social.core.DeviceManager
+import com.nexlink.social.core.ImagePrep
 import com.nexlink.social.core.session.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -108,6 +109,20 @@ class RustSocialSession private constructor(
     /** §11.7 step 3 — send an encrypted text message. */
     override suspend fun send(roomId: RoomId, body: MessageBody): Result<EventId> =
         (timeline(roomId) as RustTimeline).send(body)
+
+    /** Set by [SocialSessionManager] so image prep can reach a Context. */
+    var appContext: android.content.Context? = null
+
+    override suspend fun sendImage(roomId: RoomId, localUri: String): Result<Unit> {
+        val ctx = appContext ?: return Result.failure(IllegalStateException("no context"))
+        // §14.5.1 — downscale and strip EXIF BEFORE upload. Once it is encrypted
+        // and on the server it is too late to remove the GPS coordinates.
+        val prepared = ImagePrep.prepare(ctx, android.net.Uri.parse(localUri))
+            .getOrElse { return Result.failure(it) }
+        return (timeline(roomId) as RustTimeline)
+            .sendImage(prepared.file, prepared.width, prepared.height, prepared.mimeType)
+            .also { runCatching { prepared.file.delete() } }
+    }
 
     override suspend fun react(roomId: RoomId, eventId: EventId, emoji: String): Result<Unit> =
         (timeline(roomId) as RustTimeline).toggleReaction(eventId, emoji)

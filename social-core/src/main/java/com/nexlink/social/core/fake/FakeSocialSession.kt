@@ -64,6 +64,8 @@ class FakeSocialSession(
         return Result.success(id)
     }
 
+    override suspend fun sendImage(roomId: RoomId, localUri: String): Result<Unit> = Result.success(Unit)
+
     override suspend fun react(roomId: RoomId, eventId: EventId, emoji: String): Result<Unit> = Result.success(Unit)
 
     override fun devices(): Flow<List<DeviceInfo>> = _devices.asStateFlow()

@@ -37,6 +37,13 @@ interface SocialSession {
     suspend fun send(roomId: RoomId, body: MessageBody): Result<EventId>
 
     /**
+     * §14.5.1 — send an image. Separate from [send] because the upload is a
+     * long-running operation with its own failure modes, and because the image
+     * is prepared (downscaled, EXIF-stripped) before it gets here.
+     */
+    suspend fun sendImage(roomId: RoomId, localUri: String): Result<Unit>
+
+    /**
      * §14.4 — toggle a reaction. Takes the room as well as the event: §11.6
      * sketched this without one, but reactions are sent on a room's timeline
      * and there is no way to reach a timeline from an event id alone.

@@ -55,6 +55,7 @@ class SocialSessionManager(private val context: Context) {
                 storeKey = store.storeKey()
             )
             s.persistTo(store)
+            s.appContext = context.applicationContext
             session = s
             s.startSync()
             s.publishSignedInState()
@@ -69,6 +70,7 @@ class SocialSessionManager(private val context: Context) {
             _state.value = SessionState.Restoring
             val (data, cache) = paths()
             val s = RustSocialSession.restore(saved, data, cache, store.storeKey())
+            s.appContext = context.applicationContext
             session = s
             s.startSync()
             s.publishSignedInState()

@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.matrix.rustcomponents.sdk.EventOrTransactionId
+import org.matrix.rustcomponents.sdk.ImageInfo
+import org.matrix.rustcomponents.sdk.UploadParameters
+import org.matrix.rustcomponents.sdk.UploadSource
 import org.matrix.rustcomponents.sdk.EventTimelineItem
 import org.matrix.rustcomponents.sdk.MessageType
 import org.matrix.rustcomponents.sdk.MsgLikeKind
@@ -97,9 +100,36 @@ internal class RustTimeline(private val inner: SdkTimeline) : Timeline {
         Unit
     }
 
+    /** §14.5.1 — upload and send an image. Encrypted by the SDK before upload. */
+    suspend fun sendImage(file: java.io.File, width: Int, height: Int, mimeType: String): Result<Unit> =
+        runCatching {
+            val info = ImageInfo(
+                height = height.toULong(),
+                width = width.toULong(),
+                mimetype = mimeType,
+                size = file.length().toULong(),
+                thumbnailInfo = null,
+                thumbnailSource = null,
+                blurhash = null,
+                isAnimated = false
+            )
+            val params = UploadParameters(
+                source = UploadSource.File(file.absolutePath),
+                caption = null,
+                formattedCaption = null,
+                mentions = null,
+                inReplyTo = null,
+                extraContentJson = null
+            )
+            // join() waits for the upload to finish so the caller can report a
+            // real failure. §13.5.1's queue makes a dropped upload recoverable;
+            // it does not make silence acceptable.
+            inner.sendImage(params, UploadSource.File(file.absolutePath), info).join()
+        }
+
     suspend fun send(body: MessageBody): Result<EventId> = runCatching {
         val text = (body as? MessageBody.Text)?.text
-            ?: error("attachments land later in phase 3 — §14.5")
+            ?: error("use sendImage for attachments — §14.5")
         inner.send(messageEventContentFromMarkdown(text))
         // send() returns a SendHandle, not an id. The real event id arrives on
         // the timeline when the local echo is replaced (§14.2.2).

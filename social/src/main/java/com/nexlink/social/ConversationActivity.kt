@@ -66,8 +66,10 @@ class ConversationActivity : AppCompatActivity() {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
             layoutParams = LinearLayout.LayoutParams(0, WRAP, 1f)
         }
+        val attach = Button(this).apply { text = "+"; isAllCaps = false }
         val send = Button(this).apply { text = "Send"; isAllCaps = false }
-        composer.addView(input); composer.addView(send)
+        composer.addView(attach); composer.addView(input); composer.addView(send)
+        attach.setOnClickListener { pickImage.launch("image/*") }
         root.addView(composer)
         setContentView(root)
 
@@ -103,9 +105,36 @@ class ConversationActivity : AppCompatActivity() {
             val t = s.timeline(rid)
             timeline = t
             t.paginateBack(30)
-            t.items.collectLatest { items -> render(items); scroll.post { scroll.fullScroll(View.FOCUS_DOWN) } }
+            t.items.collectLatest { items ->
+                lastItems = items
+                render(items)
+                scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+            }
         }
     }
+
+    /**
+     * §14.5 — the photo picker. Uses GetContent rather than a media permission:
+     * the user chooses one file and the app receives exactly that, so §2.8's
+     * promise that NexLink gains no new permissions extends to this app asking
+     * for none it can avoid.
+     */
+    private val pickImage = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        val rid = roomId ?: return@registerForActivityResult
+        if (uri == null) return@registerForActivityResult
+        lifecycleScope.launch {
+            val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
+            sending = true; render(lastItems, null)
+            s.sendImage(rid, uri.toString())
+                .onFailure { render(lastItems, error = "Couldn't send that image: ${it.message}") }
+            sending = false
+        }
+    }
+
+    private var lastItems: List<TimelineItem> = emptyList()
+    private var sending = false
 
     override fun onDestroy() { timeline?.close(); super.onDestroy() }
 
@@ -115,6 +144,7 @@ class ConversationActivity : AppCompatActivity() {
             list.addView(text("No messages yet.", 14f, UiR.color.social_muted))
         }
         items.forEach { list.addView(bubble(it)) }
+        if (sending) list.addView(text("Sending image…", 14f, UiR.color.social_muted))
         error?.let { list.addView(text(it, 14f, UiR.color.social_danger)) }
     }
 
