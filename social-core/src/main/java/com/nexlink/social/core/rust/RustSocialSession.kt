@@ -124,6 +124,12 @@ class RustSocialSession private constructor(
             .also { runCatching { prepared.file.delete() } }
     }
 
+    override suspend fun edit(roomId: RoomId, eventId: EventId, newText: String): Result<Unit> =
+        (timeline(roomId) as RustTimeline).edit(eventId, newText)
+
+    override suspend fun delete(roomId: RoomId, eventId: EventId, reason: String?): Result<Unit> =
+        (timeline(roomId) as RustTimeline).redact(eventId, reason)
+
     override suspend fun react(roomId: RoomId, eventId: EventId, emoji: String): Result<Unit> =
         (timeline(roomId) as RustTimeline).toggleReaction(eventId, emoji)
 

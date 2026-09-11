@@ -11,6 +11,7 @@ import com.nexlink.social.core.session.UserId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.matrix.rustcomponents.sdk.EditedContent
 import org.matrix.rustcomponents.sdk.EventOrTransactionId
 import org.matrix.rustcomponents.sdk.ImageInfo
 import org.matrix.rustcomponents.sdk.UploadParameters
@@ -127,10 +128,30 @@ internal class RustTimeline(private val inner: SdkTimeline) : Timeline {
             inner.sendImage(params, UploadSource.File(file.absolutePath), info).join()
         }
 
+    /** §14.6 — replace the body of a message you sent. */
+    suspend fun edit(eventId: EventId, newText: String): Result<Unit> = runCatching {
+        inner.edit(
+            EventOrTransactionId.EventId(eventId.value),
+            EditedContent.RoomMessage(messageEventContentFromMarkdown(newText))
+        )
+    }
+
+    /** §14.6 — redact. See the interface doc for what this cannot undo. */
+    suspend fun redact(eventId: EventId, reason: String?): Result<Unit> = runCatching {
+        inner.redactEvent(EventOrTransactionId.EventId(eventId.value), reason)
+    }
+
+    /** §14.6 — flat replies only. Threads are explicitly out of scope (§1.6). */
+    suspend fun sendReply(text: String, replyToEventId: EventId): Result<Unit> = runCatching {
+        inner.sendReply(messageEventContentFromMarkdown(text), replyToEventId.value)
+        Unit
+    }
+
     suspend fun send(body: MessageBody): Result<EventId> = runCatching {
-        val text = (body as? MessageBody.Text)?.text
-            ?: error("use sendImage for attachments — §14.5")
-        inner.send(messageEventContentFromMarkdown(text))
+        val msg = body as? MessageBody.Text ?: error("use sendImage for attachments — §14.5")
+        val replyTo = msg.replyTo
+        if (replyTo != null) inner.sendReply(messageEventContentFromMarkdown(msg.text), replyTo.value)
+        else inner.send(messageEventContentFromMarkdown(msg.text))
         // send() returns a SendHandle, not an id. The real event id arrives on
         // the timeline when the local echo is replaced (§14.2.2).
         EventId("local-echo")
@@ -155,6 +176,10 @@ private fun SdkTimelineItem.toAppItem(): TimelineItem? {
         timestamp = ev.timestamp.toLong(),
         content = appContent,
         state = if (ev.isRemote) MessageState.SENT else MessageState.SENDING,
+        // §14.6 — an edited message is marked. A silent replacement is how a
+        // conversation ends up disputed: one person remembers what was said and
+        // the record no longer shows it was changed.
+        isEdited = ((msgLike.content.kind as? MsgLikeKind.Message)?.content?.isEdited) == true,
         reactions = msgLike.content.reactions.associate { r ->
             r.key to r.senders.map { UserId(it.senderId) }
         }

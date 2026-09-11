@@ -44,6 +44,23 @@ interface SocialSession {
     suspend fun sendImage(roomId: RoomId, localUri: String): Result<Unit>
 
     /**
+     * §14.6 — edit a message you sent. Propagated to everyone; the original is
+     * replaced in every client that renders relations.
+     */
+    suspend fun edit(roomId: RoomId, eventId: EventId, newText: String): Result<Unit>
+
+    /**
+     * §14.6 — delete (redact) a message.
+     *
+     * The honest limit, which the UI must state: redaction asks every
+     * participant's client to remove it and asks the server to drop the
+     * content. It cannot reach a copy someone already screenshotted, and the
+     * pre-redaction original lingers server-side for
+     * `redaction_retention_period` (§22.4, 7 days).
+     */
+    suspend fun delete(roomId: RoomId, eventId: EventId, reason: String? = null): Result<Unit>
+
+    /**
      * §14.4 — toggle a reaction. Takes the room as well as the event: §11.6
      * sketched this without one, but reactions are sent on a room's timeline
      * and there is no way to reach a timeline from an event id alone.

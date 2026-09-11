@@ -90,12 +90,14 @@ class ConversationActivity : AppCompatActivity() {
             val body = input.text.toString().trim()
             if (body.isEmpty()) return@setOnClickListener
             input.setText("")
+            val reply = replyingTo?.eventId
+            replyingTo = null
             lifecycleScope.launch {
                 val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
                 // §13.5.1 — a failed send is surfaced, never swallowed. The
                 // offline queue makes "failed" rarer, not impossible.
-                s.send(rid, MessageBody.Text(body)).onFailure { e ->
-                    render(listOf(), error = "Couldn't send: ${e.message}")
+                s.send(rid, MessageBody.Text(body, replyTo = reply)).onFailure { e ->
+                    render(lastItems, error = "Couldn't send: ${e.message}")
                 }
             }
         }
@@ -135,6 +137,8 @@ class ConversationActivity : AppCompatActivity() {
 
     private var lastItems: List<TimelineItem> = emptyList()
     private var sending = false
+    /** §14.6 — flat replies. Threads are out of scope (§1.6). */
+    private var replyingTo: TimelineItem? = null
 
     override fun onDestroy() { timeline?.close(); super.onDestroy() }
 
@@ -144,6 +148,13 @@ class ConversationActivity : AppCompatActivity() {
             list.addView(text("No messages yet.", 14f, UiR.color.social_muted))
         }
         items.forEach { list.addView(bubble(it)) }
+        replyingTo?.let { r ->
+            list.addView(text(
+                "Replying to ${r.senderDisplayName}: " +
+                    ((r.content as? TimelineContent.Text)?.body?.take(60) ?: "message") +
+                    "  — long-press again to cancel",
+                13f, UiR.color.social_accent))
+        }
         if (sending) list.addView(text("Sending image…", 14f, UiR.color.social_muted))
         error?.let { list.addView(text(it, 14f, UiR.color.social_danger)) }
     }
@@ -154,7 +165,7 @@ class ConversationActivity : AppCompatActivity() {
         // §14.4.2 — long-press is the entry point. A visible button per message
         // would crowd the timeline; a long-press is what people already try.
         isLongClickable = true
-        setOnLongClickListener { showReactionPicker(item); true }
+        setOnLongClickListener { showMessageMenu(item); true }
         addView(text(item.senderDisplayName, 12f, UiR.color.social_muted))
         when (val c = item.content) {
             is TimelineContent.Text -> addView(text(c.body, 16f, UiR.color.social_text))
@@ -170,6 +181,7 @@ class ConversationActivity : AppCompatActivity() {
                     15f, UiR.color.social_muted))
             else -> addView(text("[${c::class.simpleName}]", 15f, UiR.color.social_muted))
         }
+        if (item.isEdited) addView(text("edited", 12f, UiR.color.social_muted))
         if (item.state == MessageState.SENDING) {
             addView(text("Sending…", 12f, UiR.color.social_muted))
         }
@@ -198,6 +210,82 @@ class ConversationActivity : AppCompatActivity() {
                 setOnClickListener { react(item, emoji) }
             })
         }
+    }
+
+    /**
+     * §14.6 — what you can do to a message. Edit and delete appear only on your
+     * own messages, because they are the only ones you can change; offering them
+     * everywhere and failing at the server is worse than not offering them.
+     */
+    private fun showMessageMenu(item: TimelineItem) {
+        val mine = item.sender.value == myUserId()
+        val actions = buildList {
+            add("React")
+            add("Reply")
+            if (mine) { add("Edit"); add("Delete") }
+        }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setItems(actions.toTypedArray()) { _, i ->
+                when (actions[i]) {
+                    "React" -> showReactionPicker(item)
+                    "Reply" -> { replyingTo = item; render(lastItems) }
+                    "Edit" -> showEdit(item)
+                    "Delete" -> confirmDelete(item)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun myUserId(): String? =
+        (SessionProvider.manager(this).current() as? com.nexlink.social.core.rust.RustSocialSession)
+            ?.currentState()?.let {
+                (it as? com.nexlink.social.core.session.SessionState.SignedIn)?.userId?.value
+            }
+
+    private fun showEdit(item: TimelineItem) {
+        val current = (item.content as? TimelineContent.Text)?.body ?: return
+        val input = EditText(this).apply { setText(current); setSelection(current.length) }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Edit message")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val rid = roomId ?: return@setPositiveButton
+                val text = input.text.toString().trim()
+                if (text.isEmpty() || text == current) return@setPositiveButton
+                lifecycleScope.launch {
+                    val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
+                    s.edit(rid, item.eventId, text).onFailure {
+                        render(lastItems, error = "Couldn't edit: ${it.message}")
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun confirmDelete(item: TimelineItem) {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Delete this message?")
+            // §14.6 — state the limit. "Deleted for everyone" is an overclaim:
+            // it asks clients to remove it and the server to drop the content.
+            // It cannot reach a screenshot, and the original lingers server-side
+            // for the redaction retention period (§22.4, 7 days).
+            .setMessage(
+                "It will be removed for everyone in this conversation.\n\n" +
+                "It can't reach a copy someone already saved or screenshotted."
+            )
+            .setPositiveButton("Delete") { _, _ ->
+                val rid = roomId ?: return@setPositiveButton
+                lifecycleScope.launch {
+                    val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
+                    s.delete(rid, item.eventId, null).onFailure {
+                        render(lastItems, error = "Couldn't delete: ${it.message}")
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     /** §14.4.2 — a short list plus the keyboard, per §1.2 ("any emoji"). */
