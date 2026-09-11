@@ -162,8 +162,37 @@ Two implementation constraints:
 2. **Do not restrict to a curated set.** A fixed picker is a client limitation
    masquerading as a design choice, and it directly contradicts the requirement.
 
-Reactions in an encrypted room are themselves encrypted, so the server does not
-learn which emoji was used.
+**CORRECTED 2026-09-12 — this section previously said reactions are encrypted.
+They are not.**
+
+Measured against the live homeserver: a reaction sent from the app appears in the
+room as a plaintext `m.reaction` event, with the emoji readable in
+`content.m.relates_to.key` and the target event id beside it:
+
+```
+m.reaction   key: 👍   → $eventId
+```
+
+Matrix sends reactions unencrypted. That is long-standing behaviour, not a
+misconfiguration — encrypting relation events breaks the server-side aggregation
+that makes reactions cheap to render.
+
+**What the operator can therefore see:** which emoji, from whom, on which event,
+at what time. Not the message being reacted to — that stays encrypted — but a
+reaction is still a signal about content. A 😂 on a message is information.
+
+This has a consequence for §9.6.1's acceptance screen, which is the one place
+this product makes explicit promises about operator visibility. The screen's
+"We cannot see" column lists *"The content of your messages"*, and that remains
+true. But a user who reacts to a message is disclosing something the operator can
+read, and the screen does not currently say so.
+
+**Open question for §37:** either add a line to §9.6.1's "We can see" column —
+*"Which emoji you react with"* — or stop using reactions in encrypted rooms. The
+first is honest and cheap; the second contradicts an explicit product requirement
+(§1.2, §5.5). Leaning strongly toward the first: §9.6.1 already establishes that
+the honest version is the more trustworthy one, and a surprise here would be
+exactly the kind of overclaiming that section exists to prevent.
 
 ---
 

@@ -57,7 +57,10 @@ internal fun TimelineItemContent.toRoomPreview(): String? {
 }
 
 internal fun TimelineContent.toPreview(): String = when (this) {
-    is TimelineContent.Text -> body.replace('\n', ' ').take(120)
+    // §14.4.3 — take() counts UTF-16 code units and will split a surrogate
+    // pair. Graphemes.truncate walks grapheme clusters instead.
+    is TimelineContent.Text ->
+        com.nexlink.social.core.Graphemes.truncate(body.replace('\n', ' '), 120, "")
     is TimelineContent.Image -> "Photo"
     is TimelineContent.Video -> "Video"
     is TimelineContent.Audio -> "Audio message"

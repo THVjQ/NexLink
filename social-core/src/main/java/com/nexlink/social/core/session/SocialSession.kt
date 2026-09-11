@@ -36,7 +36,12 @@ interface SocialSession {
 
     suspend fun send(roomId: RoomId, body: MessageBody): Result<EventId>
 
-    suspend fun react(eventId: EventId, emoji: String): Result<Unit>
+    /**
+     * §14.4 — toggle a reaction. Takes the room as well as the event: §11.6
+     * sketched this without one, but reactions are sent on a room's timeline
+     * and there is no way to reach a timeline from an event id alone.
+     */
+    suspend fun react(roomId: RoomId, eventId: EventId, emoji: String): Result<Unit>
 
     fun devices(): Flow<List<DeviceInfo>>
 

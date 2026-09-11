@@ -52,7 +52,19 @@ data class SocialConversation(
         fun truncatePreview(text: String?): String? {
             if (text == null) return null
             if (text.length <= PREVIEW_MAX_CHARS) return text
-            return text.take(PREVIEW_MAX_CHARS - 1).trimEnd() + "…"
+            // §14.4.3 — never take() a string that may contain emoji: it counts
+            // UTF-16 code units and splits surrogate pairs. Duplicated here
+            // rather than shared because :social-contract must stay dependency
+            // free (§10.3.1) — it is the one module :app is allowed to see.
+            val it = java.text.BreakIterator.getCharacterInstance().apply { setText(text) }
+            var count = 0
+            var end = it.first()
+            while (it.next() != java.text.BreakIterator.DONE) {
+                if (count >= PREVIEW_MAX_CHARS - 1) break
+                count++
+                end = it.current()
+            }
+            return text.substring(0, end).trimEnd() + "…"
         }
     }
 }

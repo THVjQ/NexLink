@@ -109,8 +109,8 @@ class RustSocialSession private constructor(
     override suspend fun send(roomId: RoomId, body: MessageBody): Result<EventId> =
         (timeline(roomId) as RustTimeline).send(body)
 
-    override suspend fun react(eventId: EventId, emoji: String): Result<Unit> =
-        Result.failure(NotImplementedError("§14.4 — needs the room, not just the event id"))
+    override suspend fun react(roomId: RoomId, eventId: EventId, emoji: String): Result<Unit> =
+        (timeline(roomId) as RustTimeline).toggleReaction(eventId, emoji)
 
     override suspend fun findUsers(query: String): Result<List<UserSummary>> = runCatching {
         // §6.6 — the search is server-side over this homeserver's directory

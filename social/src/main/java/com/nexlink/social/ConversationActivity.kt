@@ -121,6 +121,10 @@ class ConversationActivity : AppCompatActivity() {
     private fun bubble(item: TimelineItem): View = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(0, dp(6), 0, dp(6))
+        // §14.4.2 — long-press is the entry point. A visible button per message
+        // would crowd the timeline; a long-press is what people already try.
+        isLongClickable = true
+        setOnLongClickListener { showReactionPicker(item); true }
         addView(text(item.senderDisplayName, 12f, UiR.color.social_muted))
         when (val c = item.content) {
             is TimelineContent.Text -> addView(text(c.body, 16f, UiR.color.social_text))
@@ -140,8 +144,67 @@ class ConversationActivity : AppCompatActivity() {
             addView(text("Sending…", 12f, UiR.color.social_muted))
         }
         if (item.reactions.isNotEmpty()) {
-            addView(text(item.reactions.entries.joinToString(" ") { "${it.key} ${it.value.size}" },
-                14f, UiR.color.social_text2))
+            addView(reactionStrip(item))
+        }
+    }
+
+    /**
+     * §14.4.4 — each reaction is its own tappable chip showing the count.
+     * Tapping one toggles your own, which is how a user removes a reaction
+     * without hunting for a separate control.
+     */
+    private fun reactionStrip(item: TimelineItem): View = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        setPadding(0, dp(4), 0, 0)
+        item.reactions.forEach { (emoji, senders) ->
+            addView(TextView(this@ConversationActivity).apply {
+                // §14.4.3 — the emoji is rendered as-is. Never index into it,
+                // never truncate it: a ZWJ sequence is one grapheme made of
+                // several code points and splitting it produces broken boxes.
+                text = "$emoji ${senders.size}"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextColor(ContextCompat.getColor(this@ConversationActivity, UiR.color.social_text2))
+                setPadding(dp(8), dp(4), dp(8), dp(4))
+                setOnClickListener { react(item, emoji) }
+            })
+        }
+    }
+
+    /** §14.4.2 — a short list plus the keyboard, per §1.2 ("any emoji"). */
+    private fun showReactionPicker(item: TimelineItem) {
+        val quick = listOf("👍", "❤️", "😂", "😮", "😢", "🙏")
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("React")
+            .setItems(quick.toTypedArray()) { _, i -> react(item, quick[i]) }
+            .setNeutralButton("Other…") { _, _ -> showCustomEmoji(item) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /**
+     * §1.2 promises "any emoji the user's keyboard can produce", so the picker
+     * cannot be a fixed list. This takes whatever the keyboard gives.
+     */
+    private fun showCustomEmoji(item: TimelineItem) {
+        val input = EditText(this).apply { hint = "Any emoji" }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("React")
+            .setView(input)
+            .setPositiveButton("React") { _, _ ->
+                val e = input.text.toString().trim()
+                if (e.isNotEmpty()) react(item, e)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun react(item: TimelineItem, emoji: String) {
+        val rid = roomId ?: return
+        lifecycleScope.launch {
+            val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
+            s.react(rid, item.eventId, emoji).onFailure {
+                render(listOf(), error = "Couldn't react: ${it.message}")
+            }
         }
     }
 

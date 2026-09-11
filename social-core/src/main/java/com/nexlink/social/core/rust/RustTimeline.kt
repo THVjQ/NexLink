@@ -83,6 +83,20 @@ internal class RustTimeline(private val inner: SdkTimeline) : Timeline {
 
     override fun close() { handle?.cancel(); handle = null }
 
+    /**
+     * §14.4 — toggle, not add. Reacting twice with the same emoji removes it,
+     * which is what every messenger does and what users expect.
+     *
+     * §14.4.3: the emoji is passed through as an opaque string. A ZWJ sequence
+     * or a skin-tone modifier is several code points and one grapheme; anything
+     * that indexes into it, truncates it, or "normalises" it will split it and
+     * produce the broken boxes that section warns about.
+     */
+    suspend fun toggleReaction(eventId: EventId, emoji: String): Result<Unit> = runCatching {
+        inner.toggleReaction(EventOrTransactionId.EventId(eventId.value), emoji)
+        Unit
+    }
+
     suspend fun send(body: MessageBody): Result<EventId> = runCatching {
         val text = (body as? MessageBody.Text)?.text
             ?: error("attachments land later in phase 3 — §14.5")
