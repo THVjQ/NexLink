@@ -112,6 +112,9 @@ class HomeActivity : AppCompatActivity() {
                     }
                 })
                 root.addView(button("Search") { startActivity(SearchActivity.intent(this)) })
+                root.addView(button("Export my messages") {
+                    startActivity(ExportActivity.intent(this))
+                })
                 root.addView(button("Your devices") {
                     startActivity(DevicesActivity.intent(this))
                 })
