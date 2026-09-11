@@ -11,6 +11,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.matrix.rustcomponents.sdk.AuthData
+import org.matrix.rustcomponents.sdk.AuthDataPasswordDetails
 import org.matrix.rustcomponents.sdk.Client
 import org.matrix.rustcomponents.sdk.ClientBuilder
 import org.matrix.rustcomponents.sdk.RoomListService
@@ -139,6 +141,16 @@ class RustSocialSession private constructor(
 
     /** Recovery and key backup (§7.4), which the bindings do serve well. */
     fun recovery(): RustRecovery = RustRecovery(client)
+
+    /**
+     * §7.4.4 — create the cross-signing identity. Needs User-Interactive Auth,
+     * so the user's password is required; that is the platform's rule, not a
+     * design choice, and §8.6 hits the same requirement for device deletion.
+     */
+    suspend fun bootstrapCrossSigning(username: String, password: String) {
+        val handle = client.encryption().resetIdentity() ?: return
+        handle.reset(AuthData.Password(AuthDataPasswordDetails(username, password)))
+    }
 
     companion object {
         /**

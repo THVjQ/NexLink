@@ -100,6 +100,9 @@ class HomeActivity : AppCompatActivity() {
                     root.addView(text(
                         "Your messages are not backed up. If you lose this phone, " +
                         "your history goes with it.", 14f, c = UiR.color.social_danger))
+                    root.addView(button("Set up recovery") {
+                        startActivity(RecoverySetupActivity.intent(this))
+                    })
                 }
                 root.addView(gap(8))
                 root.addView(button("Sign out") {

@@ -80,6 +80,42 @@ class SocialSessionManager(private val context: Context) {
     }
 
     /**
+     * §7.4 — set up recovery: a cross-signing identity **and** a key backup,
+     * as one step, returning the recovery key.
+     *
+     * §7.4.4 is why both halves are here. Creating only the key backup leaves a
+     * future device able to restore the backup key and still unable to read
+     * anything — it stays UNVERIFIED with `recoveryState = INCOMPLETE`, forever.
+     * That failure is silent and only surfaces when the user replaces their
+     * phone, which is the worst possible moment.
+     */
+    suspend fun setUpRecovery(
+        password: String,
+        onProgress: (String) -> Unit = {}
+    ): Result<String> = runCatching {
+        val s = session ?: error("not signed in")
+        onProgress("Setting up your account identity…")
+        s.bootstrapCrossSigning(currentUserId(), password)
+        onProgress("Encrypting your message history…")
+        val key = s.recovery().enableRecovery(waitForBackupToUpload = true) { p ->
+            onProgress(
+                when (p) {
+                    is com.nexlink.social.core.rust.RecoveryProgress.BackingUp ->
+                        "Backing up your messages (${p.done} of ${p.total})…"
+                    else -> "Setting up recovery…"
+                }
+            )
+        }
+        s.publishSignedInState()
+        _state.value = s.currentState()
+        key
+    }
+
+    private fun currentUserId(): String =
+        (_state.value as? SessionState.SignedIn)?.userId?.value?.substringAfter('@')?.substringBefore(':')
+            ?: error("not signed in")
+
+    /**
      * §32.3 — sign-out clears the credentials AND the SDK's store. Leaving the
      * crypto store behind on a shared device would be a real disclosure, and
      * §20.5.1 makes the same point about the web client.
