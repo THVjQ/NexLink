@@ -111,6 +111,9 @@ class HomeActivity : AppCompatActivity() {
                         rooms = emptyList(); watching = false; render()
                     }
                 })
+                root.addView(button("Your devices") {
+                    startActivity(DevicesActivity.intent(this))
+                })
                 root.addView(button("New conversation") {
                     startActivity(NewChatActivity.intent(this))
                 })

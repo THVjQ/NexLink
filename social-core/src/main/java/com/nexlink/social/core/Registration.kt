@@ -31,6 +31,16 @@ import java.util.concurrent.TimeUnit
  */
 class Registration(private val homeserverUrl: String) {
 
+    /**
+     * The homeserver URL arrives with a trailing slash — `public_baseurl` has
+     * one and `.well-known` echoes it. Appending "/_matrix/..." to that gives
+     * "//_matrix/...", which the tunnel's anchored `^/_matrix/` route correctly
+     * does NOT match, so the request falls through to the catch-all and reaches
+     * **Element Web instead of Synapse**. The symptom is an HTML page where JSON
+     * was expected. See infra/runbooks/cloudflare-tunnel-routes.md.
+     */
+    private val base = homeserverUrl.trimEnd('/')
+
     private val http = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -51,7 +61,7 @@ class Registration(private val homeserverUrl: String) {
 
     /** Cheap pre-check. Does NOT consume the token (§22.10). */
     fun checkInvite(token: String): Result<Boolean> = runCatching {
-        val url = "$homeserverUrl/_matrix/client/v1/register/m.login.registration_token/validity" +
+        val url = "$base/_matrix/client/v1/register/m.login.registration_token/validity" +
             "?token=$token"
         http.newCall(Request.Builder().url(url).get().build()).execute().use { r ->
             JSONObject(r.body?.string() ?: "{}").optBoolean("valid", false)
@@ -60,7 +70,7 @@ class Registration(private val homeserverUrl: String) {
 
     /** §6.3 — is this username free? Fails fast before the gate, not after. */
     fun isUsernameAvailable(username: String): Result<Boolean> = runCatching {
-        val url = "$homeserverUrl/_matrix/client/v3/register/available?username=$username"
+        val url = "$base/_matrix/client/v3/register/available?username=$username"
         http.newCall(Request.Builder().url(url).get().build()).execute().use { r ->
             if (r.code == 200) JSONObject(r.body?.string() ?: "{}").optBoolean("available", false)
             else false
@@ -111,7 +121,7 @@ class Registration(private val homeserverUrl: String) {
 
     private fun post(path: String, body: JSONObject): JSONObject =
         http.newCall(
-            Request.Builder().url(homeserverUrl + path)
+            Request.Builder().url(base + path)
                 .post(body.toString().toRequestBody(json)).build()
         ).execute().use { r -> JSONObject(r.body?.string() ?: "{}") }
 
@@ -121,6 +131,7 @@ class Registration(private val homeserverUrl: String) {
         "M_INVALID_USERNAME" -> "That username isn't allowed."
         "M_LIMIT_EXCEEDED" -> "Too many attempts. Wait a few minutes and try again."
         "M_FORBIDDEN" -> "That invite code isn't valid."
-        else -> o.optString("error").ifEmpty { "Registration failed." }
+        else -> (o.takeUnless { it.isNull("error") }?.optString("error"))?.ifEmpty { null }
+            ?: "Registration failed."
     }
 }

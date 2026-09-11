@@ -227,6 +227,29 @@ Set the Element Web route's Path field to **empty**, not `/`. That is both:
 
 If the record still does not appear, add it by hand (see DNS, above).
 
+### The trailing-slash trap
+
+Hit on 2026-09-12. The homeserver URL the SDK reports ends with a **slash** —
+`public_baseurl` has one and `.well-known` echoes it. Naively appending a path
+gives `https://nexlink.thvjq.com.au//_matrix/client/v3/devices`, and the double
+slash means the anchored `^/_matrix/` route **correctly does not match**. The
+request falls through to the catch-all and reaches **Element Web instead of
+Synapse**.
+
+The symptom is not a 404. It is an HTML page where JSON was expected:
+
+```
+Value <html> of type java.lang.String cannot be converted to JSONObject
+```
+
+Any client code that builds Client-Server API URLs by string concatenation must
+`trimEnd('/')` the base first. `:social-core`'s `Registration` and
+`DeviceManager` both do, with a comment pointing here.
+
+This is a consequence of path-based routing (§26.2.3) that a `matrix.` subdomain
+would not have had. It is a fair price for the free certificate, but it is a
+sharp edge and it will be met again by anyone adding a new raw API call.
+
 ### What must NOT be routed
 
 | Never | Why |

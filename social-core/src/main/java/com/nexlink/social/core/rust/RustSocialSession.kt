@@ -1,5 +1,6 @@
 package com.nexlink.social.core.rust
 
+import com.nexlink.social.core.DeviceManager
 import com.nexlink.social.core.session.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -12,6 +13,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.matrix.rustcomponents.sdk.AuthData
+import org.matrix.rustcomponents.sdk.VerificationState
 import org.matrix.rustcomponents.sdk.CreateRoomParameters
 import org.matrix.rustcomponents.sdk.RoomPreset
 import org.matrix.rustcomponents.sdk.RoomVisibility
@@ -169,7 +171,28 @@ class RustSocialSession private constructor(
      * `GET /_matrix/client/v3/devices` against the session's access token, and
      * deletion additionally needs User-Interactive Auth.
      */
-    override fun devices(): Flow<List<DeviceInfo>> = MutableStateFlow(emptyList<DeviceInfo>()).asStateFlow()
+    private val _devices = MutableStateFlow<List<DeviceInfo>>(emptyList())
+    override fun devices(): Flow<List<DeviceInfo>> = _devices.asStateFlow()
+
+    /** §8.6 — the SDK has no device list, so this goes to the raw C-S API. */
+    fun deviceManager(): DeviceManager =
+        DeviceManager(client.session().homeserverUrl, client.session().accessToken)
+
+    /** Returns the failure so the UI can show it — §14.2.2, never swallow. */
+    suspend fun refreshDevices(): Result<Unit> = runCatching {
+        deviceManager().list(client.deviceId()).onFailure { throw it }.onSuccess { list ->
+            // §8.3.2 — the server's view of which devices exist is useful; its
+            // view of which are TRUSTED is precisely what must not be believed.
+            // Verification comes from the local crypto store.
+            val verified = runCatching {
+                client.encryption().verificationState() == VerificationState.VERIFIED
+            }.getOrDefault(false)
+            _devices.value = list.map {
+                if (it.isCurrent) it.copy(isVerified = verified) else it
+            }
+        }
+        Unit
+    }
 
     override suspend fun verifyDevice(deviceId: DeviceId): VerificationFlow =
         throw NotImplementedError("phase 2 step 5 — §8.4, needs a second device")
