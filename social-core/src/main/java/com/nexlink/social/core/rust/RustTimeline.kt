@@ -96,20 +96,8 @@ internal class RustTimeline(private val inner: SdkTimeline) : Timeline {
 private fun SdkTimelineItem.toAppItem(): TimelineItem? {
     val ev: EventTimelineItem = asEvent() ?: return null
     val msgLike = ev.content as? TimelineItemContent.MsgLike ?: return null
-
-    val appContent = when (val kind = msgLike.content.kind) {
-        is MsgLikeKind.Message -> when (val m = kind.content.msgType) {
-            is MessageType.Text -> TimelineContent.Text(m.content.body)
-            else -> TimelineContent.Text(kind.content.body)
-        }
-        is MsgLikeKind.Redacted -> TimelineContent.Redacted
-        // §14.2.3 — rendered as a placeholder that says what happened. Never an
-        // empty bubble, never silently dropped. The usual cause is a message
-        // sent before this device existed (§8.5), which is expected, not broken.
-        is MsgLikeKind.UnableToDecrypt ->
-            TimelineContent.Undecryptable(UndecryptableReason.SENT_BEFORE_DEVICE_EXISTED)
-        else -> return null
-    }
+    // §14.2.3 and the inbox preview share one translation — see ContentMapping.
+    val appContent = ev.content.toAppContent() ?: return null
 
     val id = when (val t = ev.eventOrTransactionId) {
         is EventOrTransactionId.EventId -> t.eventId

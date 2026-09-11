@@ -140,6 +140,8 @@ class HomeActivity : AppCompatActivity() {
                 layoutParams = LinearLayout.LayoutParams(0, WRAP, 1f)
             })
             if (r.unreadCount > 0) addView(text("${r.unreadCount}", 14f, c = UiR.color.social_accent))
+            else if (r.lastMessageAt > 0) addView(text(relativeTime(r.lastMessageAt), 12f,
+                c = UiR.color.social_muted))
         })
         val preview = when {
             r.lastMessageUndecryptable ->
@@ -149,6 +151,18 @@ class HomeActivity : AppCompatActivity() {
         }
         addView(text(preview, 14f,
             c = if (r.lastMessageUndecryptable) UiR.color.social_muted else UiR.color.social_text2))
+    }
+
+    /** §14.1 — an inbox that shows a full timestamp on every row is unreadable. */
+    private fun relativeTime(ts: Long): String {
+        val mins = (System.currentTimeMillis() - ts) / 60_000
+        return when {
+            mins < 1 -> "now"
+            mins < 60 -> "${mins}m"
+            mins < 60 * 24 -> "${mins / 60}h"
+            mins < 60 * 24 * 7 -> "${mins / (60 * 24)}d"
+            else -> android.text.format.DateFormat.getDateFormat(this).format(java.util.Date(ts))
+        }
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()

@@ -20,6 +20,7 @@ import org.matrix.rustcomponents.sdk.RoomVisibility
 import org.matrix.rustcomponents.sdk.AuthDataPasswordDetails
 import org.matrix.rustcomponents.sdk.Client
 import org.matrix.rustcomponents.sdk.ClientBuilder
+import org.matrix.rustcomponents.sdk.LatestEventValue
 import org.matrix.rustcomponents.sdk.RoomListService
 import org.matrix.rustcomponents.sdk.SqliteStoreBuilder
 import org.matrix.rustcomponents.sdk.SlidingSyncVersionBuilder
@@ -143,24 +144,36 @@ class RustSocialSession private constructor(
         RoomId(id)
     }
 
-    /** Poll the room list into the flow. §13.2.3's sliding sync drives the data. */
+    /**
+     * Build the room list — §14.1.
+     *
+     * Each room contributes its own latest event, so a row can show what was
+     * actually said rather than "No messages yet" next to a busy conversation.
+     */
     suspend fun refreshRooms() {
         val summaries = client.rooms().mapNotNull { room ->
             runCatching {
                 val info = room.roomInfo()
+                val latest = runCatching { room.latestEvent() }.getOrNull()
+                val remote = latest as? LatestEventValue.Remote
+                val preview = remote?.content?.toRoomPreview()
                 RoomSummary(
                     id = RoomId(room.id()),
                     title = info.displayName ?: room.id(),
                     avatarUrl = info.avatarUrl,
-                    lastMessagePreview = null,
-                    lastMessageAt = 0L,
-                    unreadCount = info.numUnreadMessages.toInt(),
+                    lastMessagePreview = preview,
+                    lastMessageAt = (latest as? LatestEventValue.Remote)?.timestamp?.toLong() ?: 0L,
+                    unreadCount = info.notificationCount.toInt(),
                     isGroup = !info.isDirect,
-                    isMuted = false
+                    isMuted = false,
+                    lastMessageUndecryptable =
+                        (latest as? LatestEventValue.Remote)?.content?.toAppContent()
+                            is com.nexlink.social.core.session.TimelineContent.Undecryptable
                 )
             }.getOrNull()
         }
-        _rooms.value = summaries
+        // Newest first — an inbox ordered any other way is not an inbox.
+        _rooms.value = summaries.sortedByDescending { it.lastMessageAt }
     }
 
     /**
@@ -241,7 +254,13 @@ class RustSocialSession private constructor(
 
             client.login(username, password, deviceDisplayName, null)
 
-            val sync = client.syncService().finish()
+            val sync = client.syncService()
+                // §14.1 — without a timeline limit, sliding sync returns no
+                // recent events per room and latestEvent() is always None, so
+                // every inbox row reads "No messages yet" next to a conversation
+                // that plainly has messages.
+                .withRoomListTimelineLimit(10u)
+                .finish()
             return RustSocialSession(client, sync, sync.roomListService())
         }
 
@@ -258,7 +277,7 @@ class RustSocialSession private constructor(
                 .slidingSyncVersionBuilder(SlidingSyncVersionBuilder.DISCOVER_NATIVE)
                 .build()
             client.restoreSession(session)
-            val sync = client.syncService().finish()
+            val sync = client.syncService().withRoomListTimelineLimit(10u).finish()
             return RustSocialSession(client, sync, sync.roomListService())
         }
     }
