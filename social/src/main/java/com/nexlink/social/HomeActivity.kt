@@ -118,13 +118,61 @@ class HomeActivity : AppCompatActivity() {
                     startActivity(NewChatActivity.intent(this))
                 })
                 root.addView(gap(12)); root.addView(divider()); root.addView(gap(8))
-                if (rooms.isEmpty()) {
+                // §14.8 — invitations first, and visually separate. An
+                // invitation is a decision the user has to make, not a
+                // conversation they are already in.
+                val (invites, joined) = rooms.partition { it.isInvite }
+                if (invites.isNotEmpty()) {
+                    root.addView(text("Invitations", 14f, bold = true, c = UiR.color.social_accent))
+                    invites.forEach { root.addView(inviteRow(it)) }
+                    root.addView(gap(8)); root.addView(divider()); root.addView(gap(8))
+                }
+                if (joined.isEmpty()) {
                     root.addView(text("No conversations yet.", 14f, c = UiR.color.social_muted))
-                } else rooms.forEach { root.addView(row(it)) }
+                } else joined.forEach { root.addView(row(it)) }
             }
         }
 
         note?.let { root.addView(gap(12)); root.addView(text(it, 13f, c = UiR.color.social_accent)) }
+    }
+
+    /**
+     * §14.8 — an invitation. Accept and Decline are given equal weight on
+     * purpose: being added to a conversation you did not ask for is exactly the
+     * case where declining must be as easy as accepting.
+     */
+    private fun inviteRow(r: RoomSummary): View = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(0, dp(10), 0, dp(10))
+        addView(text(r.title, 16f, bold = true))
+        addView(text(
+            r.invitedBy?.let { "Invited by $it" } ?: "You have been invited",
+            13f, c = UiR.color.social_muted))
+        addView(LinearLayout(this@HomeActivity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(Button(this@HomeActivity).apply {
+                text = "Accept"; isAllCaps = false
+                setOnClickListener { respondToInvite(r, accept = true) }
+            })
+            addView(Button(this@HomeActivity).apply {
+                text = "Decline"; isAllCaps = false
+                setOnClickListener { respondToInvite(r, accept = false) }
+            })
+        })
+    }
+
+    private fun respondToInvite(r: RoomSummary, accept: Boolean) {
+        note = if (accept) "Joining…" else "Declining…"
+        render()
+        lifecycleScope.launch {
+            val s = SessionProvider.manager(this@HomeActivity).current() ?: return@launch
+            val result = if (accept) s.acceptInvite(r.id) else s.leaveRoom(r.id)
+            note = result.fold(
+                onSuccess = { null },
+                onFailure = { "Couldn't ${if (accept) "join" else "decline"}: ${it.message}" }
+            )
+            render()
+        }
     }
 
     private fun row(r: RoomSummary): View = LinearLayout(this).apply {

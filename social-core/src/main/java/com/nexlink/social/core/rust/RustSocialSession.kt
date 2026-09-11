@@ -23,6 +23,8 @@ import org.matrix.rustcomponents.sdk.Client
 import org.matrix.rustcomponents.sdk.ClientBuilder
 import org.matrix.rustcomponents.sdk.LatestEventValue
 import org.matrix.rustcomponents.sdk.MediaSource
+import org.matrix.rustcomponents.sdk.Membership
+import org.matrix.rustcomponents.sdk.Room as SdkRoom
 import org.matrix.rustcomponents.sdk.RoomListEntriesListener
 import org.matrix.rustcomponents.sdk.RoomListEntriesUpdate
 import org.matrix.rustcomponents.sdk.RoomListEntriesWithDynamicAdaptersResult
@@ -76,6 +78,17 @@ class RustSocialSession private constructor(
 
     private var roomListHandle: RoomListEntriesWithDynamicAdaptersResult? = null
 
+    /**
+     * Room handles as the room list reports them — §14.8.
+     *
+     * `client.rooms()` returns only **joined** rooms, so an invitation is
+     * invisible to it. The room list's entries include invites, which is the
+     * whole reason the list is built from here rather than from `rooms()`.
+     * Building it the easy way silently loses every invitation, and nothing
+     * reports an error.
+     */
+    private val entries = java.util.Collections.synchronizedList(mutableListOf<SdkRoom>())
+
     suspend fun startSync() {
         syncService.start()
         observeRoomList()
@@ -100,6 +113,30 @@ class RustSocialSession private constructor(
             listener = object : RoomListEntriesListener {
                 override fun onUpdate(roomEntriesUpdate: List<RoomListEntriesUpdate>) {
                     if (roomEntriesUpdate.isEmpty()) return
+                    synchronized(entries) {
+                        roomEntriesUpdate.forEach { u ->
+                            when (u) {
+                                is RoomListEntriesUpdate.Append -> entries.addAll(u.values)
+                                is RoomListEntriesUpdate.Reset -> { entries.clear(); entries.addAll(u.values) }
+                                is RoomListEntriesUpdate.PushBack -> entries.add(u.value)
+                                is RoomListEntriesUpdate.PushFront -> entries.add(0, u.value)
+                                is RoomListEntriesUpdate.Insert ->
+                                    entries.add(u.index.toInt().coerceIn(0, entries.size), u.value)
+                                is RoomListEntriesUpdate.Set -> {
+                                    val i = u.index.toInt()
+                                    if (i in entries.indices) entries[i] = u.value else entries.add(u.value)
+                                }
+                                is RoomListEntriesUpdate.Remove -> {
+                                    val i = u.index.toInt(); if (i in entries.indices) entries.removeAt(i)
+                                }
+                                is RoomListEntriesUpdate.PopBack ->
+                                    if (entries.isNotEmpty()) entries.removeAt(entries.size - 1)
+                                is RoomListEntriesUpdate.PopFront ->
+                                    if (entries.isNotEmpty()) entries.removeAt(0)
+                                else -> entries.clear()
+                            }
+                        }
+                    }
                     scope.launch { runCatching { refreshRooms() } }
                 }
             }
@@ -150,6 +187,19 @@ class RustSocialSession private constructor(
         return (timeline(roomId) as RustTimeline)
             .sendImage(prepared.file, prepared.width, prepared.height, prepared.mimeType)
             .also { runCatching { prepared.file.delete() } }
+    }
+
+    override suspend fun acceptInvite(roomId: RoomId): Result<Unit> = runCatching {
+        roomListService.room(roomId.value).join()
+        // The room-list listener does eventually report the membership change,
+        // but "eventually" here is seconds and the user has just tapped Accept.
+        // Refresh immediately so the invitation stops being offered.
+        refreshRooms()
+    }
+
+    override suspend fun leaveRoom(roomId: RoomId): Result<Unit> = runCatching {
+        roomListService.room(roomId.value).leave()
+        refreshRooms()
     }
 
     override suspend fun loadMedia(mediaId: String): Result<ByteArray> = runCatching {
@@ -204,10 +254,17 @@ class RustSocialSession private constructor(
      * actually said rather than "No messages yet" next to a busy conversation.
      */
     suspend fun refreshRooms() {
-        val summaries = client.rooms().mapNotNull { room ->
+        val snapshot = synchronized(entries) { entries.toList() }
+        val source = if (snapshot.isNotEmpty()) snapshot else client.rooms()
+        val summaries = source.mapNotNull { handle ->
             runCatching {
+                // Re-resolve through the room list service: a handle captured in
+                // an earlier diff can report stale membership after a join.
+                val room = runCatching { roomListService.room(handle.id()) }.getOrDefault(handle)
                 val info = room.roomInfo()
-                val latest = runCatching { room.latestEvent() }.getOrNull()
+                val invited = info.membership == Membership.INVITED
+                // An invite has no timeline yet, and asking for one throws.
+                val latest = if (invited) null else runCatching { room.latestEvent() }.getOrNull()
                 val remote = latest as? LatestEventValue.Remote
                 val preview = remote?.content?.toRoomPreview()
                 RoomSummary(
@@ -221,7 +278,9 @@ class RustSocialSession private constructor(
                     isMuted = false,
                     lastMessageUndecryptable =
                         (latest as? LatestEventValue.Remote)?.content?.toAppContent()
-                            is com.nexlink.social.core.session.TimelineContent.Undecryptable
+                            is com.nexlink.social.core.session.TimelineContent.Undecryptable,
+                    isInvite = invited,
+                    invitedBy = if (invited) runCatching { room.inviter()?.userId }.getOrNull() else null
                 )
             }.getOrNull()
         }

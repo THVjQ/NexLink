@@ -93,6 +93,19 @@ interface SocialSession {
      * which the server enforces (§22.4) rather than the client asking nicely.
      */
     suspend fun startDirectMessage(userId: UserId): Result<RoomId>
+
+    /**
+     * §14.8 — accept an invitation.
+     *
+     * §9.1's invite-only posture is about *the service*; this is about a room.
+     * They are unrelated controls and conflating them would be a mistake: a
+     * member of the service can still be added to a conversation they did not
+     * ask for, which is why declining has to be as easy as accepting.
+     */
+    suspend fun acceptInvite(roomId: RoomId): Result<Unit>
+
+    /** §14.8 — decline an invitation, or leave a conversation. */
+    suspend fun leaveRoom(roomId: RoomId): Result<Unit>
 }
 
 /**
@@ -136,7 +149,10 @@ data class RoomSummary(
     val isGroup: Boolean,
     val isMuted: Boolean,
     /** §14.2.3 — a room whose latest event failed to decrypt still lists, with a placeholder. */
-    val lastMessageUndecryptable: Boolean = false
+    val lastMessageUndecryptable: Boolean = false,
+    /** §14.8 — an invitation is not a conversation yet; the inbox says so. */
+    val isInvite: Boolean = false,
+    val invitedBy: String? = null
 )
 
 /** §14.5.3 — the send path's payload. Attachments arrive as a local URI string. */
