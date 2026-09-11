@@ -392,6 +392,42 @@ surface (§14); the local store and encryption at rest (§12); sync and push
 (§13); multi-device and verification (§8); recovery keys (§7); Element Web
 deployment (§20); the NexLink Level 0 link (§16.2).
 
+### 33.4.1 Phase 3 — progress at 2026-09-11
+
+Built and verified on a Samsung SM-G990E against the live homeserver.
+
+| Piece | Status |
+|---|---|
+| Platform init, session persistence, restore | **Done** — signs in once, survives force-stop |
+| Sign-in | **Done** |
+| **Account creation from the acceptance gate** | **Done** — invite → redeem → gate → account → signed in |
+| Room list | **Done** (polling; a listener is the refinement, §13.2) |
+| Conversation: timeline + send | **Done** |
+| **Encrypted end to end** | **Verified** — a message typed on the phone is `m.room.encrypted` on the server, and the plaintext appears **zero** times in the server's response |
+| §14.2.3 undecryptable placeholder | **Done**, and seen working on a new device |
+| §8.5.2 backup-health warning | **Done** — shown on the inbox, routes to recovery setup |
+| **Recovery key setup (§7.4)** | **Done** — cross-signing identity *and* key backup, key shown once behind a confirmation |
+| Attachments, reactions UI, replies, edits | Not started (§14.4–§14.6) |
+| Push notifications | Not started (§13.3) |
+| Device management (§8.6) | Not started — needs raw C-S API (§11.7.3) |
+| Encryption at rest for the SDK store | Not started (§12.4) |
+
+**The §2.8 invariants that could be tested, were:**
+
+| Invariant | Evidence |
+|---|---|
+| #1 no content the server can read | Server shows `m.room.encrypted`; plaintext grep returns 0 |
+| #3 no account without a redeemed token **and** a completed gate | An abandoned run left its token `pending` with **no account**; the completed run's token reads `spent` |
+| #6 NexLink gains nothing | `tools/check-invariants.sh` diffs its manifest every run |
+
+**Two real bugs found on hardware that no unit test could reach**, both now
+fixed: the invite field crashed on the fifth keystroke (§33.1.2), and the
+conversation composer sat under Samsung's gesture navigation bar so that
+tapping Send was consumed as a back gesture — the activity closed, nothing
+sent, nothing logged. The second is invisible on three-button navigation.
+
+---
+
 **Acceptance:**
 
 - [ ] Register via invite, complete the gate, land in the app.
