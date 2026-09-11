@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="social_bridge_permission_label">Link NexLink and NexLink Social</string>
+    <string name="social_bridge_permission_description">Allows NexLink to show your NexLink Social conversations in its unified inbox. Only apps signed by the same developer can hold this permission.</string>
+</resources>

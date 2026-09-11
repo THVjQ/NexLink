@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      The signature-level permission that makes the direct link possible (§16.3.1).
+      Declared here, in the module both apps share, so the two declarations cannot
+      drift apart — a mismatched protectionLevel silently degrades the guarantee.
+
+      protectionLevel="signature" means only an app signed with the same key can
+      hold it. Both apps sign with nexlink-release.jks (§10.5.1), which is what
+      makes that work — and what makes losing the keystore break the link
+      permanently (§21.6).
+    -->
+    <permission
+        android:name="com.thvjq.nexlink.permission.SOCIAL_BRIDGE"
+        android:protectionLevel="signature"
+        android:label="@string/social_bridge_permission_label"
+        android:description="@string/social_bridge_permission_description" />
+
+</manifest>

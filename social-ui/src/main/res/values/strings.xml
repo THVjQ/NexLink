@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The acceptance gate copy — docs/social/09-invites.md §9.6.1.
+
+  This is not boilerplate. §9.6 gives the gate three jobs: informed consent, a
+  legal record, and friction as a filter. The wording below is doing the first
+  of those, and §33.7's acceptance criterion is that a real user who has read
+  these screens can accurately say what the operator can see. If they cannot,
+  these strings have failed.
+
+  The rule that governs every word here: DO NOT OVERCLAIM. §9.6.1 —
+  "Overclaiming here — 'we can't see anything' — is both false and, under
+  consumer protection law, a misrepresentation. The honest version is also the
+  more trustworthy one."
+-->
+<resources>
+
+    <string name="social_app_name">NexLink Social</string>
+
+    <!-- ── Invite ─────────────────────────────────────────────────────── -->
+    <string name="invite_title">You need an invite</string>
+    <string name="invite_body">NexLink Social is invite only. There is no sign-up form — someone already using it has to invite you.\n\nEnter the code they sent you.</string>
+    <string name="invite_hint">XXXX-XXXX-XXXX</string>
+    <string name="invite_help">Twelve characters. Capitals and numbers only. Hyphens and spaces don\'t matter.</string>
+    <string name="invite_continue">Continue</string>
+    <string name="invite_err_short">That\'s %1$d of 12 characters.</string>
+    <string name="invite_err_long">That\'s %1$d characters — invite codes are 12.</string>
+    <string name="invite_err_char">“%1$s” isn\'t used in invite codes.</string>
+    <!-- U is excluded deliberately (§9.3), so it gets its own message rather than
+         the generic one — a user staring at a U they definitely typed deserves better. -->
+    <string name="invite_err_excluded">Invite codes never contain the letter U. Check the code again.</string>
+
+    <!-- ── Screen 1: What this is ─────────────────────────────────────── -->
+    <string name="gate1_title">What this is</string>
+    <string name="gate1_body">NexLink Social is a private messaging and calling app.\n\nYour messages and calls are end-to-end encrypted. That means they are scrambled on your phone and can only be unscrambled by the people you are talking to.\n\nIt is invite only, so it stays small.\n\n<b>It is run by one person, not a company.</b> There is no support team and no service guarantee. It is offered as-is.</string>
+
+    <!-- ── Screen 2: What we can and cannot see ───────────────────────── -->
+    <!-- §9.6.1 calls this "the single most important screen, and the one most
+         services get wrong by overclaiming". Two columns, equal visual weight. -->
+    <string name="gate2_title">What we can and cannot see</string>
+    <string name="gate2_cannot_header">We cannot see</string>
+    <string name="gate2_cannot_items">The content of your messages\nThe content of your calls\nYour photos and files\nYour message history</string>
+    <string name="gate2_can_header">We can see</string>
+    <string name="gate2_can_items">Who you message, and when\nHow often, and roughly how much\nYour IP address\nWhich devices you use</string>
+    <string name="gate2_footer">We are telling you the right-hand column because it is true. Any app that tells you it can see nothing at all is not being straight with you.</string>
+
+    <!-- ── Screen 3: Your data lives on your device ───────────────────── -->
+    <string name="gate3_title">Your messages live on your phone</string>
+    <string name="gate3_body">Your message history is stored on this device. That is the real copy.\n\nThe server keeps an encrypted copy so that a new device can catch up — but the server cannot read it, and neither can we.\n\n<b>If you lose this phone and have no way back in, your history is gone.</b> Not withheld — gone. We cannot recover it for you, because we have never been able to read it.\n\nThe next steps set up your way back in. Take them seriously.\n\nYou can also move everything directly to a new phone when you replace this one.</string>
+
+    <!-- ── Screen 4: Terms and acceptance ─────────────────────────────── -->
+    <string name="gate4_title">Terms</string>
+    <string name="gate4_body">Please read both documents. Each opens in full — you need to open one before you can tick it.</string>
+    <string name="gate4_read_terms">Read the Terms of Service</string>
+    <string name="gate4_read_privacy">Read the Privacy Policy</string>
+    <!-- §9.6.1: three separate checkboxes, none pre-ticked. "A single combined
+         checkbox is legally weaker and is not used." -->
+    <string name="gate4_cb_terms">I have read and accept the Terms of Service</string>
+    <string name="gate4_cb_privacy">I have read and accept the Privacy Policy</string>
+    <string name="gate4_cb_warranty">I understand this service is operated by an individual and provided without warranty</string>
+    <string name="gate4_must_open">Open the document first — then you can tick this.</string>
+
+    <!-- ── Screen 5: Age ──────────────────────────────────────────────── -->
+    <!-- §9.6.1: "a date-of-birth entry, not a yes/no checkbox — a checkbox is
+         trivially defeated and provides no defensible record." -->
+    <string name="gate5_title">Your date of birth</string>
+    <string name="gate5_body">You need to be at least %1$d to use NexLink Social.</string>
+    <string name="gate5_privacy_note">We do not keep your date of birth. We only record that the check passed.</string>
+    <string name="gate5_day">Day</string>
+    <string name="gate5_month">Month</string>
+    <string name="gate5_year">Year</string>
+    <string name="gate5_err_incomplete">Enter your full date of birth.</string>
+    <string name="gate5_err_invalid">That isn\'t a date.</string>
+    <string name="gate5_err_future">That date is in the future.</string>
+    <string name="gate5_err_too_young">You need to be at least %1$d to use NexLink Social.</string>
+
+    <!-- ── Navigation ─────────────────────────────────────────────────── -->
+    <string name="gate_continue">Continue</string>
+    <string name="gate_back">Back</string>
+    <string name="gate_create_account">Create my account</string>
+    <string name="gate_step">Step %1$d of %2$d</string>
+
+</resources>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="social_bg">#000000</color>
+    <color name="social_surface">#1c1c1e</color>
+    <color name="social_surface2">#2c2c2e</color>
+    <color name="social_surface3">#3a3a3c</color>
+    <color name="social_accent">#0178FF</color>
+    <color name="social_accent2">#4ca3ff</color>
+    <color name="social_text">#ffffff</color>
+    <color name="social_text2">#ebebf5</color>
+    <color name="social_muted">#8e8e93</color>
+    <color name="social_divider">#38383a</color>
+    <color name="social_danger">#FF6369</color>
+    <color name="social_cannot_see">#4CD07D</color>
+    <color name="social_can_see">#FFB347</color>
+</resources>

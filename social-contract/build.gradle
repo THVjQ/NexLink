@@ -1,0 +1,40 @@
+// :social-contract — docs/social/10-modules.md §10.3.1
+//
+// The ONLY social module :app is permitted to see. It contains the Parcelable
+// types and AIDL definitions for the cross-app link (§16.4) and nothing else:
+// no SDK, no networking, no Android dependencies beyond Parcelable.
+//
+// Without it, :app would need :social-core to know what a conversation looks
+// like, which reintroduces exactly the coupling §10.1 forbids.
+//
+// If you are about to add a dependency here, you are probably about to break
+// the thing this module exists to protect.
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.parcelize)
+}
+
+android {
+    namespace 'com.nexlink.social.contract'
+    compileSdk libs.versions.compileSdk.get().toInteger()
+
+    defaultConfig {
+        minSdk libs.versions.minSdk.get().toInteger()
+        consumerProguardFiles 'consumer-rules.pro'
+    }
+
+    buildFeatures { aidl true }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions { jvmTarget = '1.8' }
+}
+
+dependencies {
+    // Intentionally empty. See the header.
+    testImplementation libs.junit
+    testImplementation libs.robolectric
+}

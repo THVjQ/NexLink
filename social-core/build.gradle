@@ -1,0 +1,42 @@
+// :social-core — docs/social/10-modules.md §10.3, §11.6
+//
+// Owns the Matrix session, store, crypto and sync. Exposes SocialSession — the
+// APPLICATION's vocabulary, not the SDK's — and nothing outside this module
+// imports an SDK type (§11.6).
+//
+// No SDK dependency is declared yet: §11 is resolved in phase 2 (§33.3), and
+// the whole point of the seam is that this module can be written, and the UI
+// built against it, before that decision is made.
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+}
+
+android {
+    namespace 'com.nexlink.social.core'
+    compileSdk libs.versions.compileSdk.get().toInteger()
+
+    defaultConfig { minSdk libs.versions.minSdk.get().toInteger() }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions { jvmTarget = '1.8' }
+
+    testOptions { unitTests { includeAndroidResources = true } }
+}
+
+dependencies {
+    implementation project(':social-contract')
+    implementation libs.kotlinx.coroutines.core
+
+    // §11 — the Matrix SDK. THIS IS THE ONLY MODULE ALLOWED TO DECLARE IT.
+    // tools/check-invariants.sh fails the build if an SDK type is imported from
+    // :social, :social-ui or :social-contract (§11.6). That seam is what makes
+    // a wrong answer in §11 a one-module rewrite instead of an application one.
+    implementation libs.matrix.rust.sdk
+
+    testImplementation libs.junit
+    testImplementation libs.kotlinx.coroutines.test
+}

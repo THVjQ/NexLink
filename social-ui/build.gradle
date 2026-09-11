@@ -1,0 +1,39 @@
+// :social-ui — docs/social/10-modules.md §10.3
+//
+// Depends on :social-core's SocialSession, NEVER on the SDK (§11.6). That is
+// what makes an SDK change (§11) a rewrite of one module rather than of the
+// application, and it is what lets these screens be built and tested before the
+// SDK decision is made in phase 2 (§33.3).
+//
+// §10.10 leans toward folding this into :social initially. It is kept separate
+// because §33.1 asks for it and because the boundary is the thing being
+// enforced — folding it in later is a cheap change; unpicking it is not.
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+}
+
+android {
+    namespace 'com.nexlink.social.ui'
+    compileSdk libs.versions.compileSdk.get().toInteger()
+
+    defaultConfig { minSdk libs.versions.minSdk.get().toInteger() }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions { jvmTarget = '1.8' }
+}
+
+dependencies {
+    api project(':social-core')
+
+    implementation libs.androidx.core.ktx
+    implementation libs.androidx.appcompat
+    implementation libs.google.material
+    implementation libs.androidx.lifecycle.viewmodel
+    implementation libs.kotlinx.coroutines.android
+
+    testImplementation libs.junit
+}

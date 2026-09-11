@@ -1,0 +1,87 @@
+// :social — docs/social/10-modules.md §10.3, §10.5
+//
+// com.thvjq.nexlink.social. Its own application ID, its own version, its own
+// Play listing and its own review queue — that separation IS D1 (§2.2), and it
+// is why a policy problem here cannot remove the user's SMS client and dialer
+// (§1.4.3).
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+}
+
+// §10.5.1 — both apps sign with the same keystore, which is what makes the
+// signature-level permission in §16.3.1 possible. Losing it breaks both
+// products and the cross-app link irrecoverably (§21.6).
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    namespace 'com.nexlink.social'
+    compileSdk libs.versions.compileSdk.get().toInteger()
+
+    defaultConfig {
+        applicationId "com.thvjq.nexlink.social"
+        minSdk libs.versions.minSdk.get().toInteger()
+        targetSdk libs.versions.targetSdk.get().toInteger()
+        // §10.5 — deliberately independent of :app's. Locking them together
+        // would recreate the fused release train D1 exists to prevent (§1.4.3).
+        versionCode 1
+        versionName "0.1.0"
+    }
+
+    signingConfigs {
+        release {
+            storeFile     rootProject.file("app/${keystoreProperties['storeFile'] ?: 'nexlink-release.jks'}")
+            storePassword keystoreProperties['storePassword']
+            keyAlias      keystoreProperties['keyAlias'] ?: 'nexlink'
+            keyPassword   keystoreProperties['keyPassword']
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix '.debug'
+            versionNameSuffix '-debug'
+        }
+        release {
+            if (keystorePropertiesFile.exists()) signingConfig signingConfigs.release
+            // §10.6.3 — R8 from the FIRST release. Retrofitting minification to
+            // a large app with reflection-based SDK code is painful; starting
+            // with it means keep-rules grow alongside the code that needs them.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    // §10.6.2 — :social will carry native libraries (WebRTC certainly, and the
+    // Matrix SDK too if the Rust path is taken). App Bundle splits them per ABI
+    // so each device downloads one. This is why :social must ship as an AAB and
+    // never as a universal APK.
+    bundle {
+        abi { enableSplit true }
+        density { enableSplit true }
+        language { enableSplit true }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions { jvmTarget = '1.8' }
+}
+
+dependencies {
+    implementation project(':social-ui')      // brings :social-core transitively (api)
+    implementation project(':social-contract')
+
+    implementation libs.androidx.core.ktx
+    implementation libs.androidx.appcompat
+    implementation libs.google.material
+    implementation libs.kotlinx.coroutines.android
+
+    testImplementation libs.junit
+}

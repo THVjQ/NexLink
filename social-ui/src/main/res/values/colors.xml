@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Mirrors NexLink's palette (app/src/main/res/values/colors.xml) so the two apps
+  look like siblings. §10.7 wants this moved to :shared and consumed by both —
+  that is a separate, reviewable change, and doing it here would mean editing
+  :shared while it carries unrelated uncommitted work.
+
+  Prefixed `social_` so that if the two palettes ever DO land in one module, the
+  merge is a rename rather than a silent collision.
+-->
+<resources>
+    <color name="social_bg">#F2F2F7</color>
+    <color name="social_surface">#FFFFFF</color>
+    <color name="social_surface2">#F2F2F7</color>
+    <color name="social_surface3">#E5E5EA</color>
+    <color name="social_accent">#0178FF</color>
+    <color name="social_accent2">#4ca3ff</color>
+    <color name="social_text">#000000</color>
+    <color name="social_text2">#3C3C43</color>
+    <color name="social_muted">#8E8E93</color>
+    <color name="social_divider">#C6C6C8</color>
+    <color name="social_danger">#E5484D</color>
+    <!-- §9.6.1 screen 2: the two columns carry equal visual weight, so these
+         are deliberately the same saturation. Green-vs-red would editorialise. -->
+    <color name="social_cannot_see">#1F8A4C</color>
+    <color name="social_can_see">#B25E00</color>
+</resources>

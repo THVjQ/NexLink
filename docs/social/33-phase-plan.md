@@ -1,0 +1,574 @@
+# §33 — Phase plan and acceptance criteria
+
+> **Confidence:** `DURABLE`
+> The sequencing is driven by dependency, not preference. Durations are
+> estimates for one part-time developer and should be read as ordering, not
+> scheduling.
+
+---
+
+## 33.0 The principles behind the ordering
+
+Four rules produce the sequence below. They are worth stating because they
+explain why some obviously-fun work comes late.
+
+1. **Resolve the expensive uncertainties first.** §11's SDK choice and §17.6's
+   calling integration are the two decisions that are close to a rewrite if
+   wrong. Both get a timeboxed spike before anything is built on them.
+2. **Nothing reaches a real user until the operator can run it.** Backups
+   restore-tested (§23.6.3), alerting working (§27.2), runbooks written (§29).
+3. **Each phase ends in something demonstrable.** Not "the store layer is done" —
+   a thing that can be used and shown.
+4. **The VPS is not provisioned until it is needed** (§21.2.1). Phases 0–3 cost
+   a domain name.
+
+An important consequence of rule 1: **phase 2 may invalidate parts of Part III,
+and phase 4 may invalidate parts of Part IV.** That is the intended outcome, not
+a failure. Chapters carry confidence markers so that this is expected.
+
+---
+
+## 33.1 Phase 0 — Foundations
+
+*No homeserver, no SDK, no network. Buildable today.*
+
+| | |
+|---|---|
+| Goal | The repository shape that every later phase assumes, with the dependency rule enforced mechanically. |
+| Estimate | 1 week |
+| Blocked by | Nothing |
+
+**Work:**
+
+1. Migrate to a Gradle version catalogue (`gradle/libs.versions.toml`) and a
+   convention plugin. §10.6.1 is explicit that this is done **before** five new
+   modules multiply the duplication, and §10.10 wants it as its own reviewable
+   change.
+2. Create `:social-contract`, `:social-core`, `:social-ui`, `:social` per
+   §10.3. (`:social-rtc` waits for phase 4 — an empty module that pulls WebRTC
+   is a download-size cost for nothing.)
+3. Implement the dependency check in the root `build.gradle` (§10.4), with the
+   error message naming the document.
+4. Define `SocialSession` and the application-facing vocabulary in
+   `:social-core` (§11.6). **Interfaces and a fake implementation only** — no
+   SDK.
+5. Define the IPC contract types in `:social-contract` (§16.4).
+6. Build the acceptance gate (§9.6) and the invite-code field (§9.3) in
+   `:social-ui`, against the fake session.
+7. `:social` assembles, installs alongside NexLink, and runs the gate.
+
+**Acceptance:**
+
+- [ ] `./gradlew :app:assembleRelease` succeeds and **does not configure** the
+      social modules (§10.8).
+- [ ] Adding `implementation project(':social-core')` to `:app` **fails the
+      build** with the §10.4 message. Test this by doing it and reverting.
+- [ ] `:app`'s release AAB size is unchanged, to the byte where possible.
+- [ ] `:social` installs beside NexLink; both signed with the same keystore.
+- [ ] All five acceptance-gate screens render; the three checkboxes gate the
+      primary action; date of birth is entered and **not stored**.
+- [ ] The invite field accepts `x7k2 9qmf 3btd` and normalises it to
+      `X7K2-9QMF-3BTD`.
+
+**Why this is first:** it is the only phase with no external dependency, it
+produces the harness every later phase tests against, and §11.6's seam has to
+exist *before* the SDK arrives or it will not be honoured.
+
+### 33.1.1 Phase 0 — built 2026-09-11
+
+| Criterion | Result |
+|---|---|
+| `:app:assembleRelease` succeeds, social modules not configured | **Pass.** No `:social*` task runs in that build. |
+| Adding `:social-core` to `:app` fails the build | **Pass.** Introduced deliberately, build failed with the §10.4 message naming this document, reverted. |
+| `:app` unchanged | **Pass.** No `app/` source touched; the release APK's dex contains no `com.nexlink.social` class at all. 8,195,114 bytes. |
+| Same keystore | **Pass.** Both release APKs report certificate SHA-256 `a97f06…34ad4c`. |
+| Gate: five screens, three checkboxes, DOB not stored | **Verified on a real device 2026-09-11** — Samsung SM-G990E, Android 16 / API 36. Full walkthrough in §33.1.2. |
+| Invite field normalises `x7k2 9qmf 3btd` → `X7K2-9QMF-3BTD` | **Pass.** |
+
+Artefacts: `social-debug.apk` 5.7 MB, `social-release.aab` 2.4 MB (R8 on).
+
+**What was built beyond the criteria:** `tools/check-invariants.sh`, the §34.2
+invariant checks that §34.8 asks for in this phase. Each of its six checks was
+self-tested by introducing a violation and confirming it fails.
+
+### 33.1.2 Gate verified on hardware — and two crashes found
+
+Run on a Samsung SM-G990E (Android 16, API 36) on 2026-09-11, driving the UI by
+widget bounds rather than pixel guesses.
+
+| Check | Result |
+|---|---|
+| Both apps coexist | `com.thvjq.nexlink` **and** `com.thvjq.nexlink.social.debug` installed together. **D1 demonstrated on hardware.** |
+| Five screens render | Yes, with the step counter |
+| §9.3 normalisation | Typed `x7k29qmf3btd` → field shows `X7K2-9QMF-3BTD` |
+| §9.6.1 two-column disclosure | Both columns render at equal weight |
+| §9.6.1 checkbox gating | Terms and Privacy boxes `enabled=false` until their document is opened; tapping a gated box does nothing; Continue `enabled=false` until all three are ticked |
+| Age: born 2020 | Refused — *"You need to be at least 16"* |
+| Age: 31 February | Refused — *"That isn't a date."* |
+| Age: valid | Accepted |
+| **§9.6.2 — no DOB leaves the gate** | Result reads `invite X7K29QMF3BTD, age confirmed, terms 0.1.0`. **No date of birth.** |
+
+**Two crashes, both in code written this session, both invisible to 37 passing
+unit tests and found on the fifth keystroke of the first field a user ever
+touches.**
+
+1. **`IndexOutOfBoundsException: setSpan (6 ... 6) ends beyond length 5`** in
+   `InviteCodeField.Hyphenator.afterTextChanged`. Calling `setText()` from
+   inside `afterTextChanged` installs a *different* `Editable` while the key
+   listener is still inside `SpannableStringBuilder.replace()` on the old one,
+   so the following `setSelection` indexes a stale, shorter buffer. **Fix:
+   mutate the `Editable` in place with `s.replace(0, s.length, formatted)`** and
+   drop `setSelection` entirely — the selection then follows on its own.
+
+2. **The hyphens never stuck.** Masked by crash 1. The `InputFilter` stripped
+   `-`, and **an `InputFilter` runs on programmatic edits too** — so the
+   hyphenator inserted separators and the filter immediately removed them. The
+   code would have read `X7K29QMF3BTD` forever. **Fix: the separator passes
+   through the filter**; the hyphenator owns placement.
+
+Also fixed: `Ui.body()` installed `LinkMovementMethod` on every paragraph,
+making plain body text focusable and showing a grey highlight block when tapped.
+Now installed only when the text actually contains a `URLSpan`.
+
+**This is §15.9's lesson repeating exactly** — *"the bridge's original failure
+was invisible on stock Android and obvious on real devices."* Neither crash was
+reachable from a unit test, because both live in the Android `TextWatcher` /
+`InputFilter` interaction rather than in the pure logic those tests cover.
+
+**Deviations, both recorded where they belong:**
+
+- **`getInterfaceVersion()` is not a usable AIDL method name** — `aidl` reserves
+  it and fails the build. The method is `getContractVersion()`; §16.4.2 carries
+  the correction.
+- **The version catalogue covers the new modules only.** §10.6.1 wants one
+  shared configuration, and `gradle/libs.versions.toml` now exists — but `:app`,
+  `:shared` and `:wear` were left on their inline versions, because
+  `app/build.gradle` carries unrelated uncommitted work and §10.10 asks for that
+  migration as its own reviewable diff. **It is still outstanding.**
+
+---
+
+## 33.2 Phase 1 — Spike homeserver
+
+| | |
+|---|---|
+| Goal | A working, correctly-configured, private homeserver on Willard. |
+| Estimate | 1 week |
+| Blocked by | ~~The domain name~~ — **decided 2026-09-11: `nexlink.thvjq.com.au`** (§26.2.1). Unblocked. |
+
+**Work:** §21.5 datasets, §22 Synapse deployment as a TrueNAS custom app, §23
+PostgreSQL with the `ix_volume` (§23.2), §26 DNS and delegation, the invite
+service and its `invite_record` store (§9.2.2).
+
+**Acceptance — the security posture, asserted rather than believed:**
+
+- [ ] `curl https://nexlink.thvjq.com.au/_matrix/client/versions` returns 200.
+- [ ] Registration **without** a token fails.
+- [ ] Registration **with** a token succeeds, and the token is then spent.
+- [ ] `https://nexlink.thvjq.com.au/_matrix/federation/v1/version` does **not**
+      answer (§21.3).
+- [ ] `https://nexlink.thvjq.com.au/_synapse/admin/...` returns non-200 publicly
+      (§26.5.2).
+- [ ] A room created by a client is encrypted by default (§22.4).
+- [ ] `.well-known/matrix/client` is served with
+      `Access-Control-Allow-Origin: *` (§26.3.1).
+- [ ] `signing.key` is backed up **off Willard** (§21.6).
+- [ ] A `pg_dump` runs, and a restore into a scratch container passes all five
+      checks in §23.6.2. **Timed and recorded.**
+
+**Resolves:** §22.9's reserve-then-redeem question — whether the acceptance gate
+can run before the account exists, or whether the invite service must proxy
+registration entirely. That is the single most important unknown in this phase
+and it may change the shape of the invite service.
+
+### 33.2.1 Phase 1 — built 2026-09-11
+
+Live on Willard. `nexlink-social` (Synapse `v1.160.0` + PostgreSQL 16) and
+`nexlink-social-web` (Element Web `v1.12.27`), both RUNNING.
+
+| Criterion | Result |
+|---|---|
+| `/_matrix/client/versions` → 200 | **Pass.** 20 versions, 40 unstable features. |
+| Registration without a token fails | **Pass.** Offers `m.login.registration_token` as a required stage. |
+| Registration with a token succeeds, token spent | **Pass.** `@gatetest:nexlink.thvjq.com.au` created; token went `pending=1` → `completed=1`; replay refused. |
+| Federation does not answer | **Pass.** 404. |
+| Rooms encrypted by default | **Pass.** `m.room.encryption` = `m.megolm.v1.aes-sha2` on a client-created room. |
+| URL previews off | **Pass.** `/preview_url` → 404. |
+| `signing.key` backed up off Willard | **Partial** — copied to `~/NexLink-secrets/`, but that is a VM *on* Willard. Survives pool loss, not fire. See its README. |
+| `pg_dump` + restore, five checks | **Pass, 19 s.** Collation asserted `C`; users, devices, events and encrypted-room state all survived. |
+| Admin API unreachable publicly | **Pass, 2026-09-11** — but by side effect, not by control. See §33.2.3. |
+| `.well-known` with CORS | **Pass.** `access-control-allow-origin: *`, and `rtc_foci` present. |
+
+Also built: the nightly `pg_dump` as TrueNAS **cronjob id 3** (§23.4.2), and the
+operator invite CLI (§9.8) with the `invite_record` / `acceptance_record` store.
+The CLI's Crockford alphabet was diffed against the Android client's constant —
+they match, so a minted code validates in the app.
+
+**Findings that contradicted this document, now corrected in place:**
+
+- **Q2 is answered, natively and favourably** — §22.10. The invite service
+  shrinks to metadata only and no longer proxies registration.
+- **Synapse does not emit the `rtc_foci` block** into `.well-known` on its own;
+  it needs `extra_well_known_client_content` (§26.3). The symptom of missing it
+  is a *missing call button*, with nothing in any log.
+- **Cloudflare's free Universal SSL stops at first-level subdomains**, so the
+  `matrix.<domain>` delegation shape was abandoned for path-based routing on one
+  hostname (§26.2.2).
+- **§20.3's `config.json` had a duplicated `default_server_config` key** — invalid
+  JSON, silently keeping only the last. Corrected.
+
+### 33.2.2 What phase 1 could NOT finish
+
+**The Cloudflare Tunnel routing.** §26.5.1 records why: the `cloudflared` app on
+Willard uses a **token-based tunnel**, so its public hostnames live in the
+Cloudflare dashboard and **cannot be added from the CLI**. Three acceptance
+criteria depend on it and are outstanding:
+
+- the admin API returning non-200 publicly (§26.5.2);
+- `.well-known` served with `Access-Control-Allow-Origin: *` (§26.3.1);
+- anything reachable at `https://nexlink.thvjq.com.au` at all.
+
+**The routes, the DNS record and the six verification commands are written up in
+`infra/runbooks/cloudflare-tunnel-routes.md`** — that file is the authoritative
+record, because the dashboard holding the real configuration is not covered by
+any backup (§26.5.1).
+
+**Also outstanding:** `@gatetest` is a test account created to answer Q2. It must
+be deactivated before phase 6, and its password appears in this phase's working
+notes.
+
+### 33.2.3 Public access — completed 2026-09-11
+
+`https://nexlink.thvjq.com.au` is live. All six public checks pass:
+
+| Check | Result |
+|---|---|
+| `/_matrix/client/versions` | 200, 20 versions |
+| `.well-known/matrix/client` | served, `base_url` correct, **`rtc_foci` present** |
+| CORS on `.well-known` | `access-control-allow-origin: *` |
+| Element Web at `/` | 200, branded "NexLink Social" |
+| `/_synapse/admin/*` | 404 — **but see the caveat below** |
+| Registration without a token | refused, `m.login.registration_token` required |
+| `/_matrix/federation/v1/version` | 404 |
+
+Routes, in order, on one hostname (§26.2.3):
+
+| Path (regex) | Service |
+|---|---|
+| `^/_matrix/` | `192.168.0.10:8060` |
+| `^/\.well-known/matrix/client` | `192.168.0.10:8060` |
+| *(empty — catch-all)* | `192.168.0.10:8061` |
+
+**The path field is a regular expression, not a glob.** Cloudflare's own help text
+confirms it: empty matches all paths, a bare word matches *anywhere* in the path,
+and `^/api` is the prefix form. An unanchored `/_matrix/` would also match
+`/foo/_matrix/bar`.
+
+**The admin-API caveat.** The 404 is nginx's, not a block: the request misses
+`^/_matrix/`, falls to the catch-all, and Element Web 404s it. It is protection by
+routing side effect and it evaporates if the catch-all is ever repointed at
+Synapse. The explicit WAF rule in `infra/runbooks/cloudflare-tunnel-routes.md`
+is still outstanding and should be added.
+
+Two further traps hit and documented in that runbook: a **tunnel-managed DNS
+record stuck in a half-created state** (dashboard showed it healthy; Cloudflare's
+own nameservers served NXDOMAIN; adding it by hand was refused as a duplicate),
+and a **second, older tunnel** on the account that `netdata.thvjq.com.au` still
+points at.
+
+---
+
+## 33.3 Phase 2 — SDK decision
+
+| | |
+|---|---|
+| Goal | §11 resolved with evidence, and its confidence marker raised. |
+| Estimate | **5 working days, timeboxed.** §11.7. |
+| Blocked by | Phases 0, 1 |
+
+Build the §11.7 client twice, once per SDK, against the phase-1 homeserver.
+Steps 4–6 — cross-signing, second-device QR verification, history restore from
+key backup — **are a gate with no partial credit.**
+
+**Current evidence, gathered 2026-09-11 and recorded here so the spike starts
+informed rather than neutral:**
+
+| | matrix-rust-components-kotlin | matrix-android-sdk2 |
+|---|---|---|
+| Latest release | `sdk-v26.09.9`, **2026-09-09** | `v1.6.50`, **2026-02-04** |
+| Last repo activity | Current | 2026-07-21 |
+| Archived | No | No |
+
+Seven months between releases against two days is exactly the divergence §11.2.1
+predicted — *"a library whose primary consumer has moved on receives
+maintenance, not investment"*. It strengthens §11.4's lean toward the Rust SDK
+without settling it, because §11.5's disqualifiers are about whether the
+bindings *work*, not how often they ship.
+
+**Acceptance:**
+
+- [ ] Both candidates attempted, or one eliminated with a written reason.
+- [ ] Every §11.7.1 measure recorded, including the subjective ones.
+- [ ] A decision, written into §11 with the marker raised from `SPECULATIVE`.
+- [ ] `:social-core`'s `SocialSession` implemented against the winner **with no
+      SDK type crossing the module boundary** (§11.6).
+
+**Do not exceed the timebox.** If five days do not settle it, that is itself
+information — it means the churn risk in §11.3 is real — and §11.4's lean should
+break toward the more stable option rather than toward a sixth day.
+
+### 33.3.1 Phase 2 — in progress, started 2026-09-11
+
+Work done so far, all of it without a device:
+
+| Step | Status |
+|---|---|
+| Dependency resolves and links | **Done.** `org.matrix.rustcomponents:sdk-android:26.09.9` in `:social-core` only |
+| §11.5 disqualifier 1 — published and current? | **Passes.** Maven version matches the GitHub tag, same day (§11.7.0) |
+| §11.5 disqualifier 2 — key backup and cross-signing complete? | **Passes.** Full audit in §11.7.2 |
+| AAB size, per ABI | **Measured.** ~24.5 MB per device, 95.2 MB universal (§11.7.0) |
+| `SocialSession` implemented against the SDK | **Compiles.** `RustSocialSession`, `RustRecovery` |
+| §11.6 seam holds | **Enforced.** `tools/check-invariants.sh` passes with a real SDK present |
+| Steps 1–3: login, list rooms, send encrypted | Written; **not yet run** |
+| **Steps 4–6: the decision gate** | **Blocked on a second device** |
+
+**API friction (a §11.7.1 measure), recorded while it is fresh:** the API shape
+was derived by running `javap` over the published AAR, and the implementation
+compiled on the first attempt against it. `EncryptionInterface` in particular
+reads as a product API rather than an FFI dump — `enableRecovery`, `recover`,
+`resetRecoveryKey`, `isLastDevice`, `hasDevicesToVerifyAgainst` map almost
+one-to-one onto §7's requirements. That is better ergonomics than §11.2.2
+predicted ("a Kotlin API generated through FFI rather than hand-designed").
+
+The counter-observation: **5,089 classes** in the AAR, a large share of them
+`FfiConverter*` plumbing, and generated names like
+`withRoomListTimelineLimit-WZ4Q5Ns` leak Kotlin value-class mangling through the
+binding. Neither is a problem; both confirm this is generated, not designed.
+
+**One real gap found: device management (§11.7.3).** Not a disqualifier, but
+unbudgeted work in phase 3.
+
+### 33.3.2 How steps 4-6 get tested without two phones
+
+§11.7's gate is cross-signing, verifying a second device by QR, and restoring
+history from key backup. There is one operator with one phone, and §34.9 already
+flags that as a problem for §8's flows generally.
+
+**Element Web is the second device.** It is a full Matrix client on the same
+homeserver (§20.5 — "a browser session is a Matrix device like any other"), it
+is already deployed and reachable, and using it exercises the same cross-signing
+and key-backup machinery a second phone would.
+
+It also kills two birds: §5.9 and §7.4.3 both want the recovery key round-tripped
+between the Android client and Element Web, and this arrangement tests that as a
+side effect rather than as separate work.
+
+The first device was going to be an Android emulator, which would also have
+closed Phase 0's unverified "the gate renders" criterion. **That did not work** —
+the development VM has too little memory and the emulator dies during boot.
+§34.10 has the detail and the conclusion: **use a real phone over USB**, which
+§34.5 and §15.9 require anyway.
+
+**This is the one thing phase 2 now needs from the operator.** Everything that
+can be established without a device has been (§33.3.1), and the remaining work
+is §11.7 steps 1-6 — which is the decision itself.
+
+---
+
+## 33.4 Phase 3 — Messaging
+
+| | |
+|---|---|
+| Goal | Two people exchange encrypted messages and media, on phones, reliably. The product exists. |
+| Estimate | 6–10 weeks. The largest phase by far. |
+| Blocked by | Phase 2 |
+
+**Work:** registration through the gate (§9.6) into a real account; the chat
+surface (§14); the local store and encryption at rest (§12); sync and push
+(§13); multi-device and verification (§8); recovery keys (§7); Element Web
+deployment (§20); the NexLink Level 0 link (§16.2).
+
+**Acceptance:**
+
+- [ ] Register via invite, complete the gate, land in the app.
+- [ ] Send and receive text, images, files, reactions with a ZWJ emoji (§14.4.3).
+- [ ] Edit and delete, propagated.
+- [ ] Push wakes the app and the notification resolves to a **decrypted** sender
+      and preview (§13.3.2), with **no persistent foreground service** (§15.3).
+- [ ] Sign in on a second device; verify by QR; **history restores from key
+      backup** (§8.5).
+- [ ] Recovery key round-trips between Android and Element Web (§5.9, §7.4.3).
+- [ ] Messages sent offline queue and deliver on reconnect (§13.5.1).
+- [ ] Social conversations appear in NexLink's unified inbox via the existing
+      notification listener, **with no code added to `:app`** (§16.2).
+- [ ] `:app`'s AAB size still unchanged.
+- [ ] Local store is encrypted at rest and survives a device reboot (§12.4).
+
+**The unified-inbox row is the one to demonstrate to the product owner.** §1.4.4
+claims a companion app reaches the inbox on day one with no integration code.
+This phase proves it or falsifies it, and the whole D1 argument rests on it.
+
+---
+
+## 33.5 Phase 4 — Calling
+
+| | |
+|---|---|
+| Goal | Voice, video, groups and screen share. |
+| Estimate | 4–8 weeks, **preceded by a 5-day spike** (§17.6.1) |
+| Blocked by | Phase 3, and the **first recurring cost** — the VPS (§24.2) |
+
+**Work:** provision the VPS, LiveKit and coturn (§24); lk-jwt-service on Willard;
+Synapse's MatrixRTC configuration (§17.3.1); `:social-rtc`; the §17.6 decision;
+Telecom integration (§19); screen sharing (§18).
+
+**Acceptance:**
+
+- [ ] 1:1 audio and video between two Android devices.
+- [ ] **Four participants, mixed Android and Element Web, with one screen
+      share, on a mid-range phone over domestic broadband.** This is §1.5's
+      success criterion verbatim and it is the gate for the phase.
+- [ ] E2EE confirmed **on**, and keys observed rotating on join and leave
+      (§17.5). Not assumed — observed.
+- [ ] A cellular call interrupts a Social call correctly: hold, mic released,
+      resume (§19.4).
+- [ ] Incoming call with the app swiped away reaches the user (§15.6).
+- [ ] Calls work from a network that permits only outbound TCP 443 (§24.5).
+- [ ] Force-stopping a client during a call leaves no ghost participant (§17.7).
+- [ ] CI asserts no `MediaRecorder` / `MediaMuxer` anywhere in `:social-*`
+      (§18.2).
+
+---
+
+## 33.6 Phase 5 — Operational readiness
+
+| | |
+|---|---|
+| Goal | The service can be run by one person without heroics. **No real users before this completes.** |
+| Estimate | 2 weeks |
+| Blocked by | Phase 4 (or phase 3, if launching without calling) |
+
+This phase looks like overhead and is the one that decides whether the service
+survives its first bad week.
+
+**Work and acceptance:**
+
+- [ ] **SMTP configured on Willard** (§27.2). This unblocks all alerting,
+      including the backup alerting that has been queued behind it since the
+      cron job was created with `stderr: false`.
+- [ ] All five §27.3 alerts firing, verified **by deliberately breaking each
+      one**.
+- [ ] Offsite backup to Backblaze B2 working (§23.5). `signing.key` and the
+      database dump included, encrypted before upload.
+- [ ] Restore drill timed and recorded (§23.6.3).
+- [ ] Every §29 runbook written and at least once *followed* by the operator
+      reading it, not from memory.
+- [ ] Terms of service and privacy policy published and versioned (§4.7), and
+      §32's retained-after-deletion items disclosed in them.
+- [ ] Deletion works in-app **and** from the public web page, and purges media
+      (§32.3, §25.7).
+- [ ] Reporting and blocking work end to end (§31.3).
+- [ ] §27.6's drift assertions running daily, from **outside** Willard.
+
+---
+
+## 33.7 Phase 6 — Private launch
+
+| | |
+|---|---|
+| Goal | 10–20 real invited users. |
+| Estimate | 4 weeks of running it |
+| Blocked by | Phase 5 |
+
+Operator-issued invites (§9.8) to people who know it is early. Internal Play
+testing track.
+
+**Acceptance:**
+
+- [ ] 20 accounts created through the real flow.
+- [ ] Two weeks with no Sev 1 or Sev 2 incident (§30.2).
+- [ ] Push delivery ratio measured and acceptable (§27.4.1).
+- [ ] Battery impact measured on real phones over real days (§13.7).
+- [ ] Invite quotas (§9.5) exercised — and **tuned against observed behaviour**,
+      which is what those numbers were always waiting for.
+- [ ] At least one user successfully sets up a second device unaided.
+- [ ] At least one user reads the §9.6.1 screens and can accurately say what the
+      operator can see. **If they cannot, the screens have failed** and they are
+      the most important screens in the product.
+
+---
+
+## 33.8 Phase 7 — Play submission and public availability
+
+| | |
+|---|---|
+| Goal | `com.thvjq.nexlink.social` on Play; the settings row in NexLink. |
+| Estimate | 2–6 weeks, mostly waiting |
+| Blocked by | Phase 6 |
+
+§35 covers this in detail. The NexLink-side change is a **settings row and a
+Play deep-link** (§16.2) — and it is the first change to `:app` in the entire
+plan.
+
+**Acceptance:**
+
+- [ ] All §4.2.1 declarations accepted: UGC, data safety, foreground service
+      types, `USE_FULL_SCREEN_INTENT`.
+- [ ] Approved on Play.
+- [ ] NexLink ships the settings row, with **no new permissions and no new
+      background work** (§2.8, §16.8).
+- [ ] Level 1 IPC (§16.3) — **optional here**, and a candidate for deferral.
+      Level 0 already delivers the unified inbox.
+
+---
+
+## 33.9 Sequencing summary
+
+```
+Phase 0  Foundations          1 wk    ← no dependencies. Start here.
+Phase 1  Spike homeserver     1 wk    ← BLOCKED ON THE DOMAIN (§26.2)
+Phase 2  SDK decision         1 wk    ← timeboxed, hard
+Phase 3  Messaging           6-10 wk  ← the product exists at the end
+Phase 4  Calling             5-9 wk   ← first recurring cost
+Phase 5  Operational          2 wk    ← no real users before this
+Phase 6  Private launch       4 wk
+Phase 7  Play                2-6 wk
+                        ────────────
+                             22-34 weeks part-time
+```
+
+**Phases 0 and 1 are independent of each other** and can run in parallel — one
+is Android, one is server. Everything after is a chain.
+
+### 33.9.1 If the timeline is too long
+
+Honest options, with what each costs:
+
+| Cut | Saves | Costs |
+|---|---|---|
+| **Ship messaging-only** (stop after phase 3 + 5 + 6) | 5–9 weeks and the VPS bill | The headline calling feature. §21.2.1 makes this genuinely clean — no infrastructure is wasted, and phase 4 can be added later without rework. |
+| Defer the web client to phase 6 | ~1 week | §17.6's decision procedure needs it (§20.6), so this only works in the messaging-only variant |
+| Defer Level 1 IPC (§16) | 1–2 weeks | Already deferred — §33.8 |
+| Skip phase 5 | 2 weeks | **Do not.** This is the phase that prevents the incident that ends the project. |
+
+**The messaging-only cut is the strong option** and should be on the table from
+the start rather than considered under pressure at week 20.
+
+---
+
+## 33.10 What would justify stopping entirely
+
+Recorded now, calmly, because a project without a stopping condition never
+stops:
+
+- **Phase 2 eliminates both SDKs.** Unlikely, but it would mean the client
+  cannot be built on either available substrate.
+- **Phase 4's spike shows Android-to-web calls cannot be made to interoperate**
+  within a reasonable effort, *and* the messaging-only cut is unattractive.
+- **Play rejects the UGC declaration** in a way that cannot be satisfied without
+  breaking encryption (§31.8). This is the most likely of the three.
+- The operator's available time is consumed by moderation (§31.5) before the
+  user base is large enough to be worth it (§28.7).
+
+None of these is likely. All of them are cheaper to have thought about in
+advance.

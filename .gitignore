@@ -8,3 +8,10 @@ local.properties
 keystore.properties
 *.jks
 *.keystore
+
+# NexLink Social modules
+social/build/
+social-core/build/
+social-ui/build/
+social-contract/build/
+social-rtc/build/

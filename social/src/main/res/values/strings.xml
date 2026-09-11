@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NexLink Social</string>
+    <string name="home_title">NexLink Social</string>
+    <string name="home_phase0">Phase 0 — foundations</string>
+    <string name="home_phase0_body">The module skeleton, the dependency rule, the IPC contract and the acceptance gate are in place. There is no Matrix SDK yet: §11 is resolved in phase 2, and §11.6\'s seam exists so this screen can be built before that happens.\n\nThis list is served by FakeSocialSession.</string>
+    <string name="home_run_gate">Run the acceptance gate</string>
+    <string name="home_gate_done">Gate passed — invite %1$s, age confirmed, terms %2$s</string>
+    <string name="home_gate_cancelled">Gate cancelled. No account was created.</string>
+</resources>

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      docs/social/15-foreground-services.md §15.3.1 — NOTHING is declared here yet.
+
+      Phase 0 ships no foreground services, so it declares no foreground service
+      types and no permissions to hold them. §15.3.1: "Declaring a type 'just in
+      case' is a review liability — declare only what is used", and §18.9 makes
+      the same point about mediaProjection specifically.
+
+      Arriving in later phases:
+        phase 3  INTERNET, POST_NOTIFICATIONS, FOREGROUND_SERVICE_DATA_SYNC
+        phase 4  FOREGROUND_SERVICE_MICROPHONE / _CAMERA / _MEDIA_PROJECTION,
+                 MANAGE_OWN_CALLS (§19.2.2), USE_FULL_SCREEN_INTENT (§19.5.1)
+
+      Each one needs a Play justification (§35.2), so each is added in the phase
+      that uses it and not before.
+    -->
+
+    <!--
+      §16.3.1 — the signature-level permission is DECLARED in :social-contract,
+      which both apps depend on. :social holds it so that it can enforce the
+      guard on its bridge service in phase 3; NexLink holds it to bind.
+    -->
+    <uses-permission android:name="com.thvjq.nexlink.permission.SOCIAL_BRIDGE" />
+
+    <application
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.NexLinkSocial">
+        <!--
+          allowBackup="false" is deliberate and load-bearing (§12.7.1). The
+          crypto store must never reach Google's cloud backup: it holds device
+          keys and Megolm sessions, and a backup the operator does not control is
+          key material leaving the device (§2.8, invariant 2).
+        -->
+
+        <activity
+            android:name=".HomeActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name="com.nexlink.social.ui.onboarding.AcceptanceGateActivity"
+            android:exported="false"
+            android:label="@string/app_name" />
+
+    </application>
+</manifest>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.NexLinkSocial" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/social_accent</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSurface">@color/social_surface</item>
+        <item name="colorOnSurface">@color/social_text</item>
+        <item name="android:colorBackground">@color/social_bg</item>
+        <item name="android:windowBackground">@color/social_bg</item>
+        <item name="android:statusBarColor">@color/social_bg</item>
+        <item name="android:navigationBarColor">@color/social_bg</item>
+        <item name="android:textColor">@color/social_text</item>
+        <item name="android:textColorSecondary">@color/social_muted</item>
+    </style>
+</resources>

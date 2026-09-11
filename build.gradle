@@ -2,4 +2,41 @@ plugins {
     id 'com.android.application' version '8.2.0' apply false
     id 'com.android.library'     version '8.2.0' apply false
     id 'org.jetbrains.kotlin.android' version '1.9.22' apply false
+    id 'org.jetbrains.kotlin.plugin.parcelize' version '1.9.22' apply false
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The dependency rule — docs/social/10-modules.md §10.4
+//
+// §1.5, success criterion 1: a NexLink user who never enables Social is
+// unaffected. That collapses if :app ever links the social stack, so the rule is
+// enforced by the build rather than by discipline.
+//
+// :app may see :social-contract (Parcelable IPC types, no SDK) and nothing else.
+// ─────────────────────────────────────────────────────────────────────────────
+gradle.projectsEvaluated {
+    def forbidden = ['social-core', 'social-rtc', 'social-ui', 'social']
+    [':app', ':wear'].each { path ->
+        def p = findProject(path)
+        if (p == null) return
+        p.configurations.each { cfg ->
+            if (!cfg.canBeResolved) return
+            cfg.allDependencies.each { d ->
+                if (d instanceof ProjectDependency) {
+                    def name = d.dependencyProject.name
+                    if (forbidden.contains(name)) {
+                        throw new GradleException(
+                            "${path} must not depend on :${name} — see docs/social/10-modules.md §10.1.\n" +
+                            "  Only :social-contract may cross this boundary. If you need a type from\n" +
+                            "  :social-core in ${path}, the type belongs in :social-contract (§10.3.1).")
+                    }
+                    // :wear is stricter still — nothing social at all (§10.3.2).
+                    if (path == ':wear' && name.startsWith('social')) {
+                        throw new GradleException(
+                            ":wear must not depend on :${name} — see docs/social/10-modules.md §10.3.2.")
+                    }
+                }
+            }
+        }
+    }
 }

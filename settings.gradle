@@ -14,6 +14,18 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "NexLink"
-include ':app'
-include ':shared'
-include ':wear'
+
+// ── NexLink ───────────────────────────────────────────────────────────────
+include ':app'                 // com.thvjq.nexlink — SMS, dialer, inbox, bridge
+include ':shared'              // shared models and helpers
+include ':wear'                // Wear OS companion, NexLink only
+
+// ── NexLink Social (docs/social/10-modules.md §10.3) ──────────────────────
+// :app may depend on :social-contract and NOTHING else from this list.
+// The rule is enforced in the root build.gradle — see §10.4.
+include ':social-contract'     // IPC types shared with :app. No SDK, no network.
+include ':social-core'         // Matrix session, store, crypto, sync
+include ':social-ui'           // chat, onboarding, settings screens
+include ':social'              // com.thvjq.nexlink.social — the application
+// :social-rtc is deliberately absent until phase 4 (§33.5). An empty module
+// that pulls WebRTC is download size for nothing.
