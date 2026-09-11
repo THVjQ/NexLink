@@ -4,9 +4,13 @@ Last updated 2026-09-11, end of session.
 
 ## What works right now
 
-**You can install the app on a phone, sign in, open a conversation and send an
-encrypted message.** Verified on a Samsung SM-G990E (Android 16) against the
-live homeserver, not in a simulator.
+**You can install the app on a phone, create an account with an invite code,
+set up a recovery key, open a conversation and send an encrypted message.**
+Verified on a Samsung SM-G990E (Android 16) against the live homeserver, not in
+a simulator.
+
+The whole onboarding path works: invite code → the five-screen acceptance gate →
+account created → signed in → recovery key issued.
 
 The verification that matters: a message typed on the phone appears on the
 server as `m.room.encrypted` with no readable body, and grepping the whole
@@ -18,7 +22,7 @@ server-side response for the plaintext returns **zero** occurrences.
 | **Phase 0** — Android foundations | Done, verified on hardware |
 | **Phase 1** — homeserver | Live at `https://nexlink.thvjq.com.au` |
 | **Phase 2** — SDK decision | Gate passed. Only step 5 (QR) outstanding |
-| **Phase 3** — messaging | Core loop working. Much of §12–§14 still to do |
+| **Phase 3** — messaging | Onboarding, sign-in, rooms, chat and recovery all working. §14's richer surface still to do |
 | Phases 4–7 | Not started |
 
 Five commits on branch `feat/social-foundations`. Nothing pushed. Your own
@@ -73,9 +77,19 @@ whether recovery keys round-trip between Android and Element Web.
 
 ## What Phase 3 still needs
 
-Roughly in order: account creation from the acceptance gate (§22.10.2 — the gate
-works, it just does not redeem the token yet), attachments (§14.5), reactions in
-the UI (§14.4), the room list from a proper listener instead of polling (§13.2),
-push notifications (§13.3), the device-management surface (§8.6 — which needs
-raw Client-Server API calls, see §11.7.3), and encryption at rest for the SDK
-store (§12.4).
+Roughly in order: **push notifications** (§13.3 — without them the app only
+receives while open, which is the biggest functional gap), attachments (§14.5),
+reactions in the UI (§14.4), replies and edits (§14.6), the room list from a
+proper listener instead of polling (§13.2), the device-management surface (§8.6
+— which needs raw Client-Server API calls, see §11.7.3), and encryption at rest
+for the SDK's own store (§12.4).
+
+## Try it yourself
+
+```bash
+adb install -r ~/NexLink/social/build/outputs/apk/debug/social-debug.apk
+ssh willard 'sudo /mnt/Pool1-MAIN/social/invite-service/invite new --note "me"'
+```
+
+Open **NexLink Social**, tap *I have an invite code*, and use the code it
+printed. Your NexLink SMS app is unaffected — they install side by side.
