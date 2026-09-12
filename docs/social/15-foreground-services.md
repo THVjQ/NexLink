@@ -68,6 +68,31 @@ The type fallback chain matters: an OEM refusing a typed start throws out of
 `startForeground`, and letting that escape crashes the app. Falling back to a
 less-restricted type, then to untyped, keeps the contract satisfied.
 
+> **Measured 2026-09-12 — the last rung is not what it looks like.**
+>
+> "Falling back to untyped" reads as an unconditional escape. It is not.
+> `startForeground(id, n)` on a service whose **manifest** declares a
+> `foregroundServiceType` still enforces that type's requirements, so the
+> untyped call is untyped only in the source.
+>
+> And no rung of the chain can substitute for a missing **runtime** permission.
+> On Android 14+ a `microphone` start throws unless `RECORD_AUDIO` is *granted*
+> — declaring `FOREGROUND_SERVICE_MICROPHONE` is not granting `RECORD_AUDIO`.
+>
+> On an SM-G990E (Android 16) with the permission absent, `ActivityManager`
+> logged `Background started FGS: Allowed` and then **no promotion followed**:
+> all three rungs threw, `promoteToForeground` returned false silently, and the
+> service sat owing the platform a `startForeground` — the exact death this
+> section exists to prevent, with the fallback chain present and doing nothing.
+> It was caught by the on-device test in §15.9, and could not have been caught
+> any other way; the build was green throughout.
+>
+> `CallService` now picks its type from what is actually granted, and the chain
+> handles OEM refusal — the thing it was written for — instead of pretending to
+> handle a permission problem it cannot. **A silent `false` from a fallback
+> chain is worse than a throw**, because the process dies seconds later
+> somewhere else entirely.
+
 ### 15.2.2 The reviewable invariant
 
 Extending §2.8, checkable mechanically:

@@ -110,6 +110,38 @@ else
   echo "$hits" | sed 's/^/          /'
 fi
 
+# ── Every stopSelf() in a foreground service is inside stopCleanly() (§15.2.2) ─
+#
+# §15.2.2 makes this checkable and it is worth checking, because the failing
+# version looks correct. A foreground service owes the platform a
+# startForeground() on EVERY path out of onCreate/onStartCommand; a bare
+# stopSelf() on a path that decided not to run exits with that debt and the
+# platform kills the process. stopCleanly() promotes first — which reads as
+# pointless right up until it is the only thing keeping the app alive.
+fgs_files=$(grep -rl --include='*.kt' 'startForeground(' "${SOCIAL_SRC[@]}" 2>/dev/null || true)
+hits=""
+for f in $fgs_files; do
+  # A stopSelf() is legal only on a line inside the stopCleanly() definition.
+  # Comment lines are skipped: the KDoc on stopCleanly() quotes the rule it
+  # enforces, and matching that was the check's first false positive.
+  bad=$(awk '
+    { line = $0; sub(/^[[:space:]]+/, "", line) }
+    line ~ /^(\*|\/\/|\/\*)/ { next }
+    /private fun stopCleanly/   { inclean = 1 }
+    inclean && /^    \}/        { inclean = 0 }
+    /stopSelf\(\)/ && !inclean  { print FILENAME ":" FNR ": " line }
+  ' "$f")
+  [ -n "$bad" ] && hits="${hits}${bad}
+"
+done
+if [ -z "$hits" ]; then
+  pass "every stopSelf() in a foreground service is inside stopCleanly() (§15.2.2)"
+else
+  bad "a foreground service calls stopSelf() outside stopCleanly() — the process"
+  bad "still owes the platform a startForeground() and will be killed (§15.2.1):"
+  printf "%b" "$hits" | sed 's/^/          /'
+fi
+
 # ── WCAG AA contrast in both themes (§14.10) ────────────────────────────────
 # Mechanically decidable from the palette, so it should not be a judgement made
 # by eye. Added after the light theme was found failing on five colours — the

@@ -14,7 +14,41 @@
       form — the user would be asked to choose between their SMS app and their
       messaging app for the role of "phone".
     -->
+    <!--
+      §15.3.1 — one permission per declared type, and §15.3.1's warning:
+      "Declaring a type 'just in case' is a review liability — declare only what
+      is used." So microphone and camera only. mediaProjection arrives with §18
+      screen sharing and dataSync with large uploads, each when it is actually
+      used, not now.
+    -->
+    <!--
+      §15.4.1 — the RUNTIME permissions behind the service types.
+      
+      Declaring FOREGROUND_SERVICE_MICROPHONE is not enough: on Android 14+
+      startForeground() with type `microphone` throws unless RECORD_AUDIO is
+      held AND granted. Measured — without these, all three rungs of §15.2.1's
+      fallback chain failed and the service never promoted.
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+
     <application>
+        <!--
+          §15.4.1 — runs for the duration of a call only. The declared types are
+          the fallback chain's first rung; CallService degrades to microphone and
+          then to untyped if an OEM refuses (§15.2.1). A fallback type that is
+          not declared here is illegal and throws, which is §15.2.2's second
+          invariant — both of these are declared.
+        -->
+        <service
+            android:name=".calls.CallService"
+            android:exported="false"
+            android:foregroundServiceType="microphone|camera" />
+
         <service
             android:name=".telecom.SocialConnectionService"
             android:exported="true"
