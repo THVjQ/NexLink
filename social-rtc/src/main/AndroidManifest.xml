@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      §19.2 — the self-managed ConnectionService.
+
+      BIND_TELECOM_CONNECTION_SERVICE is held by the platform, not by us: it is
+      what stops any app binding this service. Telecom will not use a
+      ConnectionService that does not require it.
+
+      There is deliberately NO InCallService here and no dialer intent filter.
+      §19.2: Social is never the dialer. NexLink already holds that role, and two
+      apps from one developer both claiming it is D1 (§2.2) in its sharpest
+      form — the user would be asked to choose between their SMS app and their
+      messaging app for the role of "phone".
+    -->
+    <application>
+        <service
+            android:name=".telecom.SocialConnectionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE">
+            <intent-filter>
+                <action android:name="android.telecom.ConnectionService" />
+            </intent-filter>
+        </service>
+    </application>
+
+</manifest>

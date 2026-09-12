@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import com.nexlink.social.rtc.telecom.SocialConnectionService
 
 /**
  * §11.7.4 — `SocialPlatform.init()` must run before any SDK network call, and
@@ -33,6 +34,11 @@ class SocialApplication : Application() {
         super.onCreate()
         SocialPlatform.init()
         sessions = SocialSessionManager(this)
+        // §19.2 — register the self-managed phone account before any call is
+        // placed. Cheap, idempotent, and placing a call against an unregistered
+        // account throws — which presents as a call that simply never starts,
+        // an unpleasant thing to diagnose after the fact.
+        runCatching { SocialConnectionService.register(this) }
         Notifications.ensureChannels(this)
         watchForNewMessages()
     }

@@ -27,6 +27,5 @@ include ':rustls-tls'          // VENDORED — the SDK's TLS verifier. See its V
 include ':social-contract'     // IPC types shared with :app. No SDK, no network.
 include ':social-core'         // Matrix session, store, crypto, sync
 include ':social-ui'           // chat, onboarding, settings screens
+include ':social-rtc'          // calls — §17, §18, §19. Added for phase 4 (§33.5).
 include ':social'              // com.thvjq.nexlink.social — the application
-// :social-rtc is deliberately absent until phase 4 (§33.5). An empty module
-// that pulls WebRTC is download size for nothing.

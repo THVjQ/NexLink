@@ -1,0 +1,39 @@
+// :social-rtc — docs/social/10-modules.md §10.3, created for phase 4 (§33.5).
+//
+// Held back deliberately until now: §33.1 notes that an empty module which
+// pulls WebRTC is a download-size cost for nothing, and §10.3's dependency
+// table gives it the SDK edge. It arrives when calling does.
+//
+// **No call transport dependency is declared yet, and that is on purpose.**
+// §17.6 is unresolved — Option A is Element Call in a WebView, Option B is
+// livekit-android natively — and the two want different dependencies. Adding
+// either now would make the §17.6.1 spike start from a decision it is meant to
+// reach. What lives here until then is the part both options need: the call
+// vocabulary (§17.7) and Telecom integration (§19), neither of which touches a
+// transport.
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+}
+
+android {
+    namespace 'com.nexlink.social.rtc'
+    compileSdk libs.versions.compileSdk.get().toInteger()
+
+    defaultConfig { minSdk libs.versions.minSdk.get().toInteger() }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions { jvmTarget = '1.8' }
+}
+
+dependencies {
+    api project(':social-core')
+
+    implementation libs.androidx.core.ktx
+    implementation libs.kotlinx.coroutines.android
+
+    testImplementation libs.junit
+}

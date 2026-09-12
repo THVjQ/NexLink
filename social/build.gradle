@@ -90,6 +90,7 @@ android {
 dependencies {
     implementation project(':social-ui')      // brings :social-core transitively (api)
     implementation project(':social-contract')
+    implementation project(':social-rtc')     // §19 Telecom, §17 call state (phase 4)
 
     implementation libs.androidx.core.ktx
     implementation libs.androidx.appcompat

@@ -33,6 +33,16 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!--
+      §19.2.2 — Social declares this FOR ITSELF, and it is the whole permission
+      cost of Telecom integration. Not in a restricted group, and the intended
+      permission for an app with its own calls.
+
+      §2.8 #6 and §16.8: nothing here adds a permission to NexLink.
+      tools/check-invariants.sh diffs NexLink's manifest on every run.
+    -->
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+
     <uses-permission android:name="${nexlinkBridgePermission}" />
 
     <application
