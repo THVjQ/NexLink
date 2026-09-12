@@ -17,6 +17,17 @@ android {
     compileSdk libs.versions.compileSdk.get().toInteger()
 
     defaultConfig {
+        // §16.3.1 — :social-core merges :social-contract's manifest, which
+        // declares the bridge permission with a placeholder name and
+        // deliberately supplies no default (see the note there). Every consumer
+        // must therefore define it, including this one, or the merge fails with
+        //   requires a placeholder substitution but no value for
+        //   <nexlinkBridgePermission> is provided
+        // This value is never installed — :social-core is a library and its
+        // only APK is the instrumentation test — so it just has to resolve.
+        manifestPlaceholders = [
+            nexlinkBridgePermission: 'com.thvjq.nexlink.permission.SOCIAL_BRIDGE.coretest'
+        ]
         minSdk libs.versions.minSdk.get().toInteger()
         // §11.7's decision procedure runs as an instrumented test against the
         // real homeserver — the SDK is native code and cannot run on the JVM.
