@@ -197,6 +197,79 @@ The passphrase must be **distinct from the recovery key** and the UI must not
 allow reuse, because an exported file plus a reused recovery key in the same
 cloud drive is a single point of total compromise.
 
+### 7.5.3 Built 2026-09-12 — the archive, and the half that is not built
+
+**Built and verified: the archive format and the export side.**
+`TransferArchive` writes AES-256-GCM over a zip, keyed by PBKDF2-HMAC-SHA256 at
+600,000 iterations (OWASP's floor for SHA-256). Argon2id would be the better
+KDF and is not in the platform; adding a native KDF to `:social-core` is a
+dependency decision in its own right (§11), so the parameters are written into
+the header instead and raising them later still reads old files.
+
+The header is fed to GCM as **AAD**, which binds the salt and the iteration
+count to the ciphertext: an attacker cannot edit the header down to 1,000
+iterations to make a dictionary attack cheap without invalidating the tag.
+`TransferArchiveTest` asserts exactly that by doing it.
+
+Verified on hardware, end to end:
+
+| check | result |
+|---|---|
+| Archive written from a real signed-in account | 127,169 bytes, 25 entries |
+| Account id / homeserver / `SQLite format 3` present in the file | **none** |
+| Shannon entropy of the body | **7.998** bits/byte |
+| Header self-describing | `magic=NLSOCIAL version=1 iterations=600000 salt=16B nonce=12B` |
+| GCM tag verifies | yes |
+| `matrix-sdk-crypto.sqlite3` recovered | 192,512 bytes, intact |
+
+The decryption was done by a **separate implementation** written for the purpose
+(`scratchpad/decrypt.py`, hashlib plus a pure-Python AES-GCM), sharing no code
+with the app. That is the point: a format decrypted only by its own writer is
+not a format, it is a coincidence. This one is specified by its header.
+
+**How §7.5.2's reuse rule is actually enforced — and why not the obvious way.**
+Comparing the passphrase against the recovery key would require *having* the
+recovery key, and §7.2 is emphatic that the app never keeps it. Storing a copy
+to police reuse would manufacture precisely the asset the design exists to
+avoid — a worse outcome than the reuse it prevents.
+
+So it is enforced by **shape**. A recovery key, generated on the test account
+and recorded here because the rule depends on the real form rather than an
+assumed one:
+
+```
+EsU3 G5nq 5QkF N9Br Svbn uz7a xUHE pzVy xetu wLAh WSTQ UzFf
+```
+
+48 base58 characters, twelve groups of four, prefix `Es`. Anything with that
+shape is refused, spacing ignored, with a message that says why. Verified on the
+phone: the dialog stays open, the field is marked, and **no file is written**.
+
+This is weaker than a comparison, and that is stated rather than glossed: it
+cannot catch someone who retypes the key with one character altered. It catches
+the copy-and-paste, which is how reuse actually happens. Its cost is that a
+48-character base58 string beginning `Es` cannot be used as a passphrase, which
+costs nobody anything real.
+
+**Not built — the restore side.** The archive can be created and saved; it
+cannot yet be loaded back. Restoring the store means writing into `filesDir`
+*before* any client is constructed and then restarting the process, because the
+SDK holds the SQLite files open. That sequencing is the whole difficulty and a
+half-done version is dangerous: a partially restored store presents as a working
+account with silently missing keys. `TransferArchive.read` exists and is tested
+(including zip-slip and tamper rejection); what is missing is the app-lifecycle
+work around it.
+
+**Not built — §7.5.1 direct transfer.** QR pairing plus a local-network
+transport with a server relay fallback is a feature of its own size, and the
+CGNAT constraint (§26) means the relay path cannot be hand-waved. Recorded as
+outstanding rather than quietly dropped.
+
+**What §7.5 delivers today,** against its own three rows: key backup restore
+works (§7.4, verified by `RecoveryRestoreTest`); the encrypted export file is
+half-delivered — it writes, it does not read back; direct transfer is not
+started.
+
 ## 7.6 Account deletion
 
 Play policy requires deletion to be available in-app and from a public web URL
