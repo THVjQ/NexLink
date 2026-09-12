@@ -3,6 +3,13 @@ package com.nexlink.social
 import android.app.Application
 import com.nexlink.social.core.SocialPlatform
 import com.nexlink.social.core.SocialSessionManager
+import com.nexlink.social.core.session.RoomId
+import com.nexlink.social.core.session.RoomSummary
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 /**
  * §11.7.4 — `SocialPlatform.init()` must run before any SDK network call, and
@@ -14,9 +21,61 @@ class SocialApplication : Application() {
     lateinit var sessions: SocialSessionManager
         private set
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** Room id → last unread count we notified for. */
+    private val seen = mutableMapOf<String, Int>()
+
+    /** Set by ConversationActivity: no notification for the room you are in. */
+    @Volatile var openRoomId: String? = null
+
     override fun onCreate() {
         super.onCreate()
         SocialPlatform.init()
         sessions = SocialSessionManager(this)
+        Notifications.ensureChannels(this)
+        watchForNewMessages()
+    }
+
+    /**
+     * §13.4 — turn a rising unread count into a notification.
+     *
+     * Push (§13.3) is not wired yet, so this only fires while the process is
+     * alive. That is a real limitation and not a pretence: §13.3 is the gap.
+     * What this does establish is the notification surface itself, which is also
+     * what NexLink's unified inbox reads at Level 0 (§16.2).
+     */
+    private fun watchForNewMessages() {
+        scope.launch {
+            sessions.state.collectLatest {
+                val s = sessions.current() ?: return@collectLatest
+                s.rooms().collectLatest { rooms -> rooms.forEach { notifyIfNew(it) } }
+            }
+        }
+    }
+
+    private fun notifyIfNew(room: RoomSummary) {
+        val previous = seen[room.id.value] ?: 0
+        seen[room.id.value] = room.unreadCount
+
+        // §13.4.2 — nothing for a room the user is looking at, and nothing when
+        // the count has not risen. A count that FELL means it was read
+        // somewhere, so clear rather than notify.
+        if (room.unreadCount <= previous) {
+            if (room.unreadCount == 0) Notifications.dismiss(this, room.id)
+            return
+        }
+        if (room.id.value == openRoomId) return
+        if (room.isMuted) return
+
+        Notifications.show(
+            context = this,
+            roomId = room.id,
+            roomTitle = room.title,
+            senderName = room.title,
+            body = room.lastMessagePreview ?: "New message",
+            timestamp = if (room.lastMessageAt > 0) room.lastMessageAt else System.currentTimeMillis(),
+            showContent = true
+        )
     }
 }

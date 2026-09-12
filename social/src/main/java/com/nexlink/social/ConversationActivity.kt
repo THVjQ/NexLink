@@ -207,6 +207,10 @@ class ConversationActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         isResumed = true
+        // §13.4.2 — no notification for the conversation on screen, and clear
+        // any that is already showing for it.
+        (application as? SocialApplication)?.openRoomId = roomId?.value
+        roomId?.let { Notifications.dismiss(this, it) }
         val rid = roomId ?: return
         lifecycleScope.launch {
             SessionProvider.manager(this@ConversationActivity).current()?.markRead(rid)
@@ -215,6 +219,7 @@ class ConversationActivity : AppCompatActivity() {
 
     override fun onPause() {
         isResumed = false
+        (application as? SocialApplication)?.openRoomId = null
         // §14.7 — stop claiming to type the moment the screen is not in front of
         // the user. A typing indicator that outlives the screen is a small lie.
         val rid = roomId

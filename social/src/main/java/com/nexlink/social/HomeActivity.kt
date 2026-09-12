@@ -42,6 +42,10 @@ class HomeActivity : AppCompatActivity() {
         render()
     }
 
+    private val notifPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* §13.8 — declining is fine; the app works, it is just quieter. */ }
+
     private val signIn = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { render() }
@@ -58,6 +62,15 @@ class HomeActivity : AppCompatActivity() {
 
         lifecycleScope.launch { mgr.state.collectLatest { state = it; render(); observeRooms() } }
         lifecycleScope.launch { if (mgr.hasStoredSession) mgr.restore() }
+
+        // §13.4 — Android 13+ requires this at runtime. Asked for once, here,
+        // because a messenger that cannot notify is not much of one.
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.POST_NOTIFICATIONS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!granted) notifPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
         render()
     }
 

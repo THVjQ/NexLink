@@ -23,6 +23,7 @@ android {
     compileSdk libs.versions.compileSdk.get().toInteger()
 
     defaultConfig {
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         applicationId "com.thvjq.nexlink.social"
         minSdk libs.versions.minSdk.get().toInteger()
         targetSdk libs.versions.targetSdk.get().toInteger()
@@ -84,4 +85,8 @@ dependencies {
     implementation libs.kotlinx.coroutines.android
 
     testImplementation libs.junit
+
+    androidTestImplementation libs.androidx.test.ext.junit
+    androidTestImplementation 'androidx.test:runner:1.5.2'
+    androidTestImplementation 'androidx.test:rules:1.5.0'
 }
