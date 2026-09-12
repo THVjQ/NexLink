@@ -412,6 +412,39 @@ Built and verified on a Samsung SM-G990E against the live homeserver.
 | Device management (§8.6) | Not started — needs raw C-S API (§11.7.3) |
 | Encryption at rest for the SDK store | Not started (§12.4) |
 
+### 33.4.2 Phase 3 — progress at 2026-09-12
+
+Everything above still holds. Added since, all verified on the same handset
+(SM-G990E, Android 16 — the §16.2.1 entry originally recorded the wrong model):
+
+| Piece | Status |
+|---|---|
+| Attachments (§14.5), reactions (§14.4), replies, edits (§14.6) | **Done** |
+| Search (§14.9), group creation, invitations (§14.8) | **Done** |
+| Device management (§8.6) | **Done** — `DevicesActivity`, live against the server |
+| Message notifications (§13.4) | **Done** — MessagingStyle, per-room channels, inline reply |
+| **NexLink Level 0 link (§16.2)** | **Done and verified** — see §16.2.1; §1.4.4's "no integration code" claim was **false** and is corrected |
+| Offline send failure surface (§13.5) | **Done** — §13.5.2; a failed send used to read "Sending…" forever |
+| Storage and retention (§12.5) | **Done** — §12.5.4; two false claims of its own, both fixed |
+| Accessibility (§14.10) | **Done** — §14.10.1; light theme failed WCAG AA on five colours |
+| Encrypted transfer archive (§7.5.2) | **Half** — writes and is verified by an independent decryptor; cannot load back yet (§7.5.3) |
+| Recovery restore (§7.4) | **Done** — `RecoveryRestoreTest` |
+| Push notifications (§13.3) | **Blocked** — needs a Firebase project, which is Luca's to create |
+| Encryption at rest for the SDK store (§12.4) | Not started |
+| Direct device transfer (§7.5.1) | Not started — feature of its own size |
+| Calls (§15, §17–19) | Phase 4, not started |
+
+**Mechanical checks now standing at 7** (`tools/check-invariants.sh`), the
+newest being WCAG AA contrast in both themes — added because §14.10's contrast
+requirement is fully decidable from the palette and had never been checked.
+**62 unit tests** across `:social-core` and `:social-ui`.
+
+Every one of the five §-sections closed today was closed by finding something
+wrong on hardware that no amount of reading would have found. That is the
+argument for §34.10's rule (the emulator is unusable here) restated as evidence:
+three of the four accessibility failures were invisible because the phone runs
+dark mode, and the §16 one was invisible because the listener fails by `return`.
+
 **The §2.8 invariants that could be tested, were:**
 
 | Invariant | Evidence |
