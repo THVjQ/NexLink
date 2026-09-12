@@ -122,6 +122,71 @@ class TransferArchiveTest {
         }
     }
 
+    /**
+     * §7.5.2 — **the regression test for the defect that made the first build
+     * useless.**
+     *
+     * It packed `filesDir` and `cacheDir` and looked complete, because every
+     * SQLite store was present. But the store key lives in
+     * `EncryptedSharedPreferences`, which is in `shared_prefs/` — a *sibling*
+     * of `filesDir` — so the archive held stores nothing could open.
+     *
+     * The key now travels as a synthetic entry, encrypted by the passphrase
+     * rather than by the Keystore, and comes back through `onExtra` rather than
+     * being written to disk.
+     */
+    @Test
+    fun `synthetic entries survive the round trip and are not written to disk`() {
+        val src = store()
+        val bundle = """{"v":1,"storeKey":"c3VwZXJzZWNyZXQ="}""".toByteArray()
+        val out = ByteArrayOutputStream()
+        TransferArchive.write(
+            out, pass.copyOf(), mapOf("files" to src),
+            extras = mapOf(TransferArchive.BUNDLE_ENTRY to bundle)
+        )
+
+        val dest = tmp.newFolder("restored")
+        val extras = mutableMapOf<String, ByteArray>()
+        TransferArchive.read(
+            ByteArrayInputStream(out.toByteArray()), pass.copyOf(),
+            mapOf("files" to dest),
+            onExtra = { name, content -> extras[name] = content }
+        )
+
+        assertArrayEquals(bundle, extras[TransferArchive.BUNDLE_ENTRY])
+        assertTrue(
+            "credentials must not be written to the filesystem",
+            !File(dest, "keys").exists()
+        )
+    }
+
+    /**
+     * §7.5.2 — the other defect in the first build: the output was written into
+     * `cacheDir` while `cacheDir` was being archived, so the archive contained
+     * a copy of itself. Visible in the shipped file as
+     * `cache/nexlink-social-backup.nlsx`.
+     */
+    @Test
+    fun `an excluded file is left out`() {
+        val src = store()
+        val itself = File(src, "backup.nlsx").apply { writeBytes(ByteArray(999)) }
+        val out = ByteArrayOutputStream()
+        val m = TransferArchive.write(
+            out, pass.copyOf(), mapOf("files" to src),
+            exclude = setOf(itself.absolutePath)
+        )
+        assertEquals("the excluded file must not be counted", 2, m.files)
+
+        val dest = tmp.newFolder("restored")
+        TransferArchive.read(
+            ByteArrayInputStream(out.toByteArray()), pass.copyOf(), mapOf("files" to dest)
+        )
+        assertTrue(
+            "the archive must not contain itself",
+            !File(dest, "backup.nlsx").exists()
+        )
+    }
+
     /** Two archives of the same data must differ — fresh salt and nonce. */
     @Test
     fun `two archives of the same store are not identical`() {

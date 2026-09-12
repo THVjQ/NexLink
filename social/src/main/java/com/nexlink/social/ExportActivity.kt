@@ -14,6 +14,7 @@ import android.widget.TextView
 import android.text.InputType
 import android.widget.EditText
 import androidx.appcompat.app.AlertDialog
+import com.nexlink.social.core.SessionStore
 import com.nexlink.social.core.transfer.Passphrase
 import com.nexlink.social.core.transfer.TransferArchive
 import androidx.activity.result.contract.ActivityResultContracts
@@ -209,7 +210,20 @@ class ExportActivity : AppCompatActivity() {
                     tmp.outputStream().use { out ->
                         TransferArchive.write(
                             out, passphrase,
-                            mapOf("files" to filesDir, "cache" to cacheDir),
+                            sources = mapOf("files" to filesDir, "cache" to cacheDir),
+                            // §7.5.2 — without these the archive holds SQLite
+                            // stores that nothing can open. The store key lives
+                            // in EncryptedSharedPreferences, which is a sibling
+                            // of filesDir and so was missed entirely by the
+                            // first version of this.
+                            extras = mapOf(
+                                TransferArchive.BUNDLE_ENTRY to
+                                    SessionStore(this@ExportActivity).exportBundle()
+                            ),
+                            // The output is being written into the directory
+                            // being archived, so without this the archive
+                            // contains a copy of itself.
+                            exclude = setOf(tmp.absolutePath),
                             onProgress = { }
                         )
                     }

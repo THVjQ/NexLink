@@ -68,10 +68,29 @@ object TransferArchive {
      * @param sources directories whose contents go into the archive, each under
      *   the name it is keyed by — so a restore knows where each came back to.
      */
+    /**
+     * Entries not on disk, written into the archive under these names.
+     *
+     * §7.5.2's credentials go here (`SessionStore.exportBundle`) rather than
+     * being picked up from `shared_prefs/`, because that file is sealed by a
+     * Keystore key that never leaves the device — see the note on
+     * `SessionStore.exportBundle`.
+     */
+    const val BUNDLE_ENTRY = "keys/session.json"
+
     fun write(
         out: OutputStream,
         passphrase: CharArray,
         sources: Map<String, File>,
+        extras: Map<String, ByteArray> = emptyMap(),
+        /**
+         * Files to leave out, by absolute path.
+         *
+         * Exists because the first build archived `cacheDir` while writing its
+         * own output into `cacheDir`, so the archive contained a copy of itself
+         * — visible in the entry list as `cache/nexlink-social-backup.nlsx`.
+         */
+        exclude: Set<String> = emptySet(),
         onProgress: (String) -> Unit = {}
     ): Manifest {
         val rnd = SecureRandom()
@@ -99,7 +118,9 @@ object TransferArchive {
             ZipOutputStream(enc).use { zip ->
                 sources.forEach { (name, dir) ->
                     if (!dir.exists()) return@forEach
-                    dir.walkTopDown().filter { it.isFile }.forEach { f ->
+                    dir.walkTopDown()
+                        .filter { it.isFile && it.absolutePath !in exclude }
+                        .forEach { f ->
                         val rel = "$name/${f.relativeTo(dir).invariantPath()}"
                         onProgress(rel)
                         zip.putNextEntry(ZipEntry(rel))
@@ -107,6 +128,13 @@ object TransferArchive {
                         zip.closeEntry()
                         files++; bytes += f.length()
                     }
+                }
+                extras.forEach { (name, content) ->
+                    onProgress(name)
+                    zip.putNextEntry(ZipEntry(name))
+                    zip.write(content)
+                    zip.closeEntry()
+                    files++; bytes += content.size
                 }
             }
         }
@@ -125,6 +153,13 @@ object TransferArchive {
         input: InputStream,
         passphrase: CharArray,
         targets: Map<String, File>,
+        /**
+         * Called for an entry whose top-level name is not in [targets] — the
+         * synthetic ones. Handed to the caller instead of being written to
+         * disk, because §7.5.2's credentials belong in the Keystore-backed
+         * prefs, not in a file on the filesystem.
+         */
+        onExtra: (String, ByteArray) -> Unit = { _, _ -> },
         onProgress: (String) -> Unit = {}
     ): Manifest {
         val header = DataInputStream(input)
@@ -153,7 +188,9 @@ object TransferArchive {
                     val root = name.substringBefore('/')
                     val rest = name.substringAfter('/', "")
                     val target = targets[root]
-                    if (target != null && rest.isNotEmpty() && !e.isDirectory) {
+                    if (target == null && !e.isDirectory) {
+                        onExtra(name, zip.readBytes())
+                    } else if (target != null && rest.isNotEmpty() && !e.isDirectory) {
                         val dest = File(target, rest)
                         // Zip-slip: an entry named "../../x" would otherwise
                         // write outside the target. The archive is one we wrote,

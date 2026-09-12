@@ -251,6 +251,55 @@ the copy-and-paste, which is how reuse actually happens. Its cost is that a
 48-character base58 string beginning `Es` cannot be used as a passphrase, which
 costs nobody anything real.
 
+### 7.5.4 The first build of this was useless, and the audit caught it
+
+Written the same day, a few hours later, by listing every entry of the archive
+that had just been shipped rather than the first six.
+
+**Defect 1 — the archive held stores that nothing could open.** It packed
+`filesDir` and `cacheDir`, which *looked* complete: every SQLite file was there,
+the crypto store recovered byte-intact, the independent decryptor was happy. But
+**the store key lives in `EncryptedSharedPreferences`, and that is
+`shared_prefs/` — a sibling of `filesDir`, not inside it.** So the archive
+carried encrypted databases and no key. It would have restored nothing.
+
+Copying `shared_prefs/social_session.xml` in would not have fixed it either:
+that file is sealed by a Keystore master key which by design never leaves the
+device. On a new phone it is undecryptable ciphertext.
+
+The real conclusion is that **custody has to differ by destination**, and §12.4.3
+and §7.5.2 are describing two different problems:
+
+| Where the secret lives | Protected by |
+|---|---|
+| On this device | Keystore, hardware-backed where available (§12.4.3) |
+| In an archive | the user's passphrase (§7.5.2) |
+
+The store key and session credentials now travel as a synthetic entry,
+`keys/session.json`, inside the passphrase-encrypted blob — and come back
+through a callback rather than being written to the filesystem, since they
+belong in the Keystore-backed prefs on arrival.
+
+This also sharpens why [Passphrase]'s rules matter: **that entry is a complete
+account takeover to anyone who can read it.** The passphrase is the only thing
+protecting it, which is the whole reason §7.5.2 forbids reusing the recovery key
+and why the length floor is not decoration.
+
+**Defect 2 — the archive contained itself.** The output was written to
+`cacheDir` while `cacheDir` was being archived. The shipped file has
+`cache/nexlink-social-backup.nlsx` in its entry list. Harmless here, unbounded in
+principle. `write` now takes an `exclude` set.
+
+Both are covered by regression tests. Re-verified on the device: 25 entries, no
+`.nlsx` inside, `keys/session.json` present with a 32-byte store key and the
+account's credentials.
+
+> The lesson is narrower than "test more". The first verification was real — an
+> independent implementation decrypted the file and checked the crypto store
+> byte-for-byte. It proved the *format* was sound and said nothing about whether
+> the *contents* were sufficient, and the six-entry listing hid the gap. Verify
+> the thing the feature is for, not the thing that is easy to assert.
+
 **Not built — the restore side.** The archive can be created and saved; it
 cannot yet be loaded back. Restoring the store means writing into `filesDir`
 *before* any client is constructed and then restarting the process, because the

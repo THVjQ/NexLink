@@ -121,6 +121,76 @@ class SessionStore(context: Context) {
     }
 
     /**
+     * §7.5.2 — the credentials an archive must carry, as JSON bytes.
+     *
+     * **This is the part the first build of the archive got wrong.** It packed
+     * `filesDir` and `cacheDir` and nothing else, which looked complete: the
+     * SQLite stores were all there. But the store key and the access token live
+     * in `EncryptedSharedPreferences`, which sits in `shared_prefs/` — a
+     * *sibling* of `filesDir`, not inside it. So the archive held stores that
+     * **nothing could open**, and was useless for the one job §7.5.2 gives it.
+     *
+     * Copying `shared_prefs/social_session.xml` in would not have fixed it
+     * either: that file is sealed by a Keystore master key which by design never
+     * leaves the device. On a new phone it is undecryptable ciphertext.
+     *
+     * So the custody model differs by destination, and has to:
+     *
+     * | Where | Protected by |
+     * |---|---|
+     * | On this device | Keystore, hardware-backed where available (§12.4.3) |
+     * | In an archive | the user's passphrase (§7.5.2) |
+     *
+     * The whole archive is AES-256-GCM under a key derived from that
+     * passphrase, so these bytes are protected by it and by nothing else.
+     * **That is the trade §7.5.2 asks for** — an archive that can be opened on a
+     * phone that has never seen this Keystore — and it is why the passphrase
+     * rules in [com.nexlink.social.core.transfer.Passphrase] are not
+     * decoration: this blob is a full account takeover to anyone who reads it.
+     */
+    fun exportBundle(): ByteArray {
+        val o = org.json.JSONObject()
+        o.put("v", 1)
+        o.put("storeKey", android.util.Base64.encodeToString(storeKey(), android.util.Base64.NO_WRAP))
+        load()?.let { se ->
+            o.put("accessToken", se.accessToken)
+            o.put("refreshToken", se.refreshToken)
+            o.put("userId", se.userId)
+            o.put("deviceId", se.deviceId)
+            o.put("homeserverUrl", se.homeserverUrl)
+            o.put("oauthData", se.oauthData)
+        }
+        return o.toString().toByteArray()
+    }
+
+    /**
+     * §7.5.2 — put an archive's credentials back.
+     *
+     * The store key is written **first and unconditionally**: without it the
+     * restored SQLite files are unreadable, and a restore that placed the
+     * stores but not the key would produce the silent half-broken account this
+     * whole path is written to avoid.
+     */
+    fun importBundle(bytes: ByteArray) {
+        val o = org.json.JSONObject(String(bytes))
+        val e = prefs.edit()
+        e.putString(K_STORE_KEY, o.getString("storeKey"))
+        // org.json returns the literal string "null" from optString for a JSON
+        // null, so every optional field is read through isNull. This bit us
+        // once already, in the invite service.
+        fun opt(k: String): String? = if (o.isNull(k)) null else o.optString(k, null)
+        opt("accessToken")?.let { e.putString(K_ACCESS, it) }
+        e.putString(K_REFRESH, opt("refreshToken"))
+        opt("userId")?.let { e.putString(K_USER, it) }
+        opt("deviceId")?.let { e.putString(K_DEVICE, it) }
+        opt("homeserverUrl")?.let { e.putString(K_HS, it) }
+        e.putString(K_OIDC, opt("oauthData"))
+        // commit, not apply: the caller restarts the process immediately after
+        // a restore, and apply() is asynchronous.
+        e.commit()
+    }
+
+    /**
      * §7.6 / §32.3 — sign-out must leave nothing behind. The SDK's own store is
      * deleted separately by whoever owns the session paths; this clears the
      * credentials that would let anything re-attach to the account.
