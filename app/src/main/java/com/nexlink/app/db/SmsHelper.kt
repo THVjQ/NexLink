@@ -25,6 +25,7 @@ object SmsHelper {
     fun getConversations(ctx: Context, limit: Int = 500): List<Conversation> {
         val canonMap  = buildCanonicalAddressMap(ctx)
         val unreadMap = buildUnreadByThread(ctx)
+        val selfKeys  = selfAddressKeys(ctx)
         val list      = mutableListOf<Conversation>()
         // Deduplicate: the same participants stored in different formats (0412… vs +61412…
         // vs 61412…) can end up as two threads. Key on *every* participant, so a group chat
@@ -52,13 +53,22 @@ object SmsHelper {
                     var parts      = recipIds.trim().split(" ")
                         .mapNotNull { sid -> canonMap[sid.toLongOrNull() ?: -1L]?.trim() }
                         .filter { it.isNotBlank() }
-                    // A thread whose recipient ids are missing from the canonical-address
-                    // table still has messages — read them off the thread instead of
-                    // dropping the conversation entirely.
-                    if (parts.isEmpty()) parts = addressesForThread(ctx, threadId)
-                    if (parts.isEmpty()) continue
+                    // Whether the participants came from the canonical-address table. A thread it
+                    // doesn't cover still has messages, so read the members off the thread itself —
+                    // but that can only ever recover a partial set, and merging on a partial set is
+                    // exactly what folded a group into a 1:1, so a recovered set is never deduped.
+                    val resolved   = parts.isNotEmpty()
+                    if (parts.isEmpty()) parts = addressesForThread(ctx, threadId, selfKeys)
 
-                    val key = parts.map { addressKey(it) }.sorted().joinToString("|")
+                    // An empty shell of a thread (no participants, nothing ever said) is the one
+                    // case worth skipping — otherwise a stale draft row would show as a chat.
+                    if (parts.isEmpty() && snippet.isBlank() && date == 0L) continue
+
+                    // Never drop a thread just because its participants could not be named. An
+                    // outgoing-only group MMS resolves to nothing at all, and skipping it here is
+                    // what made group chats disappear from the list; show it keyed on its thread id.
+                    val key = if (resolved) parts.map { addressKey(it) }.sorted().joinToString("|")
+                              else "thread:" + threadId
                     val at  = seenAt[key]
                     if (at != null) {
                         // Rows arrive newest-first, so the kept entry is the live one;
@@ -68,9 +78,12 @@ object SmsHelper {
                         continue
                     }
 
-                    val primary    = parts.first()
-                    val name       = if (parts.size > 1) parts.joinToString(", ") { getContactName(ctx, it) }
-                                     else getContactName(ctx, primary)
+                    val primary    = parts.firstOrNull() ?: ""
+                    val name       = when {
+                        parts.size > 1  -> parts.joinToString(", ") { getContactName(ctx, it) }
+                        parts.size == 1 -> getContactName(ctx, primary)
+                        else            -> snippet.ifBlank { "Unknown sender" }
+                    }
                     seenAt[key] = list.size
                     list += Conversation(
                         threadId    = threadId,
@@ -89,6 +102,13 @@ object SmsHelper {
     }
 
     /**
+     * An outgoing SMS the platform has accepted but not yet sent. A completed send moves the row
+     * to MESSAGE_TYPE_SENT, so anything still here after a grace period never went out.
+     */
+    private fun isOutboundPending(type: Int) =
+        type == Telephony.Sms.MESSAGE_TYPE_OUTBOX || type == Telephony.Sms.MESSAGE_TYPE_QUEUED
+
+    /**
      * Collapses the many written forms of one address to a single comparable key.
      * Numbers reduce to their last 9 digits; alphanumeric sender IDs keep their text.
      */
@@ -101,8 +121,17 @@ object SmsHelper {
         }
     }
 
-    /** Recipient lookup for threads that the canonical-address table doesn't cover. */
-    private fun addressesForThread(ctx: Context, threadId: Long): List<String> {
+    /**
+     * Recipient lookup for threads that the canonical-address table doesn't cover.
+     *
+     * For an MMS thread this must return *every* participant, not just whoever spoke last.
+     * Reading only the sender collapsed a group onto that one member, so the dedup in
+     * [getConversations] then merged the group into that member's 1:1 chat and the group
+     * vanished — the same failure the participant-set key was meant to fix. An outgoing-only
+     * group recovered nothing at all, because the FROM row of a message you sent is the literal
+     * "insert-address-token", and the thread was then skipped outright.
+     */
+    private fun addressesForThread(ctx: Context, threadId: Long, selfKeys: Set<String>): List<String> {
         val found = LinkedHashSet<String>()
         try {
             ctx.contentResolver.query(Telephony.Sms.CONTENT_URI, arrayOf(Telephony.Sms.ADDRESS),
@@ -112,19 +141,51 @@ object SmsHelper {
                     c.getString(0)?.trim()?.takeIf { it.isNotBlank() }?.let { found += it }
             }
         } catch (_: Exception) {}
-        if (found.isEmpty()) {
-            // MMS-only thread — take the sender off its newest messages.
-            try {
-                ctx.contentResolver.query(Telephony.Mms.CONTENT_URI, arrayOf(Telephony.Mms._ID),
-                    "${Telephony.Mms.THREAD_ID} = ?", arrayOf(threadId.toString()),
-                    "${Telephony.Mms.DATE} DESC")?.use { c ->
-                    while (c.moveToNext() && found.size < 5)
-                        getMmsSenderAddress(ctx, c.getLong(0))?.trim()
-                            ?.takeIf { it.isNotBlank() }?.let { found += it }
+        // Always consult MMS too: a group thread's membership only exists there, and an SMS row
+        // in the same thread names one person at a time.
+        try {
+            ctx.contentResolver.query(Telephony.Mms.CONTENT_URI, arrayOf(Telephony.Mms._ID),
+                "${Telephony.Mms.THREAD_ID} = ?", arrayOf(threadId.toString()),
+                "${Telephony.Mms.DATE} DESC")?.use { c ->
+                var scanned = 0
+                while (c.moveToNext() && scanned < 20 && found.size < 20) {
+                    scanned++
+                    found += mmsAddresses(ctx, c.getLong(0))
                 }
-            } catch (_: Exception) {}
-        }
-        return found.toList()
+            }
+        } catch (_: Exception) {}
+        // Drop this device's own numbers. A group you sent to lists you among the addresses, and
+        // keying on your own number would merge every such thread into a single row.
+        return found.filter { addressKey(it) !in selfKeys }
+    }
+
+    /** Every address on one MMS — the sender (type 137 FROM) and each recipient (type 151 TO). */
+    private fun mmsAddresses(ctx: Context, mmsId: Long): List<String> {
+        val out = mutableListOf<String>()
+        try {
+            ctx.contentResolver.query(Uri.parse("content://mms/$mmsId/addr"),
+                arrayOf("address"), "type = 137 OR type = 151", null, null)?.use { c ->
+                while (c.moveToNext()) {
+                    val a = c.getString(0)?.trim()
+                    if (!a.isNullOrBlank() && a != "insert-address-token") out += a
+                }
+            }
+        } catch (_: Exception) {}
+        return out
+    }
+
+    /**
+     * This device's own numbers in [addressKey] form, so the user can be excluded from a
+     * participant list rebuilt out of raw MMS address rows.
+     */
+    private fun selfAddressKeys(ctx: Context): Set<String> {
+        val keys = mutableSetOf<String>()
+        try {
+            getSims(ctx).forEach { sim ->
+                sim.number?.trim()?.takeIf { it.isNotBlank() }?.let { keys += addressKey(it) }
+            }
+        } catch (_: Exception) {}
+        return keys
     }
 
     private fun getConversationsFallback(ctx: Context, limit: Int): List<Conversation> {
@@ -227,7 +288,9 @@ object SmsHelper {
                         body           = c.getString(3) ?: "",
                         timestamp      = c.getLong(4),
                         isIncoming     = c.getInt(5) == Telephony.Sms.MESSAGE_TYPE_INBOX,
-                        deliveryStatus = c.getInt(6)
+                        deliveryStatus = c.getInt(6),
+                        isFailed       = c.getInt(5) == Telephony.Sms.MESSAGE_TYPE_FAILED,
+                        isPendingSend  = isOutboundPending(c.getInt(5))
                     )
                 }
             }
@@ -310,6 +373,8 @@ object SmsHelper {
                 val mediaParts = mediaPartsMap[row.id] ?: emptyList()
                 val textPart   = textPartMap[row.id]
                 val isIn       = row.msgBox == Telephony.Mms.MESSAGE_BOX_INBOX
+                val failed     = row.msgBox == Telephony.Mms.MESSAGE_BOX_FAILED
+                val pending    = row.msgBox == Telephony.Mms.MESSAGE_BOX_OUTBOX
                 val senderAddr = if (isIn) senderMap[row.id] else null
 
                 if (mediaParts.isNotEmpty()) {
@@ -334,7 +399,9 @@ object SmsHelper {
                             isMms      = true,
                             isVoice    = isVoice,
                             mediaUri   = mediaPart.uri,
-                            mimeType   = mediaPart.mimeType
+                            mimeType   = mediaPart.mimeType,
+                            isFailed   = failed,
+                            isPendingSend = pending
                         )
                     }
                     // Text caption emitted once, after the last image bubble
@@ -350,7 +417,9 @@ object SmsHelper {
                                 timestamp  = row.date + mediaParts.size,
                                 isIncoming = isIn,
                                 senderName = senderAddr?.let { getContactName(ctx, it) },
-                                isMms      = true
+                                isMms      = true,
+                                isFailed   = failed,
+                                isPendingSend = pending
                             )
                         }
                     }
@@ -367,7 +436,9 @@ object SmsHelper {
                         timestamp  = row.date,
                         isIncoming = isIn,
                         senderName = senderAddr?.let { getContactName(ctx, it) },
-                        isMms      = true
+                        isMms      = true,
+                        isFailed   = failed,
+                        isPendingSend = pending
                     )
                 }
             }
@@ -432,7 +503,7 @@ object SmsHelper {
     private fun getSmsMessages(ctx: Context, address: String): List<SmsMessage> {
         val list = mutableListOf<SmsMessage>()
         val proj = arrayOf(Telephony.Sms._ID, Telephony.Sms.ADDRESS, Telephony.Sms.BODY,
-                           Telephony.Sms.DATE, Telephony.Sms.TYPE)
+                           Telephony.Sms.DATE, Telephony.Sms.TYPE, Telephony.Sms.STATUS)
         try {
             ctx.contentResolver.query(Telephony.Sms.CONTENT_URI, proj,
                 "${Telephony.Sms.ADDRESS} = ?", arrayOf(address),
@@ -443,7 +514,10 @@ object SmsHelper {
                         address    = c.getString(1) ?: address,
                         body       = c.getString(2) ?: "",
                         timestamp  = c.getLong(3),
-                        isIncoming = c.getInt(4) == Telephony.Sms.MESSAGE_TYPE_INBOX
+                        isIncoming = c.getInt(4) == Telephony.Sms.MESSAGE_TYPE_INBOX,
+                        deliveryStatus = c.getInt(5),
+                        isFailed   = c.getInt(4) == Telephony.Sms.MESSAGE_TYPE_FAILED,
+                        isPendingSend = isOutboundPending(c.getInt(4))
                     )
                 }
             }

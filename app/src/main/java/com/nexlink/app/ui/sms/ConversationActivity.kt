@@ -75,6 +75,11 @@ class ConversationActivity : AppCompatActivity() {
     private val debounceHandler = Handler(Looper.getMainLooper())
     private val debounceLoad = Runnable { loadMessages() }
 
+    // Must match BubbleAdapter's STUCK_SEND_MS — the reload only exists so the adapter re-evaluates.
+    private val STUCK_SEND_GRACE_MS = 60_000L
+    private val stuckHandler = Handler(Looper.getMainLooper())
+    private val stuckCheck   = Runnable { loadMessages() }
+
     private val sessionReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: android.content.Context, intent: android.content.Intent) {
             val addr = intent.getStringExtra("address") ?: return
@@ -199,7 +204,8 @@ class ConversationActivity : AppCompatActivity() {
                     SmsHelper.deleteMessage(this, msg.id, msg.isMms)
                     loadMessages()
                 }.start()
-            }
+            },
+            onResend  = { msg -> resendMessage(msg) }
         )
         adapter.isRcsConversation = NotificationPrefs.isRcsEnabled(this)
         b.recycler.layoutManager = LinearLayoutManager(this).apply { stackFromEnd = true }
@@ -579,10 +585,15 @@ class ConversationActivity : AppCompatActivity() {
         contentResolver.unregisterContentObserver(smsObserver)
         contentResolver.unregisterContentObserver(mmsObserver)
         try { unregisterReceiver(sessionReceiver) } catch (_: Exception) {}
+        stuckHandler.removeCallbacks(stuckCheck)
         cancelRecording()
     }
 
-    override fun onDestroy() { super.onDestroy(); cancelRecording() }
+    override fun onDestroy() {
+        super.onDestroy()
+        stuckHandler.removeCallbacks(stuckCheck)
+        cancelRecording()
+    }
 
     // ── Options menu ─────────────────────────────────────────────────────────
 
@@ -594,6 +605,9 @@ class ConversationActivity : AppCompatActivity() {
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         // "Add to contacts" only makes sense for 1-to-1 chats (not groups)
         menu.findItem(R.id.action_add_contact)?.isVisible = !isGroup
+        // Same screen either way: from a 1:1 it is how you turn the chat into a group.
+        menu.findItem(R.id.action_group_members)?.title =
+            if (isGroup) "Group members" else "Add people"
         return super.onPrepareOptionsMenu(menu)
     }
 
@@ -620,6 +634,10 @@ class ConversationActivity : AppCompatActivity() {
                 ActivityCompat.requestPermissions(this,
                     arrayOf(Manifest.permission.CALL_PHONE), 200)
             }
+            return true
+        }
+        if (item.itemId == R.id.action_group_members) {
+            showMembersDialog()
             return true
         }
         if (item.itemId == R.id.action_chat_info) {
@@ -700,8 +718,22 @@ class ConversationActivity : AppCompatActivity() {
                 loading.set(false)
                 adapter.setData(msgs)
                 if (msgs.isNotEmpty()) b.recycler.scrollToPosition(adapter.itemCount - 1)
+                scheduleStuckSendCheck(msgs)
             }
         }.start()
+    }
+
+    /**
+     * A send that stalls writes nothing further to the database, so no content observer ever fires
+     * and the row would keep its clock until the user left and came back. Re-check once the
+     * youngest pending message crosses the stuck threshold, and only then.
+     */
+    private fun scheduleStuckSendCheck(msgs: List<SmsMessage>) {
+        stuckHandler.removeCallbacks(stuckCheck)
+        val youngestPending = msgs.filter { !it.isIncoming && it.id > 0 && it.isPendingSend }
+            .maxOfOrNull { it.timestamp } ?: return
+        val due = STUCK_SEND_GRACE_MS - (System.currentTimeMillis() - youngestPending)
+        if (due > 0) stuckHandler.postDelayed(stuckCheck, due + 500L)
     }
 
     private fun sendMessage() {
@@ -743,6 +775,161 @@ class ConversationActivity : AppCompatActivity() {
                 runOnUiThread { Toast.makeText(this, "Send failed: ${e.message}", Toast.LENGTH_LONG).show() }
             }
         }.start()
+    }
+
+    /**
+     * Retries a message whose send failed. The failed telephony row is removed once the retry is
+     * away, so it replaces the dead row instead of leaving a duplicate. The body is re-sent verbatim —
+     * for an encrypted conversation it is already ciphertext, so re-encrypting would double-wrap it.
+     */
+    private fun resendMessage(msg: SmsMessage) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS)
+            != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, "SMS permission required", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (msg.isMms && !requireDefaultSmsApp()) return
+        Thread {
+            try {
+                when {
+                    msg.isMms && msg.mediaUri != null ->
+                        // extraRecipients matters here: without it a failed group picture would
+                        // resend to the first member only, quietly dropping everyone else.
+                        SmsHelper.sendMediaMms(this, address, Uri.parse(msg.mediaUri),
+                            msg.mimeType ?: "application/octet-stream", selectedSimId,
+                            extraRecipients = if (isGroup) participants.filter { it != address } else emptyList())
+                    msg.isMms || isGroup -> {
+                        val recipients = if (participants.isNotEmpty()) participants else listOf(address)
+                        val resolvedTid = SmsHelper.sendGroupText(this, threadId, recipients, msg.body, selectedSimId)
+                        if (threadId == 0L && resolvedTid > 0L) threadId = resolvedTid
+                    }
+                    else -> SmsHelper.sendSms(this, address, msg.body, selectedSimId)
+                }
+                // Only once the retry is away — an MMS attachment lives in the parts of the failed
+                // row itself, so deleting first would take the media with it.
+                if (msg.id > 0) SmsHelper.deleteMessage(this, msg.id, msg.isMms)
+                runOnUiThread {
+                    Toast.makeText(this, "Resending…", Toast.LENGTH_SHORT).show()
+                    loadMessages()
+                }
+            } catch (e: SecurityException) {
+                runOnUiThread { requireDefaultSmsApp() }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    Toast.makeText(this, "Resend failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    loadMessages()
+                }
+            }
+        }.start()
+    }
+
+    // ── Group membership ──────────────────────────────────────────────────────
+
+    /**
+     * Lists who is in the conversation, with a tick per person and a way to add more.
+     *
+     * MMS has no "add to group" operation: a thread *is* its recipient set, so a different set is
+     * a different thread. Rather than pretend otherwise, changing the membership opens the
+     * conversation for the new set and leaves the existing thread untouched — which is also what
+     * the carrier does the moment you send to a different list of people.
+     *
+     * [members] lets the contact picker hand back a list that isn't in [participants] yet, so the
+     * dialog can reopen showing pending additions.
+     */
+    private fun showMembersDialog(members: List<String>? = null) {
+        // distinctBy the normalised key, not the raw text: adding someone already in the group
+        // from the contact picker would otherwise list them twice as 0412… and +61412….
+        val current = (members ?: participants)
+            .map { it.trim() }.filter { it.isNotBlank() }.distinctBy { memberKey(it) }
+        if (current.isEmpty()) {
+            Toast.makeText(this, "No one to show in this conversation", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val labels = current.map { num ->
+            val name = SmsHelper.getContactName(this, num)
+            if (name == num) num else "$name\n$num"
+        }.toTypedArray()
+        val keep = BooleanArray(current.size) { true }
+
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(if (current.size > 1) "Group members" else "Members")
+            .setMultiChoiceItems(labels, keep) { _, which, checked -> keep[which] = checked }
+            .setNeutralButton("Add people…", null)
+            .setPositiveButton("Save", null)
+            .setNegativeButton("Cancel", null)
+            .show()
+
+        // Both buttons are wired after show() so they can leave the dialog open — the default
+        // listener dismisses on every click, which would drop the ticks on the way to the picker.
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setOnClickListener {
+            dialog.dismiss()
+            openAddPeoplePicker(current.filterIndexed { i, _ -> keep[i] })
+        }
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
+            val kept = current.filterIndexed { i, _ -> keep[i] }
+            when {
+                kept.isEmpty() ->
+                    Toast.makeText(this, "A conversation needs at least one person", Toast.LENGTH_SHORT).show()
+                else -> { dialog.dismiss(); applyMembership(kept) }
+            }
+        }
+    }
+
+    /** Contact picker for adding people, merged onto whoever is still ticked. */
+    private fun openAddPeoplePicker(current: List<String>) {
+        ContactPickerSheet(
+            multiSelect  = true,
+            onSinglePick = { _, number -> showMembersDialog(current + number) },
+            onGroupPick  = { contacts -> showMembersDialog(current + contacts.map { it.number }) },
+            titleText    = "Add people"
+        ).show(supportFragmentManager, "add_people")
+    }
+
+    /**
+     * Opens the conversation for a changed participant set, carrying the group name across so a
+     * renamed group keeps its name after someone is added or removed.
+     */
+    private fun applyMembership(newMembers: List<String>) {
+        val cleaned = newMembers.map { it.trim() }.filter { it.isNotBlank() }.distinctBy { memberKey(it) }
+        if (cleaned.isEmpty()) return
+        // Compare on the same normalised key the thread list uses, so a number merely rewritten
+        // as +61… doesn't read as a membership change.
+        if (cleaned.map { memberKey(it) }.sorted() == participants.map { memberKey(it) }.sorted()) {
+            Toast.makeText(this, "No changes", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val existingName = GroupNameStore.getName(this, participants)
+        val newName      = if (cleaned.size > 1)
+                               existingName ?: cleaned.joinToString(", ") { SmsHelper.getContactName(this, it) }
+                           else SmsHelper.getContactName(this, cleaned.first())
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(if (cleaned.size > 1) "Start group with ${cleaned.size} people?" else "Start chat")
+            .setMessage("A group message is addressed to a fixed set of people, so changing who is " +
+                        "in it opens a conversation with the new set. This chat and its messages " +
+                        "stay exactly as they are.")
+            .setPositiveButton("Continue") { _, _ ->
+                if (cleaned.size > 1 && existingName != null) GroupNameStore.setName(this, cleaned, existingName)
+                startActivity(android.content.Intent(this, ConversationActivity::class.java).apply {
+                    putExtra("address", cleaned.first())
+                    putExtra("contact_name", newName)
+                    putExtra("thread_id", 0L)
+                    putStringArrayListExtra("participants", ArrayList(cleaned))
+                })
+                finish()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /** Last 9 digits, matching the thread list's dedup key; alphanumeric senders keep their text. */
+    private fun memberKey(address: String): String {
+        val digits = address.filter { it.isDigit() }
+        return when {
+            digits.length >= 9  -> digits.takeLast(9)
+            digits.isNotEmpty() -> digits
+            else                -> address.trim().lowercase()
+        }
     }
 
     // ── Attachments ───────────────────────────────────────────────────────────

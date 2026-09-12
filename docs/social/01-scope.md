@@ -122,8 +122,17 @@ It does not, for a specific and slightly fortunate reason: **NexLink already
 aggregates other applications' notifications.** `NexLinkNotificationListener`
 surfaces social app notifications into the inbox and deep-links back to the
 source app. A companion app is, from NexLink's perspective, just another social
-app — it appears in the unified inbox on day one, with no integration code
-written at all.
+app — it appears in the unified inbox for **three lines of change** in `:app`,
+none of which add a permission or any background work.
+
+> **Measured 2026-09-12 — the original claim here was wrong.** This paragraph
+> used to read "with no integration code written at all". That is false, and it
+> was false in a way that only building it revealed. NexLink's listener does not
+> aggregate *every* app's notifications; it filters against an allowlist, and it
+> reads two specific notification extras. Verifying Level 0 (§16.1) meant opening
+> three gates, described in §16.2.3. Three lines is still a strong argument for
+> D1 — it is not the zero the first draft asserted, and a claim of zero would
+> have been found false by whoever implemented it.
 
 That is the floor, not the ceiling. Because both apps ship from the same
 repository under the same signing key, a `signature`-level custom permission

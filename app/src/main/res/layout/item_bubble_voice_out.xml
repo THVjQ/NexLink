@@ -44,4 +44,5 @@
             android:layout_marginStart="4dp"
             android:visibility="gone"/>
     </LinearLayout>
+    <include layout="@layout/part_send_failed"/>
 </LinearLayout>

@@ -11,4 +11,5 @@
     <color name="text2">#ebebf5</color>
     <color name="muted">#8e8e93</color>
     <color name="divider">#38383a</color>
+    <color name="danger">#FF6369</color>
 </resources>

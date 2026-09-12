@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shown under an outgoing bubble whose send failed. Included by every item_bubble_*_out layout. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/llFailed"
+    android:layout_width="wrap_content" android:layout_height="wrap_content"
+    android:layout_gravity="end"
+    android:orientation="horizontal" android:gravity="center_vertical"
+    android:layout_marginTop="2dp" android:layout_marginEnd="4dp"
+    android:visibility="gone">
+    <ImageView
+        android:layout_width="13dp" android:layout_height="13dp"
+        android:src="@drawable/ic_status_failed"
+        android:tint="@color/danger"
+        android:contentDescription="@null"/>
+    <TextView android:id="@+id/tvFailed"
+        android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:text="Not sent"
+        android:textColor="@color/danger" android:textSize="11sp"/>
+    <LinearLayout android:id="@+id/btnResend"
+        android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:orientation="horizontal" android:gravity="center_vertical"
+        android:background="@drawable/bg_resend_btn"
+        android:paddingHorizontal="9dp" android:paddingVertical="3dp"
+        android:clickable="true" android:focusable="true"
+        android:contentDescription="Resend message">
+        <ImageView
+            android:layout_width="11dp" android:layout_height="11dp"
+            android:src="@drawable/ic_resend"
+            android:tint="@color/danger"
+            android:contentDescription="@null"/>
+        <TextView
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:text="Resend"
+            android:textColor="@color/danger" android:textSize="11sp"
+            android:textStyle="bold"/>
+    </LinearLayout>
+</LinearLayout>

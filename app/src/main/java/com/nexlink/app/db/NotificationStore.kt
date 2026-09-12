@@ -32,7 +32,15 @@ object NotificationStore {
         "com.facebook.mlite"                                 to "Messenger",
         "com.discord"                                        to "Discord",
         "com.instagram.android"                              to "Instagram",
-        "com.valvesoftware.android.steam.community"           to "Steam"
+        "com.valvesoftware.android.steam.community"           to "Steam",
+        // NexLink Social (docs/social/16-nexlink-integration.md §16.2).
+        // The unified inbox works by allowlist, so the companion app has to be
+        // named here — §1.4.4's claim that it appears "with no integration code
+        // written at all" was wrong, and this single entry is the whole of the
+        // correction. It adds NO permission and NO background work to NexLink,
+        // so §2.8's sixth invariant still holds.
+        "com.thvjq.nexlink.social"                           to "NexLink Social",
+        "com.thvjq.nexlink.social.debug"                     to "NexLink Social"
     )
 
     val watchedPackages: Set<String> get() = PLATFORM_MAP.keys

@@ -43,6 +43,8 @@ fun SmsMessage.toJson(): JSONObject = JSONObject().apply {
     put("mediaUri",       mediaUri  ?: JSONObject.NULL)
     put("mimeType",       mimeType  ?: JSONObject.NULL)
     put("deliveryStatus", deliveryStatus)
+    put("isFailed",       isFailed)
+    put("isPendingSend",  isPendingSend)
 }
 
 fun JSONObject.toSmsMessage(): SmsMessage = SmsMessage(
@@ -57,5 +59,8 @@ fun JSONObject.toSmsMessage(): SmsMessage = SmsMessage(
     isVoice        = getBoolean("isVoice"),
     mediaUri       = if (isNull("mediaUri"))  null else getString("mediaUri"),
     mimeType       = if (isNull("mimeType"))  null else getString("mimeType"),
-    deliveryStatus = getInt("deliveryStatus")
+    deliveryStatus = getInt("deliveryStatus"),
+    // optBoolean, not getBoolean: a watch still running an older build sends neither field.
+    isFailed       = optBoolean("isFailed", false),
+    isPendingSend  = optBoolean("isPendingSend", false)
 )

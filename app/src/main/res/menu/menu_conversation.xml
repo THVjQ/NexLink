@@ -16,6 +16,10 @@
         android:title="Rename chat"
         app:showAsAction="never"/>
     <item
+        android:id="@+id/action_group_members"
+        android:title="Group members"
+        app:showAsAction="never"/>
+    <item
         android:id="@+id/action_add_contact"
         android:title="Add to contacts"
         app:showAsAction="never"/>

@@ -15,16 +15,68 @@ Two integration levels, and the first is free.
 
 ---
 
-## 16.2 Level 0 — notifications, no code
+## 16.2 Level 0 — notifications, three lines
 
 `NexLinkNotificationListener` already aggregates other apps' notifications into
 the inbox and deep-links back to the source app. **NexLink Social is, to that
-listener, just another social app.** It appears in the unified inbox from its
-first install with no integration code written on either side.
+listener, almost just another social app** — close enough that three lines of
+change make it one.
 
 This is the floor, and it matters more than it sounds: it means the integration
 is never blocked on the integration. Social can ship, be used, and appear in the
 inbox before a single line of §16.3 exists.
+
+### 16.2.1 What was actually measured
+
+Verified on hardware (Samsung SM-S928B, Android 15, NexLink 2.5.7 installed over
+the user's live 2.5.3 with the same signing key so real data was preserved) on
+**2026-09-12**. `Level0ProbeTest` posts a Social notification and holds it for 90
+seconds; NexLink's inbox was then read on-screen.
+
+**Result: the probe appears in NexLink's Inbox tab**, labelled "NexLink Social",
+with an unread badge, timestamp, and a working open-in-app affordance. NexLink
+re-posted it on its own `nexlink_social` channel with `category=msg` — i.e. the
+full existing path ran, not a partial one.
+
+### 16.2.2 The claim it falsified
+
+§1.4.4 originally asserted the companion app "appears in the unified inbox on day
+one, with no integration code written at all". **That is false.** The first
+attempt produced nothing at all: the notification was live, the listener was
+bound, the process was running, and the inbox was empty and silent about why.
+There is no log line for a notification the listener drops.
+
+### 16.2.3 The three gates
+
+Each had to be found by reading `NexLinkNotificationListener.onNotificationPosted`
+line by line, because every one of them fails by `return` with no diagnostic.
+
+| # | Gate | Where | Fix |
+|---|---|---|---|
+| 1 | `if (pkg !in NotificationStore.watchedPackages) return` — an **allowlist**, derived from `PLATFORM_MAP` | `:app` `db/NotificationStore.kt` | two map entries: `com.thvjq.nexlink.social` and `.debug`, both → `"NexLink Social"` |
+| 2 | `if (!NotificationPrefs.isPlatformEnabled(ctx, n.platform)) return` — defaults to **off** for an unknown platform | `:app` `db/NotificationPrefs.kt` | add `"NexLink Social"` to the default-enabled set |
+| 3 | `extras.getCharSequence("android.title") ?: return` and the same for `android.text` | `:social` `Notifications.kt` | `MessagingStyle` does **not** populate those extras; call `setContentTitle`/`setContentText` alongside it |
+
+Gate 3 is the interesting one and is not NexLink-specific: **any**
+`NotificationListenerService` reading `android.title`/`android.text` sees nothing
+from a pure `MessagingStyle` notification. Android Auto, Wear, and third-party
+notification mirrors all take that path. Setting both explicitly costs nothing —
+`MessagingStyle` still wins for on-device rendering — and it is the correct thing
+to do regardless of §16.
+
+### 16.2.4 What this costs D1
+
+Three lines, of which two are in `:app`. `tools/check-invariants.sh` confirms
+**"NexLink's permission set unchanged (§2.8 #6)"** still passes: no permission
+added, no background work added, no dependency from `:app` onto any social
+module. D1's argument survives intact — it was simply overstated.
+
+One honest gap: the Inbox's platform cards (Signal, Telegram, WhatsApp,
+Messenger) are a hardcoded 2×2 grid, so there is **no mute card for NexLink
+Social**. Messages still list normally — Discord, Instagram and Steam are in
+exactly the same position in the existing app — but muting it from NexLink's UI
+would need a layout change. That was left undone deliberately: it is `:app` UI
+work in service of the companion app, which is the cost D1 exists to avoid.
 
 **Limitations of level 0:**
 
@@ -35,6 +87,7 @@ inbox before a single line of §16.3 exists.
 | Reply via notification action | Works, but constrained to what the action allows |
 | Nothing when notifications are muted | A muted conversation is invisible to the inbox |
 | Content is scraped, not structured | Fragile to notification format changes |
+| No mute card in the Inbox grid | §16.2.4 — hardcoded 2×2 layout |
 
 ---
 

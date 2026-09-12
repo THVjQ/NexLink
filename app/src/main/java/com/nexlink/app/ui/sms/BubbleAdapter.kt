@@ -42,10 +42,17 @@ private sealed class Row {
     data class Msg(val msg: SmsMessage) : Row()
 }
 
+/**
+ * How long an outgoing message may sit in the outbox before it is treated as stuck. Long enough to
+ * ride out a slow carrier hand-off, short enough that the user isn't left guessing.
+ */
+private const val STUCK_SEND_MS = 60_000L
+
 class BubbleAdapter(
     private val isGroup: Boolean = false,
     private val onForward: ((SmsMessage) -> Unit)? = null,
-    private val onDelete: ((SmsMessage) -> Unit)? = null
+    private val onDelete: ((SmsMessage) -> Unit)? = null,
+    private val onResend: ((SmsMessage) -> Unit)? = null
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     var isRcsConversation: Boolean = false
@@ -102,7 +109,12 @@ class BubbleAdapter(
                 return when {
                     a is Row.DateSep && b is Row.DateSep -> a == b
                     a is Row.Msg     && b is Row.Msg     ->
-                        a.msg.body == b.msg.body && a.msg.mediaUri == b.msg.mediaUri
+                        a.msg.body == b.msg.body && a.msg.mediaUri == b.msg.mediaUri &&
+                        // Send status decides whether the "Not sent · Resend" strip shows, so a
+                        // row that has just failed must rebind rather than be diffed away.
+                        a.msg.isFailed == b.msg.isFailed &&
+                        a.msg.isPendingSend == b.msg.isPendingSend &&
+                        a.msg.deliveryStatus == b.msg.deliveryStatus
                     else -> false
                 }
             }
@@ -189,6 +201,9 @@ class BubbleAdapter(
         val pcSent:       ImageView?   = v.findViewById(R.id.ivPcSent)
         val btnTranscript: TextView?   = v.findViewById(R.id.btnTranscript)
         val tvTranscript:  TextView?   = v.findViewById(R.id.tvTranscript)
+        val failedRow:     View?       = v.findViewById(R.id.llFailed)
+        val tvFailed:      TextView?   = v.findViewById(R.id.tvFailed)
+        val btnResend:     View?       = v.findViewById(R.id.btnResend)
     }
 
     inner class ImageVH(v: View) : RecyclerView.ViewHolder(v) {
@@ -197,6 +212,9 @@ class BubbleAdapter(
         val sender:   TextView?                    = v.findViewById(R.id.tvSenderName)
         val status:   ImageView?                   = v.findViewById(R.id.ivStatus)
         val progress: android.widget.ProgressBar?  = v.findViewById(R.id.pbSending)
+        val failedRow: View?                       = v.findViewById(R.id.llFailed)
+        val tvFailed:  TextView?                   = v.findViewById(R.id.tvFailed)
+        val btnResend: View?                       = v.findViewById(R.id.btnResend)
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, pos: Int) {
@@ -220,19 +238,49 @@ class BubbleAdapter(
         }
     }
 
+    /**
+     * An outgoing message the user needs to act on: the send itself failed (SMS TYPE=5 / MMS
+     * MESSAGE_BOX=5), it is still sitting in the outbox long after a normal send would have
+     * finished, or the carrier's delivery report came back negative. Optimistic rows (id < 0) are
+     * still in flight, so they never count.
+     */
+    private fun isUnsent(m: SmsMessage): Boolean {
+        if (m.isIncoming || m.id <= 0) return false
+        if (m.isFailed || m.deliveryStatus == 64) return true
+        // A send that stalls never reports anything at all — no failure broadcast, no delivery
+        // report — so the only signal is that the row never left the outbox.
+        return m.isPendingSend && System.currentTimeMillis() - m.timestamp > STUCK_SEND_MS
+    }
+
     private fun bindStatus(iv: ImageView?, m: SmsMessage) {
         if (iv == null || m.isIncoming) { iv?.visibility = View.GONE; return }
         iv.visibility = View.VISIBLE
         // STATUS_NONE=-1  STATUS_COMPLETE=0  STATUS_PENDING=32  STATUS_FAILED=64
-        val (drawable, applyTint, tint) = when {
-            m.id < 0               -> Triple(R.drawable.ic_status_pending,   true,  0x80FFFFFF.toInt())
-            m.deliveryStatus == 32 -> Triple(R.drawable.ic_status_pending,   true,  0x80FFFFFF.toInt())
-            m.deliveryStatus == 0  -> Triple(R.drawable.ic_status_delivered, true,  0xAAFFFFFF.toInt())
-            m.deliveryStatus == 64 -> Triple(R.drawable.ic_status_sent,      true,  0x55FFFFFF.toInt())
-            else                   -> Triple(R.drawable.ic_status_sent,      true,  0xAAFFFFFF.toInt())
+        val (drawable, tint) = when {
+            m.id < 0               -> R.drawable.ic_status_pending   to 0x80FFFFFF.toInt()
+            isUnsent(m)            -> R.drawable.ic_status_failed    to
+                                      androidx.core.content.ContextCompat.getColor(iv.context, R.color.danger)
+            m.deliveryStatus == 32 -> R.drawable.ic_status_pending   to 0x80FFFFFF.toInt()
+            m.deliveryStatus == 0  -> R.drawable.ic_status_delivered to 0xAAFFFFFF.toInt()
+            else                   -> R.drawable.ic_status_sent      to 0xAAFFFFFF.toInt()
         }
         iv.setImageResource(drawable)
-        iv.imageTintList = if (applyTint) ColorStateList.valueOf(tint) else null
+        iv.imageTintList = ColorStateList.valueOf(tint)
+    }
+
+    /**
+     * Shows the "Not sent · Resend" strip under a failed outgoing bubble, and fades the bubble
+     * so it reads as un-sent at a glance rather than looking like every other sent message.
+     */
+    private fun bindFailed(row: View?, label: TextView?, btn: View?, bubble: View?, m: SmsMessage) {
+        val failed = isUnsent(m)
+        row?.visibility = if (failed) View.VISIBLE else View.GONE
+        bubble?.alpha = if (failed) 0.55f else 1f
+        if (!failed) { btn?.setOnClickListener(null); return }
+        // A negative delivery report means it left the device but never arrived — say so precisely.
+        label?.text = if (!m.isFailed && !m.isPendingSend && m.deliveryStatus == 64) "Not delivered"
+                      else "Not sent"
+        btn?.setOnClickListener { onResend?.invoke(m) }
     }
 
     /** Shows a small computer symbol on outgoing messages that were sent from the PC via the bridge. */
@@ -262,6 +310,7 @@ class BubbleAdapter(
             bindSender(h.sender, m)
             h.status?.visibility = View.GONE
             h.pcSent?.visibility = View.GONE
+            h.failedRow?.visibility = View.GONE
             h.btnPlay?.visibility = View.GONE
             h.btnTranscript?.visibility = View.GONE
             h.tvTranscript?.visibility = View.GONE
@@ -277,6 +326,7 @@ class BubbleAdapter(
         bindSender(h.sender, m)
         bindStatus(h.status, m)
         bindPcSent(h.pcSent, ctx, m)
+        bindFailed(h.failedRow, h.tvFailed, h.btnResend, h.bubble, m)
 
         // File attachment (non-image, non-video, non-voice MMS) → tap to open
         val isFileMms = m.isMms && m.mediaUri != null && !m.isVoice &&
@@ -356,6 +406,7 @@ class BubbleAdapter(
         h.time.text = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(m.timestamp))
         bindSender(h.sender, m)
         bindStatus(h.status, m)
+        bindFailed(h.failedRow, h.tvFailed, h.btnResend, h.image, m)
         // Show spinner while outgoing message is still being uploaded (optimistic id < 0)
         h.progress?.visibility = if (m.id < 0 && !m.isIncoming) View.VISIBLE else View.GONE
         val isVideo = m.mimeType?.startsWith("video/") == true

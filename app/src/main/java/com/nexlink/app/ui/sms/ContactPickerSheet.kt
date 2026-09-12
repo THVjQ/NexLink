@@ -26,7 +26,9 @@ import com.nexlink.shared.AvatarColors
 class ContactPickerSheet(
     private val multiSelect: Boolean,
     private val onSinglePick: (contact: Contact, number: String) -> Unit,
-    private val onGroupPick: ((List<Contact>) -> Unit)? = null
+    private val onGroupPick: ((List<Contact>) -> Unit)? = null,
+    /** Overrides the default heading — the same picker is also used to add people to a chat. */
+    private val titleText: String? = null
 ) : BottomSheetDialogFragment() {
 
     private var allContacts = listOf<Contact>()
@@ -55,7 +57,7 @@ class ContactPickerSheet(
         val tvUseNumValue  = view.findViewById<TextView>(R.id.tvUseNumberValue)
         val dividerUseNum  = view.findViewById<View>(R.id.dividerUseNumber)
 
-        tvTitle.text      = if (multiSelect) "New group" else "New message"
+        tvTitle.text      = titleText ?: if (multiSelect) "New group" else "New message"
         btnDone.isVisible = multiSelect
 
         fun totalSelected() = selectedKeys.size + manualNumbers.size

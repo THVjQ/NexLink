@@ -126,6 +126,18 @@ object Notifications {
 
         val n = NotificationCompat.Builder(context, channel)
             .setSmallIcon(android.R.drawable.stat_notify_chat)
+            // §16.2 — set title and text explicitly ALONGSIDE MessagingStyle.
+            //
+            // MessagingStyle does not reliably populate the `android.title` and
+            // `android.text` extras, and a NotificationListenerService reading
+            // those — which is exactly what NexLink's unified inbox does — sees
+            // nothing and drops the notification. Any other listener (Android
+            // Auto, Wear, a smartwatch) has the same problem.
+            //
+            // MessagingStyle still wins for rendering on the phone; these are
+            // the fallback a listener can actually read.
+            .setContentTitle(roomTitle)
+            .setContentText(if (showContent) "$senderName: $body" else "New message")
             .setStyle(style)
             .setContentIntent(open)
             .setAutoCancel(true)

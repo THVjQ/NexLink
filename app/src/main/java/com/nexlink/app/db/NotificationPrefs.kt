@@ -28,7 +28,13 @@ object NotificationPrefs {
     fun isPlatformEnabled(ctx: Context, platform: String): Boolean =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getBoolean("platform_$platform",
-                platform in setOf("Signal", "Telegram", "WhatsApp", "Messenger"))
+                // "NexLink Social" is on by default: it is the companion app
+                // (docs/social/16-nexlink-integration.md §16.2), and a user who
+                // installs it has already opted in. This is the SECOND gate a
+                // new package has to pass — PLATFORM_MAP is the first — and
+                // together they are why §1.4.4's "no integration code at all"
+                // was wrong.
+                platform in setOf("Signal", "Telegram", "WhatsApp", "Messenger", "NexLink Social"))
 
     fun setPlatformEnabled(ctx: Context, platform: String, enabled: Boolean) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
