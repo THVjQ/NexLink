@@ -430,7 +430,7 @@ Everything above still holds. Added since, all verified on the same handset
 | Encrypted transfer archive (§7.5.2) | **Half** — writes and is verified by an independent decryptor; cannot load back yet (§7.5.3) |
 | Recovery restore (§7.4) | **Done** — `RecoveryRestoreTest` |
 | Push notifications (§13.3) | **Blocked** — needs a Firebase project, which is Luca's to create |
-| Encryption at rest for the SDK store (§12.4) | Not started |
+| Encryption at rest for the SDK store (§12.4) | **Done** — §12.4.5 measured the store, §12.4.6 closed StrongBox and the screen-lock warning. (This row said "not started" for one commit: copied from the stale §33.4.1 without checking.) |
 | Direct device transfer (§7.5.1) | Not started — feature of its own size |
 | Calls (§15, §17–19) | Phase 4, not started |
 

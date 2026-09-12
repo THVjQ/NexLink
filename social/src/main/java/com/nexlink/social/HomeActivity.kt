@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.nexlink.social.core.DeviceLock
 import com.nexlink.social.core.session.RoomSummary
 import com.nexlink.social.core.session.SessionState
 import com.nexlink.social.ui.onboarding.AcceptanceGateActivity
@@ -127,6 +128,22 @@ class HomeActivity : AppCompatActivity() {
                         startActivity(RecoverySetupActivity.intent(this))
                     })
                 }
+                // §12.4.4 — the other half of the bargain that section makes.
+                //
+                // The store key carries no authentication requirement, because
+                // demanding one would stop push-woken sync whenever the phone is
+                // locked. §12.4.4 accepts that *on condition* the app warns when
+                // there is no screen lock — without the warning it is not a
+                // trade, just the weaker half.
+                //
+                // Here rather than in settings, for §8.5.2's reason: someone in
+                // this position has no other way to find out.
+                DeviceLock.warning(this)?.let { w ->
+                    root.addView(text(w, 14f, c = UiR.color.social_danger))
+                    root.addView(button("Open security settings") {
+                        startActivity(DeviceLock.settingsIntent())
+                    })
+                }
                 root.addView(gap(8))
                 root.addView(button("Sign out") {
                     lifecycleScope.launch {
@@ -209,6 +226,19 @@ class HomeActivity : AppCompatActivity() {
         orientation = LinearLayout.VERTICAL
         setPadding(0, dp(10), 0, dp(10))
         isClickable = true
+        // §14.10 — the row is one target made of several TextViews, so a screen
+        // reader would otherwise read the pieces separately and never say the
+        // whole thing is tappable. The unread count is the part most easily
+        // lost: it is a small coloured number that carries real meaning.
+        contentDescription = buildString {
+            append(r.title)
+            if (r.unreadCount > 0) {
+                append(", ")
+                append(if (r.unreadCount == 1) "1 unread message"
+                       else "${r.unreadCount} unread messages")
+            }
+            r.lastMessagePreview?.takeIf { it.isNotBlank() }?.let { append(". Latest: $it") }
+        }
         setOnClickListener {
             startActivity(ConversationActivity.intent(this@HomeActivity, r.id.value, r.title))
         }

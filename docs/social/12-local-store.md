@@ -151,6 +151,59 @@ acceptable now, when the only accounts are test ones. **It stops being
 acceptable the moment real users exist**, so this had to land before phase 6 and
 did.
 
+### 12.4.6 The rest of §12.4, closed 2026-09-12
+
+Two requirements from §12.4.3 and §12.4.4 were still unbuilt after §12.4.5.
+
+**StrongBox is now requested, with a fallback.** `MasterKey.Builder` now sets
+`setRequestStrongBoxBacked(true)`, per §12.4.3's *"StrongBox where the device
+provides it, falling back to TEE."* Most devices have no StrongBox chip and
+`build()` throws on those — on some vendors with exceptions other than the
+documented `StrongBoxUnavailableException` — so the fallback catches broadly on
+purpose. A device without StrongBox must still get a Keystore-backed key rather
+than a crash on first launch.
+
+§12.4.3's other two rules were already satisfied and stay: **no**
+`setUserAuthenticationRequired(true)` (§12.4.4's reasoning), and **no**
+`setInvalidatedByBiometricEnrolment(true)` — adding a fingerprint must not
+destroy someone's message history.
+
+**The screen-lock warning now exists, and it fired on the first real device.**
+
+§12.4.4 makes a bargain: the store key carries no authentication requirement, so
+push-woken background sync keeps working while the phone is locked, *on
+condition* that **"the app should detect the absence of a device lock and warn
+clearly"**. Until now only the first half had been built. Without the warning it
+is not a trade — it is just the weaker half, taken silently.
+
+`DeviceLock` uses `KeyguardManager.isDeviceSecure`, not `isKeyguardSecure`: the
+latter has counted swipe-to-unlock as secure, which is exactly the configuration
+this must catch. The warning appears on the home screen beside §8.5.2's
+backup-health banner, for the same reason — someone in this position has no other
+way to find out. It is **not** a blocker; refusing to run would be a paternalism
+this product does not otherwise practise.
+
+> **It fired immediately on the development handset, and it was right.**
+> `dumpsys lock_settings` reports `CredentialType: NONE`, `Quality: 0` — the
+> phone carrying a live E2EE account has no PIN, pattern or password.
+>
+> The first check made of it was wrong and is worth recording: `locksettings
+> get-disabled` returned `false`, which reads as "a lock is set" and is not what
+> it means. `IsLockScreenDisabled: false` only says the swipe lockscreen is
+> shown. The authoritative signals are `CredentialType` and `Quality`, and
+> `isDeviceSecure` agrees with them.
+
+The copy follows §9.6.1's standard for security text: it says what an attacker
+gains ("anyone who picks up the phone can read everything — and so can anyone
+who connects it to a computer"), keeps the true part true ("encrypted in transit
+and on the server"), and admits the limit ("not something this app can do for
+you"). `DeviceLockTest` asserts each of those clauses, because copy like this
+decays into reassurance the moment someone edits it for brevity.
+
+The decision is split into a pure `warningFor(lockIsSet)` so both branches are
+tested. The branch that matters cannot be reached on the development phone
+without removing the owner's screen lock, which is not a test.
+
 ---
 
 ## 12.5 Size management

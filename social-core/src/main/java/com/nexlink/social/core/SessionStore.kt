@@ -23,9 +23,7 @@ import org.matrix.rustcomponents.sdk.SlidingSyncVersion
 class SessionStore(context: Context) {
 
     private val prefs by lazy {
-        val key = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
+        val key = masterKey(context)
         EncryptedSharedPreferences.create(
             context,
             "social_session",
@@ -33,6 +31,37 @@ class SessionStore(context: Context) {
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
+    }
+
+    /**
+     * §12.4.3 — "StrongBox where the device provides it, falling back to TEE."
+     *
+     * StrongBox is a separate security chip; a key held there survives attacks
+     * that defeat the TEE. Most devices do not have one, and on those
+     * `build()` throws — including, on some vendors, with exceptions other than
+     * the documented `StrongBoxUnavailableException`. So the fallback catches
+     * broadly on purpose: a device without StrongBox must still get a working
+     * Keystore-backed key, not a crash on first launch.
+     *
+     * Deliberately **not** `setUserAuthenticationRequired(true)`. §12.4.4 is
+     * explicit about why: a background sync woken by a push cannot authenticate
+     * the user, so requiring it stops message delivery whenever the phone is
+     * locked — which is most of the time. The honest trade is a working
+     * messenger protected by platform encryption, and [deviceLockWarning] is
+     * the other half of that bargain.
+     */
+    private fun masterKey(context: Context): MasterKey {
+        val strongBox = runCatching {
+            MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .setRequestStrongBoxBacked(true)
+                .build()
+        }
+        return strongBox.getOrElse {
+            MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+        }
     }
 
     fun save(session: Session) {
