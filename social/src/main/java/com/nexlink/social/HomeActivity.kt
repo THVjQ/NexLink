@@ -158,6 +158,9 @@ class HomeActivity : AppCompatActivity() {
                 root.addView(button("Your devices") {
                     startActivity(DevicesActivity.intent(this))
                 })
+                root.addView(button("Verify this device") {
+                    startActivity(VerifyActivity.intent(this))
+                })
                 root.addView(button("Storage") {
                     startActivity(StorageActivity.intent(this))
                 })

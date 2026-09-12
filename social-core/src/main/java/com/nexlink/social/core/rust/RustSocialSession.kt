@@ -118,6 +118,30 @@ class RustSocialSession private constructor(
     suspend fun startSync() {
         syncService.start()
         observeRoomList()
+        // §8.4 — install the verification delegate HERE, not when the verify
+        // screen opens.
+        //
+        // A verification request arrives as a to-device event and is handled by
+        // the crypto machine the moment sync delivers it. If no delegate is
+        // attached yet, it is consumed with nobody listening and the UI never
+        // learns of it — which is what happened on the first run of this, and
+        // it fails silently in both directions: the asking device waits
+        // forever, the answering device shows nothing.
+        //
+        // Worse, the request stays *ongoing*. Asking again then produces
+        //
+        //   matrix_sdk_crypto::verification::machine: Received a new
+        //   verification request whilst another request with the same user is
+        //   ongoing. Cancelling both requests.
+        //
+        // so the retry cancels the original as well, and the user sees the
+        // second attempt fail for no visible reason.
+        //
+        // §8.3.2 makes this a security requirement rather than a nicety: an
+        // unexpected verification request is the signal that someone is trying
+        // to add a device to the account, and a request nobody can see is a
+        // warning that was never given.
+        runCatching { startVerification() }
     }
 
     /**
@@ -645,8 +669,28 @@ class RustSocialSession private constructor(
         Unit
     }
 
-    override suspend fun verifyDevice(deviceId: DeviceId): VerificationFlow =
-        throw NotImplementedError("phase 2 step 5 — §8.4, needs a second device")
+    /**
+     * §8.4 — kept for the seam, and it explains itself rather than lying.
+     *
+     * The protocol has no "verify that device from here": see the note on
+     * [RustVerification]. [deviceId] is accepted so the interface is unchanged
+     * for callers that already have one in hand, and ignored, because the
+     * request goes to all of this user's other sessions.
+     */
+    override suspend fun verifyDevice(deviceId: DeviceId): VerificationFlow = startVerification()
+
+    /**
+     * §8.4 — the verification controller for this session.
+     *
+     * One per client, created lazily and kept: the SDK has a single delegate
+     * slot, so constructing a second one would silently unhook the first and
+     * incoming requests would stop arriving at whoever was listening.
+     */
+    suspend fun startVerification(): RustVerification =
+        verification ?: io { RustVerification(client.getSessionVerificationController()) }
+            .also { verification = it }
+
+    @Volatile private var verification: RustVerification? = null
 
     /** Recovery and key backup (§7.4), which the bindings do serve well. */
     fun recovery(): RustRecovery = RustRecovery(client)

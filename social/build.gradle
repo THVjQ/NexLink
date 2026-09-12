@@ -31,6 +31,13 @@ android {
         // would recreate the fused release train D1 exists to prevent (§1.4.3).
         versionCode 1
         versionName "0.1.0"
+        // §16.3.1 — the bridge permission's name. A custom permission is owned
+        // account-wide by the first package to declare it, so debug and release
+        // must not share one or they cannot both be installed. See the comment
+        // in :social-contract's manifest.
+        manifestPlaceholders = [
+            nexlinkBridgePermission: 'com.thvjq.nexlink.permission.SOCIAL_BRIDGE'
+        ]
     }
 
     signingConfigs {
@@ -46,6 +53,11 @@ android {
         debug {
             applicationIdSuffix '.debug'
             versionNameSuffix '-debug'
+            // Its own permission name, matching its own applicationId suffix,
+            // so a debug and a release build coexist on one phone.
+            manifestPlaceholders = [
+                nexlinkBridgePermission: 'com.thvjq.nexlink.permission.SOCIAL_BRIDGE.debug'
+            ]
         }
         release {
             if (keystorePropertiesFile.exists()) signingConfig signingConfigs.release

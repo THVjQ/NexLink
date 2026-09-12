@@ -10,9 +10,27 @@
       hold it. Both apps sign with nexlink-release.jks (§10.5.1), which is what
       makes that work — and what makes losing the keystore break the link
       permanently (§21.6).
+
+      The NAME is a manifest placeholder, and that is not cosmetic. A custom
+      permission is owned account-wide by whichever package declares it first,
+      so two variants declaring the same name cannot both be installed:
+
+          INSTALL_FAILED_DUPLICATE_PERMISSION: Package com.thvjq.nexlink.social
+          attempting to redeclare permission com.thvjq.nexlink.permission.SOCIAL_BRIDGE
+          already owned by com.thvjq.nexlink.social.debug
+
+      That is exactly what blocks having a debug and a release build side by
+      side — which is the only way to test §8.4 device verification on one
+      phone, and is how this was found. Each consuming app sets the placeholder,
+      so debug builds get their own name and production is unchanged.
+
+      **When :app takes this dependency for §16.3 Level 1, it must set the same
+      placeholders with the same suffix rule**, or a debug NexLink and a debug
+      Social will hold two different permissions and the bridge will silently
+      never bind.
     -->
     <permission
-        android:name="com.thvjq.nexlink.permission.SOCIAL_BRIDGE"
+        android:name="${nexlinkBridgePermission}"
         android:protectionLevel="signature"
         android:label="@string/social_bridge_permission_label"
         android:description="@string/social_bridge_permission_description" />

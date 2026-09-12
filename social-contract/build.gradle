@@ -20,6 +20,18 @@ android {
     compileSdk libs.versions.compileSdk.get().toInteger()
 
     defaultConfig {
+        // NO default for nexlinkBridgePermission on purpose.
+        //
+        // A library's own manifestPlaceholders win over the consuming app's for
+        // entries in the library's manifest, so a default here is not a
+        // fallback — it is an override that silently defeats the whole point.
+        // Measured: with a default set, the debug APK's <uses-permission> took
+        // the app's suffixed value while the <permission> declaration kept the
+        // library's, so the two variants still collided on install and the
+        // uses-permission referred to a permission nothing declared.
+        //
+        // Left undefined, the placeholder resolves at app-merge time from
+        // whichever app is consuming it, which is the intended behaviour.
         minSdk libs.versions.minSdk.get().toInteger()
         consumerProguardFiles 'consumer-rules.pro'
     }
