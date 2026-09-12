@@ -333,8 +333,70 @@ Work done so far, all of it without a device:
 | Step 2: list rooms | **PASS** |
 | Step 3: send encrypted | Sent; the test's assertion was wrong (§11.7.4) |
 | **Step 4: cross-signing + recovery key — the gate** | **PASS** |
-| Steps 5–6: second device, history restore | Outstanding — needs Element Web |
+| Step 6: history restore from key backup | **PASS** — `RecoveryRestoreTest` |
+| **Step 5: second-device verification** | **Partial — see §33.3.2.** Implemented; the SAS handshake stalls on the test rig |
 | Step 7: multi-code-point reaction | **PASS** |
+
+### 33.3.2 Step 5 — implemented, not yet completed end to end (2026-09-12)
+
+§8.4 verification is **built**: `RustVerification` over the SDK's
+`SessionVerificationController`, and `VerifyActivity` covering both sides — the
+device that asks and the device that answers.
+
+**On the wire it reaches `m.key.verification.request` → `.ready` → `.start`, and
+stops there.** No `.accept`, no emoji. Held open for 108 seconds with no change,
+so it is a stall, not latency.
+
+**The rig is the suspect, and it is a bad rig.** Two builds of the app on one
+phone (debug and release are separate packages) can only have one in the
+foreground at a time, and the SAS handshake needs several round trips with both
+sides responsive. Attributing the log lines by pid: the requester sent `.start`
+twice, and the accepter — foreground and demonstrably still syncing — never
+received it.
+
+That is worth being precise about rather than declaring a pass. **Step 5 is not
+complete.** The next attempt should use Element Web as the second device, which
+is what §33.3.1 said in the first place: it runs on another machine, syncs
+continuously, and is the reference implementation, so a failure there is a real
+failure rather than an artefact of two apps fighting over one foreground.
+
+**Three real bugs were found getting this far, and they are the return on the
+attempt even though the step did not pass:**
+
+1. **The release build did not start at all.** `UnsatisfiedLinkError: Can't
+   obtain peer field ID for class com.sun.jna.Pointer`. JNA's native half looks
+   its Java fields up by name through JNI, and R8 had renamed them; uniffi sits
+   on JNA, so every Rust call goes through it. §10.6.3 enabled R8 from the first
+   release precisely to catch this early — and it did, but only once someone
+   ran the APK. Every check before this had been on `assembleDebug`, which is
+   unminified. **A shipping blocker that no amount of debug testing would have
+   found.**
+
+2. **Debug and release could not be installed together** — both declared the
+   §16.3.1 signature permission under the same name, and a custom permission is
+   owned account-wide by whichever package declares it first. Fixed with a
+   manifest placeholder. The trap underneath: a default in `:social-contract`'s
+   own `build.gradle` is not a fallback. A library's placeholders win for its
+   own manifest entries, so with one set, the debug APK's `<uses-permission>`
+   took the app's suffixed value while the `<permission>` declaration kept the
+   library's — and the two still collided.
+
+3. **Incoming verification requests were invisible.** The controller was created
+   when the verify screen opened, so a request arriving earlier was consumed by
+   the crypto machine with no delegate attached. Silent in both directions. And
+   it stays *ongoing*, so asking again logs *"Received a new verification
+   request whilst another request with the same user is ongoing. Cancelling
+   both requests"* — the retry kills the original. The delegate is now installed
+   at `startSync()`. §8.3.2 makes this a security requirement, not a nicety: an
+   unexpected request is the signal that someone is adding a device to the
+   account, and a request nobody can see is a warning that was never given.
+
+One protocol detail learned the same way: **only the requester may start SAS.**
+`didAcceptVerificationRequest` fires on both devices, so starting there
+unconditionally made both send `.start` — observed as four `.start` events per
+attempt — and the handshake stalled with both sides showing "connecting" and no
+error. Nothing in the SDK's API tells you which side you are on; it is knowable
+only from which call you made.
 
 **API friction (a §11.7.1 measure), recorded while it is fresh:** the API shape
 was derived by running `javap` over the published AAR, and the implementation

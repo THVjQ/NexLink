@@ -78,6 +78,9 @@ class RustVerification(
      */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** Which side of the handshake this device is on — see the note in the delegate. */
+    @Volatile private var isRequester = false
+
     init {
         inner.setDelegate(object : SessionVerificationControllerDelegate {
             override fun didReceiveVerificationRequest(details: SessionVerificationRequestDetails) {
@@ -101,7 +104,19 @@ class RustVerification(
              */
             override fun didAcceptVerificationRequest() {
                 _steps.value = VerificationStep.Requested
-                scope.launch { runCatching { startSas() } }
+                // ONLY the requester starts SAS.
+                //
+                // This callback fires on both devices, so starting here
+                // unconditionally makes both send m.key.verification.start.
+                // Measured on the wire: `.start` appeared twice per attempt,
+                // and the handshake then stalled — both sides sat on
+                // "connecting" with no error and no emoji, because each was
+                // waiting for the other to answer the start it had sent.
+                //
+                // The protocol gives the requester that job, so [isRequester]
+                // decides. Nothing in the SDK's API says which side you are;
+                // it is knowable only from which call you made.
+                if (isRequester) scope.launch { runCatching { startSas() } }
             }
 
             override fun didStartSasVerification() {
@@ -141,6 +156,7 @@ class RustVerification(
     suspend fun request() = io {
         runCatching { inner.cancelVerification() }
         _incoming.value = null
+        isRequester = true
         inner.requestDeviceVerification()
     }
 
@@ -151,6 +167,7 @@ class RustVerification(
      * the flow id before the accept means anything.
      */
     suspend fun accept() = io {
+        isRequester = false
         val r = _incoming.value ?: error("no incoming verification request")
         inner.acknowledgeVerificationRequest(r.senderUserId, r.flowId)
         inner.acceptVerificationRequest()
