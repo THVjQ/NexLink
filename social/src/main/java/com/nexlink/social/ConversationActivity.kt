@@ -17,6 +17,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.nexlink.social.core.session.MessageBody
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
+import com.nexlink.social.core.session.SendFailure
 import com.nexlink.social.core.session.MessageState
 import com.nexlink.social.core.session.RoomId
 import com.nexlink.social.core.session.Timeline
@@ -297,12 +300,109 @@ class ConversationActivity : AppCompatActivity() {
             else -> addView(text("[${c::class.simpleName}]", 15f, UiR.color.social_muted))
         }
         if (item.isEdited) addView(text("edited", 12f, UiR.color.social_muted))
-        if (item.state == MessageState.SENDING) {
-            addView(text("Sending…", 12f, UiR.color.social_muted))
+        when (item.state) {
+            MessageState.SENDING -> addView(text("Sending…", 12f, UiR.color.social_muted))
+            MessageState.QUEUED_OFFLINE, MessageState.FAILED -> addView(sendFailureRow(item))
+            else -> Unit
         }
         if (item.reactions.isNotEmpty()) {
             addView(reactionStrip(item))
         }
+    }
+
+    /**
+     * §13.5.2 — the status line under a message that has not been sent.
+     *
+     * The rule from §13.5.1 is that a queued message is never silently lost.
+     * The failure mode this replaces was subtler than losing it: a failed send
+     * rendered as "Sending…" indefinitely, which *looks* fine and is a lie. So
+     * this row always says which of the two situations the user is in, and
+     * offers the action that matches:
+     *
+     * - **Queued** — the SDK is retrying by itself. "Retry now" is a shortcut,
+     *   not a requirement, so the wording must not imply the message is stuck.
+     * - **Failed** — nothing more happens without the user. "Retry" and
+     *   "Discard" are both offered, because leaving it visible forever is its
+     *   own kind of broken and silently dropping it is the thing we refuse.
+     *
+     * The one case with no Retry is VERIFICATION_REQUIRED (§8): the send is
+     * being held on purpose because a device in the room is not vouched for.
+     * Offering "Retry" there would teach the user to tap past a security
+     * decision, and it would not work anyway.
+     */
+    private fun sendFailureRow(item: TimelineItem): View = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        setPadding(0, dp(4), 0, 0)
+
+        val queued = item.state == MessageState.QUEUED_OFFLINE
+        val label = when (item.sendFailure) {
+            SendFailure.OFFLINE, null ->
+                if (queued) "Waiting for network" else "Not sent"
+            SendFailure.SERVER_REJECTED -> "Not sent — the server refused it"
+            SendFailure.VERIFICATION_REQUIRED -> "Held — an unverified device is in this chat"
+            SendFailure.MEDIA_REJECTED -> "Not sent — this attachment was refused"
+            SendFailure.UNKNOWN -> "Not sent"
+        }
+        addView(text(label, 12f,
+            if (queued) UiR.color.social_muted else UiR.color.social_danger))
+
+        fun action(caption: String, onTap: () -> Unit) {
+            addView(TextView(this@ConversationActivity).apply {
+                text = caption
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextColor(ContextCompat.getColor(
+                    this@ConversationActivity, UiR.color.social_accent))
+                setPadding(dp(10), 0, 0, 0)
+                // §14.10 — 12sp text is far under the 48dp minimum target, so
+                // the touch area is grown past the glyph rather than left at
+                // whatever the text happens to measure.
+                minHeight = dp(44)
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                contentDescription = "$caption message"
+                setOnClickListener { onTap() }
+            })
+        }
+
+        val failure = item.sendFailure
+        if (failure == null || failure.retryable) {
+            action(if (queued) "Retry now" else "Retry") { retrySend(item) }
+        }
+        if (!queued) action("Discard") { confirmDiscard(item) }
+    }
+
+    private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+
+    private fun retrySend(item: TimelineItem) {
+        lifecycleScope.launch {
+            timeline?.retrySend(item.eventId)?.onFailure {
+                toast("Could not retry — " + (it.message ?: "unknown error"))
+            }
+        }
+    }
+
+    /**
+     * Discarding is destructive and unrecoverable — the text is gone, and
+     * unlike a sent message there is no copy anywhere else. So it asks.
+     */
+    private fun confirmDiscard(item: TimelineItem) {
+        AlertDialog.Builder(this)
+            .setTitle("Discard this message?")
+            .setMessage("It has not been sent. Discarding deletes it — it is not saved anywhere.")
+            .setNegativeButton("Keep", null)
+            .setPositiveButton("Discard") { _, _ ->
+                lifecycleScope.launch {
+                    val r = timeline?.cancelSend(item.eventId)
+                    when {
+                        r == null -> Unit
+                        r.isFailure -> toast("Could not discard it")
+                        // The SDK reports false when the message got sent
+                        // between the tap and the cancel. Saying so is better
+                        // than leaving the user to notice it themselves.
+                        r.getOrNull() == false -> toast("It had already been sent")
+                    }
+                }
+            }
+            .show()
     }
 
     /**

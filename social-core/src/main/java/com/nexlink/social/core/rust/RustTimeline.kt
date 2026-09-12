@@ -3,6 +3,8 @@ package com.nexlink.social.core.rust
 import com.nexlink.social.core.session.EventId
 import com.nexlink.social.core.session.MessageBody
 import com.nexlink.social.core.session.MessageState
+import com.nexlink.social.core.session.SendFailure
+import com.nexlink.social.core.session.SendState
 import com.nexlink.social.core.session.Timeline
 import com.nexlink.social.core.session.TimelineContent
 import com.nexlink.social.core.session.TimelineItem
@@ -17,7 +19,10 @@ import org.matrix.rustcomponents.sdk.FileInfo
 import org.matrix.rustcomponents.sdk.ImageInfo
 import org.matrix.rustcomponents.sdk.UploadParameters
 import org.matrix.rustcomponents.sdk.UploadSource
+import org.matrix.rustcomponents.sdk.EventSendState
 import org.matrix.rustcomponents.sdk.EventTimelineItem
+import org.matrix.rustcomponents.sdk.QueueWedgeError
+import org.matrix.rustcomponents.sdk.SendHandle
 import org.matrix.rustcomponents.sdk.MessageType
 import org.matrix.rustcomponents.sdk.MsgLikeKind
 import org.matrix.rustcomponents.sdk.ProfileDetails
@@ -84,6 +89,51 @@ internal class RustTimeline(private val inner: SdkTimeline) : Timeline {
 
     override suspend fun markRead(upTo: EventId) {
         runCatching { inner.sendReadReceipt(ReceiptType.READ, upTo.value) }
+    }
+
+    override suspend fun retrySend(id: EventId): Result<Unit> =
+        withSendHandle(id) { it.tryResend(); Unit }
+
+    override suspend fun cancelSend(id: EventId): Result<Boolean> =
+        withSendHandle(id) { it.abort("cancelled by user") }
+
+    /**
+     * §13.5.2 — resolve a [SendHandle] from the *current* timeline, use it, and
+     * destroy it.
+     *
+     * Deliberately not cached alongside the item. A `SendHandle` is an FFI
+     * object with a native peer: holding one across timeline diffs means either
+     * leaking it when the item is replaced (every `TimelineDiff.Set` replaces
+     * the item, and a queued message is `Set` on every state change) or
+     * destroying one the UI still points at. Looking it up on demand costs a
+     * list scan at the moment the user taps Retry, which is free, and makes the
+     * lifetime exactly the duration of this function.
+     *
+     * The handle is absent once the message is remote — the SDK drops it when
+     * the send completes. That is the race in [cancelSend]'s contract, so it
+     * reads as "nothing to cancel", not as an error.
+     */
+    private suspend fun <T> withSendHandle(
+        id: EventId,
+        block: suspend (SendHandle) -> T
+    ): Result<T> = runCatching {
+        val item = synchronized(raw) {
+            raw.mapNotNull { it.asEvent() }.firstOrNull { ev ->
+                val evId = when (val t = ev.eventOrTransactionId) {
+                    is EventOrTransactionId.EventId -> t.eventId
+                    is EventOrTransactionId.TransactionId -> t.transactionId
+                }
+                evId == id.value
+            }
+        } ?: error("no timeline item for that id")
+
+        val sendHandle = item.lazyProvider.getSendHandle()
+            ?: error("no send handle — message is no longer queued")
+        try {
+            block(sendHandle)
+        } finally {
+            sendHandle.destroy()
+        }
     }
 
     override fun close() { handle?.cancel(); handle = null }
@@ -206,7 +256,8 @@ private fun SdkTimelineItem.toAppItem(): TimelineItem? {
         senderDisplayName = (ev.senderProfile as? ProfileDetails.Ready)?.displayName ?: ev.sender,
         timestamp = ev.timestamp.toLong(),
         content = appContent,
-        state = if (ev.isRemote) MessageState.SENT else MessageState.SENDING,
+        state = ev.appState(),
+        sendFailure = ev.appSendFailure(),
         // §14.6 — an edited message is marked. A silent replacement is how a
         // conversation ends up disputed: one person remembers what was said and
         // the record no longer shows it was changed.
@@ -215,4 +266,41 @@ private fun SdkTimelineItem.toAppItem(): TimelineItem? {
             r.key to r.senders.map { UserId(it.senderId) }
         }
     )
+}
+
+
+/**
+ * §13.5.2 — the local send state, mapped to something the UI can render.
+ *
+ * `isRemote` alone is not enough and was the original bug here: a message that
+ * has permanently failed is not remote, so it rendered as SENDING *forever*.
+ * A spinner that never stops is indistinguishable from a lost message, which is
+ * the exact outcome §13.5.1 forbids.
+ */
+private fun EventTimelineItem.appState(): MessageState {
+    val failed = localSendState as? EventSendState.SendingFailed
+    // Everything the decision needs, reduced to plain values. The judgement
+    // itself is in SendState.classify, where a unit test can reach it — see the
+    // note there on why that separation exists.
+    return SendState.classify(
+        isRemote = isRemote || localSendState is EventSendState.Sent,
+        failure = appSendFailure(),
+        recoverable = failed?.isRecoverable == true
+    )
+}
+
+private fun EventTimelineItem.appSendFailure(): SendFailure? {
+    val st = localSendState as? EventSendState.SendingFailed ?: return null
+    return when (st.error) {
+        // Held because a device or identity is not vouched for (§8). Not an
+        // error, and not retryable — see SendFailure.VERIFICATION_REQUIRED.
+        is QueueWedgeError.CrossVerificationRequired,
+        is QueueWedgeError.InsecureDevices,
+        is QueueWedgeError.IdentityViolations -> SendFailure.VERIFICATION_REQUIRED
+        is QueueWedgeError.InvalidMimeType,
+        is QueueWedgeError.MissingMediaContent -> SendFailure.MEDIA_REJECTED
+        is QueueWedgeError.GenericApiError ->
+            if (st.isRecoverable) SendFailure.OFFLINE else SendFailure.SERVER_REJECTED
+        else -> if (st.isRecoverable) SendFailure.OFFLINE else SendFailure.UNKNOWN
+    }
 }

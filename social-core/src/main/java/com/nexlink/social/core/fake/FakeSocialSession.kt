@@ -141,13 +141,50 @@ class FakeSocialSession(
     }
 }
 
-private class FakeTimeline : Timeline {
+/**
+ * Public so tests can drive failure states directly — see [FakeTimeline.fail].
+ * There is no other way to model an unsendable message without a network.
+ */
+class FakeTimeline : Timeline {
     private val _items = MutableStateFlow<List<TimelineItem>>(emptyList())
     override val items: Flow<List<TimelineItem>> = _items.asStateFlow()
     override suspend fun paginateBack(count: Int): Boolean = false
     override suspend fun markRead(upTo: EventId) = Unit
+
+    /**
+     * §13.5.2 — the fake actually moves the message, so a UI test can drive the
+     * whole failed → retrying → sent path without a network. A retry that
+     * returned success while leaving the bubble red would let the exact bug
+     * this models slip through the test that exists to catch it.
+     */
+    override suspend fun retrySend(id: EventId): Result<Unit> = runCatching {
+        _items.update { list ->
+            list.map {
+                if (it.eventId == id) it.copy(state = MessageState.SENT, sendFailure = null) else it
+            }
+        }
+    }
+
+    override suspend fun cancelSend(id: EventId): Result<Boolean> = runCatching {
+        val present = _items.value.any { it.eventId == id }
+        _items.update { list -> list.filterNot { it.eventId == id } }
+        present
+    }
+
     override fun close() = Unit
     fun append(item: TimelineItem) { _items.update { it + item } }
+    /** Force a message into a failed state — for tests of the §13.5 surface. */
+    fun fail(id: EventId, reason: com.nexlink.social.core.session.SendFailure) {
+        _items.update { list ->
+            list.map {
+                if (it.eventId == id) it.copy(
+                    state = if (reason == com.nexlink.social.core.session.SendFailure.OFFLINE)
+                        MessageState.QUEUED_OFFLINE else MessageState.FAILED,
+                    sendFailure = reason
+                ) else it
+            }
+        }
+    }
 }
 
 private class FakeVerificationFlow : VerificationFlow {

@@ -154,6 +154,79 @@ identifier marked handled before the dispatch succeeded, so a failure looked
 like a success. **The same class of error is available here and the same
 discipline applies: record success after the operation, never before.**
 
+### 13.5.2 The surface — built 2026-09-12
+
+The SDK owns the queue itself: persistence across process death, backoff,
+ordering and transaction-ID idempotency are all `matrix-rust-sdk`'s, and
+§13.5.1's properties are satisfied by not reimplementing them. What the
+application owns is **saying which state a message is in**, and that is where
+this went wrong first.
+
+**The bug.** `RustTimeline` mapped send state in one expression:
+
+```kotlin
+state = if (ev.isRemote) MessageState.SENT else MessageState.SENDING
+```
+
+A permanently failed message is not remote. So it rendered as "Sending…"
+**forever** — no crash, no log line, no error path taken. The app looked
+healthy and the message never arrived. This is worse than the loss §13.5.1
+warns about, because a spinner that never resolves gives the user positive
+evidence that it is still working.
+
+**What replaced it.** The SDK's `EventTimelineItem.localSendState` carries
+`Sent` / `NotSentYet` / `SendingFailed(error, isRecoverable)`. Those reduce to
+plain values which `SendState.classify` turns into a state:
+
+| SDK | App state | Because |
+|---|---|---|
+| `Sent`, or `isRemote` | `SENT` | Confirmed by the server |
+| `NotSentYet`, or no state | `SENDING` | In flight |
+| `SendingFailed(isRecoverable = true)` | `QUEUED_OFFLINE` | **The SDK is still retrying by itself** |
+| `SendingFailed(isRecoverable = false)` | `FAILED` | Nothing more happens without the user |
+
+The `isRecoverable` split is the load-bearing one. Telling a user to retry
+something that is already retrying is how an app teaches people to ignore its
+warnings; staying silent about something genuinely stuck is the original bug
+again. They must be different words on screen.
+
+`QueueWedgeError` is reduced to `SendFailure`, collapsing cases that share a
+remedy and keeping apart the ones that do not:
+
+| `SendFailure` | Shown as | Offers |
+|---|---|---|
+| `OFFLINE` | "Waiting for network" | Retry now |
+| `SERVER_REJECTED` | "Not sent — the server refused it" | Retry, Discard |
+| `MEDIA_REJECTED` | "Not sent — this attachment was refused" | Retry, Discard |
+| `VERIFICATION_REQUIRED` | "Held — an unverified device is in this chat" | **no Retry** — Discard only |
+| `UNKNOWN` | "Not sent" | Retry, Discard |
+
+**`VERIFICATION_REQUIRED` deliberately has no Retry.** The send is being held
+because someone in the room has a device or identity this account has not
+vouched for — a §8 security decision, not a transport error. A "Retry" there
+would not send, and offering it trains the user to tap past the one prompt in
+the app that must not be tapped past. The remedy is §8.4's verification flow.
+
+**Discard exists, and it asks.** "Never silently dropped" does not mean "kept
+forever": a failed bubble that cannot be got rid of is its own broken state. So
+the user can discard — explicitly, through a confirmation, because the text
+exists nowhere else. `SendHandle.abort` returns false when the message was sent
+between the tap and the cancel; the UI says so rather than pretending.
+
+**Why `SendState.classify` is a separate object.** The original one-line bug was
+untestable where it lived: it read an `EventTimelineItem`, which is an FFI
+object with a native peer and cannot be constructed in a unit test. So the
+single line carrying the "is this message lost?" decision had no test, and was
+wrong. The judgement now lives on plain types in `:social-core`, and
+`SendFailureTest` covers it — verified by reintroducing the original expression,
+which fails two of the eight tests.
+
+**`SendHandle` lifetime.** Handles are resolved from the current timeline at the
+moment the user taps, used, and destroyed — never cached on the item. A queued
+message is replaced by a `TimelineDiff.Set` on *every* state change, so a cached
+handle is either leaked on each transition or destroyed while the UI still
+points at it.
+
 ---
 
 ## 13.6 Background execution: the hard-won part
