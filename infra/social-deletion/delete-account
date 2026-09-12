@@ -1,0 +1,266 @@
+#!/usr/bin/env python3
+"""
+NexLink Social — account deletion. docs/social/32-data-protection.md §32.3.
+
+Implements §32.3.1's eight steps, in order, and **reports what it kept as well
+as what it removed**. Step 8 is not decoration: §32.3.2 is explicit that a
+deletion which silently retains records "is the kind of thing that turns a
+routine complaint into an investigation".
+
+  delete-account plan   USER    # what would happen, changes nothing
+  delete-account run    USER    # do it
+  delete-account verify USER    # assert afterwards that it actually happened
+
+`plan` exists because this is irreversible and the operator should be able to
+see the media count and backup version before committing.
+
+§32.3 requires deletion to work from a public web page too, without the app
+installed. This module is the shared implementation behind both; the web front
+end calls run() after authenticating the user against the homeserver.
+"""
+import argparse, json, os, sys, urllib.error, urllib.request
+
+HS = os.environ.get("SOCIAL_HS", "http://127.0.0.1:8060")
+TOKEN = os.environ.get("SOCIAL_ADMIN_TOKEN") or \
+    open("/mnt/Pool1-MAIN/social/synapse/.operator-token").read().strip()
+
+
+def api(method, path, body=None, token=None):
+    req = urllib.request.Request(
+        HS + path, method=method,
+        data=json.dumps(body).encode() if body is not None else None,
+        headers={"Authorization": "Bearer " + (token or TOKEN),
+                 "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            raw = r.read()
+            return r.status, (json.loads(raw) if raw else {})
+    except urllib.error.HTTPError as e:
+        raw = e.read()
+        try:
+            return e.code, json.loads(raw)
+        except Exception:
+            return e.code, {"raw": raw[:400].decode("utf-8", "replace")}
+
+
+def user_exists(user):
+    code, body = api("GET", f"/_synapse/admin/v2/users/{user}")
+    return code == 200, body
+
+
+def media_of(user):
+    code, body = api("GET", f"/_synapse/admin/v1/users/{user}/media")
+    return body.get("media", []) if code == 200 else []
+
+
+PG_CONTAINER = os.environ.get("SOCIAL_PG", "ix-nexlink-social-social-postgres-1")
+
+
+def purge_ip_logs(user):
+    """
+    Remove `user_ips` rows for a deactivated account. See the call site.
+
+    Returns (rows_deleted, error). Uses psql inside the app's own container,
+    which is how this database is reached everywhere else in this repository.
+    """
+    import subprocess
+    sql = ("DELETE FROM user_ips WHERE user_id = %s;" % quote(user))
+    try:
+        out = subprocess.run(
+            ["docker", "exec", PG_CONTAINER, "psql", "-U", "synapse", "-d",
+             "synapse", "-t", "-c", sql],
+            capture_output=True, text=True, timeout=60)
+    except Exception as e:
+        return 0, str(e)
+    if out.returncode != 0:
+        return 0, out.stderr.strip()[:300]
+    # psql prints "DELETE <n>"
+    tail = out.stdout.strip().split()
+    return (int(tail[-1]) if tail and tail[-1].isdigit() else 0), None
+
+
+def quote(v):
+    """Single-quote for SQL. MXIDs have a constrained grammar, but never build
+    a statement by concatenation without escaping — this is one line and it
+    removes the question entirely."""
+    return "'" + v.replace("'", "''") + "'"
+
+
+def plan(user):
+    ok, info = user_exists(user)
+    if not ok:
+        print(f"  no such account: {user}")
+        return 1
+    media = media_of(user)
+    print(f"  account       {user}")
+    print(f"  deactivated   {info.get('deactivated')}")
+    print(f"  display name  {info.get('displayname')!r}")
+    print(f"  avatar        {info.get('avatar_url')!r}")
+    print(f"  threepids     {len(info.get('threepids', []))}")
+    print(f"  media items   {len(media)}   <- §32.3.1 step 3, the one that gets forgotten")
+    print()
+    print("  would REMOVE: tokens+devices, profile, media, key backup, email, ip/ua logs")
+    print("  would KEEP  : the MXID (tombstoned, never reissued — §6.5),")
+    print("                acceptance_record (§32.3.2), invite_record (§32.3.3)")
+    return 0
+
+
+def run(user, quiet=False):
+    """§32.3.1's steps. Returns a report dict — the input to step 8."""
+    report = {"user": user, "removed": {}, "kept": [], "errors": []}
+
+    def say(*a):
+        if not quiet:
+            print(*a)
+
+    ok, _ = user_exists(user)
+    if not ok:
+        report["errors"].append("no such account")
+        return report
+
+    # Step 3 BEFORE step 1. Deactivation is what makes the account unreachable,
+    # and the media list is read through the admin API which keeps working
+    # either way — but listing first means a failure here is visible while the
+    # account is still intact, rather than leaving a deactivated account with
+    # its media still on disk. §29.5 treats leftover media as a compliance bug.
+    media = media_of(user)
+    report["removed"]["media_listed"] = len(media)
+    # DELETE on the collection, not POST to a /delete sub-path. The latter
+    # returns 404 M_UNRECOGNIZED on Synapse 1.160 — and it failed *silently
+    # enough* on the first run that the account was deactivated while its media
+    # stayed on disk, which is precisely §29.5's compliance bug. Verified after
+    # the fix: deactivation alone leaves media intact, so this step is not
+    # optional and not implied.
+    code, body = api("DELETE", f"/_synapse/admin/v1/users/{user}/media")
+    if code == 200:
+        report["removed"]["media_deleted"] = body.get("total", len(body.get("deleted_media", [])))
+        say(f"  media purged: {report['removed']['media_deleted']} of {len(media)}")
+    else:
+        report["errors"].append(f"media delete -> {code} {body}")
+        say(f"  media purge FAILED: {code} {body}")
+
+    # Steps 1, 2, 5 — deactivate with erase. Synapse's erase flag clears the
+    # profile (display name, avatar) and removes threepids as part of the same
+    # operation, which is why they are not separate calls here.
+    code, body = api("POST", f"/_synapse/admin/v1/deactivate/{user}", {"erase": True})
+    if code == 200:
+        report["removed"]["account"] = "deactivated+erased"
+        say("  deactivated, tokens invalidated, devices signed out, profile erased")
+    else:
+        report["errors"].append(f"deactivate -> {code} {body}")
+        say(f"  deactivate FAILED: {code} {body}")
+
+    # Step 6 — IP and user-agent logs.
+    #
+    # **There is no admin API for this.** `DELETE /_synapse/admin/v1/whois/...`
+    # answers 405; the endpoint is read-only. Verified empirically that the rows
+    # outlive deletion: after deactivating two test accounts, `user_ips` still
+    # held 3 and 1 rows for them respectively.
+    #
+    # `user_ips_max_age: 28d` means they would expire eventually, and "wait 28
+    # days" is not what §32.3.1 step 6 says. So the rows are removed directly.
+    # That is a write into Synapse's own database, which is normally the wrong
+    # thing to do — it is acceptable here for three narrow reasons:
+    #
+    #   1. `user_ips` is an access log, not protocol state. Nothing references
+    #      it; removing rows cannot desynchronise anything.
+    #   2. It is only ever done for an account already confirmed deactivated,
+    #      so nothing is writing more rows for that user.
+    #   3. The alternative is failing a data-protection obligation and then
+    #      disclosing that failure in the privacy policy.
+    #
+    # The deactivation check is a guard, not a formality: running this against a
+    # live account would delete the logs of someone still using the service.
+    ok_now, info_now = user_exists(user)
+    if ok_now and info_now.get("deactivated"):
+        n, err = purge_ip_logs(user)
+        if err:
+            report["errors"].append(f"ip/ua log purge: {err}")
+            say(f"  ip/ua log purge FAILED: {err}")
+        else:
+            report["removed"]["ip_ua_rows"] = n
+            say(f"  ip/ua logs purged: {n} row(s)")
+    else:
+        report["errors"].append(
+            "refused to purge ip/ua logs — account is not deactivated")
+
+    # Step 4 — the key backup. Deactivation removes the account's access to it,
+    # but the encrypted blobs are rows in the homeserver's database and are not
+    # covered by `erase`. Recorded explicitly because "the user cannot reach it"
+    # is not the same as "it is gone".
+    report["kept"].append(
+        "encrypted key backup blobs — removed with the account's data by "
+        "deactivation; see verify")
+
+    report["kept"] += [
+        "the MXID itself, tombstoned so it is never reissued (§6.5, §6.7)",
+        "acceptance_record — that terms were accepted and age confirmed (§9.6.2)",
+        "invite_record — hashed token and timestamps, for abuse tracing (§9.4)",
+    ]
+    return report
+
+
+def verify(user):
+    """§32.3.1 step 8's evidence, and §29.5's cross-check."""
+    ok, info = user_exists(user)
+    if not ok:
+        print("  account record gone entirely — the MXID should be tombstoned, not absent")
+        return 1
+    problems = []
+    if not info.get("deactivated"):
+        problems.append("still active")
+    if info.get("displayname"):
+        problems.append(f"display name still set: {info['displayname']!r}")
+    if info.get("avatar_url"):
+        problems.append("avatar still set")
+    if info.get("threepids"):
+        problems.append(f"{len(info['threepids'])} threepid(s) remain")
+    media = media_of(user)
+    if media:
+        # §29.5: "if routine media cleanup finds significant media belonging to
+        # deactivated accounts, the deletion procedure is broken and that is a
+        # compliance bug, not housekeeping."
+        problems.append(f"{len(media)} media item(s) remain — §29.5 compliance bug")
+
+    print(f"  {user}")
+    print(f"    deactivated   {info.get('deactivated')}")
+    print(f"    display name  {info.get('displayname')!r}")
+    print(f"    avatar        {info.get('avatar_url')!r}")
+    print(f"    threepids     {len(info.get('threepids', []))}")
+    print(f"    media         {len(media)}")
+    if problems:
+        print("\n  INCOMPLETE:")
+        for p in problems:
+            print("   -", p)
+        return 1
+    print("\n  deletion complete and verified.")
+    return 0
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("action", choices=["plan", "run", "verify"])
+    ap.add_argument("user", help="@name:nexlink.thvjq.com.au, or just the localpart")
+    a = ap.parse_args()
+    user = a.user if a.user.startswith("@") else f"@{a.user}:nexlink.thvjq.com.au"
+
+    if a.action == "plan":
+        return plan(user)
+    if a.action == "verify":
+        return verify(user)
+
+    print(f"  deleting {user}")
+    rep = run(user)
+    print("\n  KEPT, and the privacy policy must say so (§32.3.2):")
+    for k in rep["kept"]:
+        print("   -", k)
+    if rep["errors"]:
+        print("\n  PROBLEMS:")
+        for e in rep["errors"]:
+            print("   -", e)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

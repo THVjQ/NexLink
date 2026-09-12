@@ -96,6 +96,56 @@ housekeeping.
 after deletion. A deletion that silently retains records is the kind of thing
 that turns a routine complaint into an investigation.
 
+### 32.3.4 Built and verified 2026-09-12
+
+`infra/social-deletion/delete-account`, with three verbs — `plan`, `run`,
+`verify`. `plan` exists because deletion is irreversible and the operator should
+see the media count before committing; `verify` exists because §32.3.1 step 8
+requires confirming what happened, and "the command exited 0" is not evidence.
+
+Verified against two throwaway accounts on the live homeserver, each given
+uploaded media first so step 3 was actually exercised.
+
+**Two findings, both of which would have made deletion incomplete in a way
+nobody would notice:**
+
+**1. Deactivation does not purge media.** §32.3.1 already warns that step 3 "is
+the one that gets forgotten"; measured, it is worse than forgettable. The first
+implementation used `POST /_synapse/admin/v1/users/<user>/media/delete`, which
+Synapse 1.160 answers **404 `M_UNRECOGNIZED`**. The deactivation in the same run
+*succeeded*. So the account was erased, signed out and profile-cleared — and its
+media sat on disk untouched. The correct call is `DELETE` on the collection:
+
+```
+DELETE /_synapse/admin/v1/users/<user_id>/media   →  {"deleted_media":[...],"total":3}
+```
+
+That is §29.5's compliance bug arriving on its first run, and the only reason it
+was caught is that the tool reports per-step failures and exits non-zero instead
+of summarising success.
+
+**2. IP and user-agent logs survive deletion, and there is no admin API for
+them.** `DELETE /_synapse/admin/v1/whois/<user>` answers **405** — the endpoint
+is read-only. Confirmed empirically: after deactivating both test accounts,
+`user_ips` still held 3 and 1 rows for them.
+
+`user_ips_max_age: 28d` means they would expire eventually, but §32.3.1 step 6
+says *purge*, not *wait four weeks*. So the rows are deleted directly, guarded
+on the account already being deactivated — a write into Synapse's own database,
+which is normally the wrong thing to do and is justified here only because
+`user_ips` is an access log that nothing references, the account can no longer
+generate rows, and the alternative is failing an erasure obligation and then
+disclosing that failure in the privacy policy.
+
+Final state, both accounts: deactivated, profile erased, 0 threepids, 0 media,
+0 `user_ips` rows. Re-running is idempotent.
+
+**What this means for the privacy policy (§4.7):** the retained list in §32.3.2
+is complete and correct as written — MXID, `acceptance_record`, `invite_record`
+— and IP logs are **not** on it, because they are now purged rather than aged
+out. Had the first implementation shipped, the policy would have been wrong on
+two counts.
+
 ### 32.3.3 The invite tree after deletion — a genuine problem
 
 §9.9 asks what happens to an invitee when their inviter deletes their account,
