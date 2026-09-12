@@ -190,6 +190,63 @@ A settings screen showing actual usage broken down by conversation, with the
 largest first, and per-conversation media clearing. Users manage what they can
 see; an opaque multi-gigabyte total produces uninstalls rather than pruning.
 
+### 12.5.4 Built 2026-09-12 — and two things the measurement changed
+
+`StorageActivity` implements §12.5.2 and §12.5.3 against the SDK's
+`getStoreSizes`, `setMediaRetentionPolicy` and `clearCaches`. Verified on
+hardware (SM-G990E, Android 16). Two claims in the first build turned out to be
+false, both found by looking at the screen rather than by testing it.
+
+**1. "Clear cache (112 KB)" freed nothing visible.**
+
+The button promised a figure, the user tapped it, and every number on the screen
+stayed exactly the same. The clear *worked* — the SDK logged
+`sliding_sync: Session expired; resetting pos` — but **SQLite does not shrink a
+database file when rows are deleted.** Freed pages go on the file's freelist and
+are reused; the file keeps its size until a `VACUUM`, and there is no FFI call
+to trigger one.
+
+So the screen was making a promise the storage engine does not keep. Fixed by
+removing the figure from the button and saying so in the confirmation: the
+cache is emptied, and *"the number above may not drop straight away — the space
+is reused for new messages rather than handed back to Android."* That is the
+honest version, and it is the same principle as §9.6.1's "we can see" column:
+state what actually happens, including when it is less impressive.
+
+**2. `getStoreSizes` understates the footprint by ~30%.**
+
+Measured with a freshly signed-in account:
+
+| | SDK reports | On disk |
+|---|---|---|
+| Event cache | 76 KB | 77,824 B + 16,512 WAL + 32,768 SHM |
+| Media | 36 KB | 36,864 B + 20,632 WAL + 32,768 SHM |
+| Crypto | 184 KB | 188,416 B + 115,392 WAL + 32,768 SHM |
+| **Total** | **444 KB** | **590,894 B (577 KB)** |
+
+`getStoreSizes` returns the size of each main `.sqlite3` file and counts neither
+the `-wal` nor the `-shm` beside it. The crypto store's WAL alone was 115 KB
+against a 184 KB store.
+
+This matters because Android's own app-info screen shows the directory total.
+A settings screen labelled "Storage" that disagrees with the OS by 30% is the
+one telling the lie, and it sends the user to uninstall rather than to prune —
+the exact outcome §12.5.3 exists to prevent. **The headline figure is now the
+app's real data-directory size**, walked directly; the SDK's numbers stay as the
+per-store breakdown, which is what they are good for.
+
+**What was kept from the plan and what was not.** §12.5.3 asks for a breakdown
+*by conversation* with per-conversation media clearing. The SDK exposes store
+totals, not per-room attribution, so that is not built — recorded here rather
+than quietly dropped. The four-way breakdown by store is what the SDK supports
+and it answers the same question ("what is big, and can I clear it?").
+
+The crypto store is shown, labelled **"Never cleared"**, with the reason in
+plain words. §12.5.1 says not to prune it; showing it without showing why would
+invite exactly the request to prune it.
+
+---
+
 ---
 
 ## 12.6 Media cache

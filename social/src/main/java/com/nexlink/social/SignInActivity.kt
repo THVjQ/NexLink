@@ -38,6 +38,8 @@ class SignInActivity : AppCompatActivity() {
             setPadding(dp(20), dp(28), dp(20), dp(20))
         }
         setContentView(ScrollView(this).apply { addView(root) })
+        // §14.10 — see Insets.kt.
+        root.padForSystemBars(dp(20), dp(24), dp(24))
 
         fun label(t: String, size: Float, bold: Boolean = false, c: Int = UiR.color.social_text) =
             TextView(this).apply {

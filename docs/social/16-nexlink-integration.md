@@ -28,7 +28,8 @@ inbox before a single line of §16.3 exists.
 
 ### 16.2.1 What was actually measured
 
-Verified on hardware (Samsung SM-S928B, Android 15, NexLink 2.5.7 installed over
+Verified on hardware (Samsung SM-G990E / Galaxy S21 FE, Android 16, API 36,
+NexLink 2.5.7 installed over
 the user's live 2.5.3 with the same signing key so real data was preserved) on
 **2026-09-12**. `Level0ProbeTest` posts a Social notification and holds it for 90
 seconds; NexLink's inbox was then read on-screen.

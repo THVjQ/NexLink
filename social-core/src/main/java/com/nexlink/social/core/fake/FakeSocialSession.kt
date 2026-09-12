@@ -33,6 +33,39 @@ class FakeSocialSession(
 
     override fun rooms(): Flow<List<RoomSummary>> = _rooms.asStateFlow()
 
+    // ---- §12.5 storage -----------------------------------------------------
+    //
+    // Plausible numbers rather than zeroes: a storage screen that shows 0 B for
+    // everything looks broken and, worse, cannot be reviewed — the formatting,
+    // the ordering and the "clearing this frees X" copy are all untestable
+    // against an empty store.
+
+    private var media = 412L * 1024 * 1024
+    private var eventCache = 63L * 1024 * 1024
+    var retention: MediaRetention = MediaRetention.DEFAULT
+        private set
+
+    override suspend fun storeSizes(): Result<StoreUsage> = Result.success(
+        StoreUsage(
+            stateBytes = 18L * 1024 * 1024,
+            eventCacheBytes = eventCache,
+            mediaBytes = media,
+            cryptoBytes = 3L * 1024 * 1024
+        )
+    )
+
+    override suspend fun applyMediaRetention(policy: MediaRetention): Result<Unit> {
+        retention = policy
+        return Result.success(Unit)
+    }
+
+    /** Clears exactly what the real one clears — crypto and state survive. */
+    override suspend fun clearCaches(): Result<Unit> {
+        media = 0
+        eventCache = 0
+        return Result.success(Unit)
+    }
+
     override suspend fun timeline(roomId: RoomId): Timeline =
         timelines.getOrPut(roomId.value) { FakeTimeline() }
 

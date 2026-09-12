@@ -164,6 +164,83 @@ interface SocialSession {
 
     /** §14.7 — who else is typing, by display name. Empty when nobody is. */
     fun typingUsers(roomId: RoomId): kotlinx.coroutines.flow.Flow<List<String>>
+
+    // ---- §12.5 storage -----------------------------------------------------
+
+    /** §12.5.3 — what the app is actually using on disk, right now. */
+    suspend fun storeSizes(): Result<StoreUsage>
+
+    /**
+     * §12.5.2 — apply the user's media-cache choice.
+     *
+     * Applied at session start as well as on change, because the policy lives
+     * in the SDK's store and a fresh client starts from its default otherwise.
+     */
+    suspend fun applyMediaRetention(policy: MediaRetention): Result<Unit>
+
+    /**
+     * §12.5.2 — "Clear cache". Drops cached media and the local event cache.
+     *
+     * **Does not touch the crypto store**, which is the whole point: Megolm
+     * session keys are not disposable, and deleting them destroys the ability
+     * to read history that nothing can restore. §12.5.1 is explicit about it.
+     */
+    suspend fun clearCaches(): Result<Unit>
+}
+
+/**
+ * §12.5.3 — disk usage, broken out, in bytes.
+ *
+ * Four numbers rather than a total because they behave differently and the
+ * settings screen has to say so: one of them the user can clear freely, one of
+ * them must never be cleared, and a single opaque multi-gigabyte figure is what
+ * produces uninstalls instead of pruning.
+ */
+data class StoreUsage(
+    /** Room state, membership, account data. Regenerable by re-syncing. */
+    val stateBytes: Long,
+    /** Cached timeline events. Regenerable — the server still has them. */
+    val eventCacheBytes: Long,
+    /** Downloaded attachments. The part that actually gets large. */
+    val mediaBytes: Long,
+    /**
+     * Device and Megolm keys. **Never cleared** (§12.5.1). Small, and its loss
+     * is unrecoverable — no amount of re-syncing brings back the ability to
+     * decrypt history.
+     */
+    val cryptoBytes: Long
+) {
+    val totalBytes: Long get() = stateBytes + eventCacheBytes + mediaBytes + cryptoBytes
+
+    /** What "Clear cache" would actually free — crypto excluded by design. */
+    val clearableBytes: Long get() = eventCacheBytes + mediaBytes
+}
+
+/**
+ * §12.5.2 — the media cache budget.
+ *
+ * [maxCacheBytes] null means unlimited, which is offered because some users
+ * genuinely want it and hiding the option does not stop the store growing —
+ * it just stops them knowing why.
+ */
+data class MediaRetention(
+    val maxCacheBytes: Long?,
+    /** Files larger than this are never cached at all. */
+    val maxFileBytes: Long = 100L * 1024 * 1024,
+    /** Evict anything untouched for this long, regardless of the size cap. */
+    val lastAccessExpiryDays: Long = 90
+) {
+    companion object {
+        const val MB = 1024L * 1024
+        /** §12.5.1's default. */
+        val DEFAULT = MediaRetention(maxCacheBytes = 1024 * MB)
+        val CHOICES: List<Pair<String, MediaRetention>> = listOf(
+            "500 MB" to MediaRetention(500 * MB),
+            "1 GB" to DEFAULT,
+            "5 GB" to MediaRetention(5 * 1024 * MB),
+            "Unlimited" to MediaRetention(null)
+        )
+    }
 }
 
 /**

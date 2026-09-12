@@ -74,6 +74,11 @@
             android:label="@string/app_name" />
 
         <activity
+            android:name=".StorageActivity"
+            android:exported="false"
+            android:label="@string/app_name" />
+
+        <activity
             android:name=".NewChatActivity"
             android:exported="false"
             android:label="@string/app_name" />

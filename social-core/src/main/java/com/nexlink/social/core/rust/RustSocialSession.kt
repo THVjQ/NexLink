@@ -33,7 +33,11 @@ import org.matrix.rustcomponents.sdk.RoomListEntriesWithDynamicAdaptersResult
 import org.matrix.rustcomponents.sdk.RoomListService
 import org.matrix.rustcomponents.sdk.SqliteStoreBuilder
 import org.matrix.rustcomponents.sdk.SlidingSyncVersionBuilder
+import com.nexlink.social.core.session.MediaRetention
+import com.nexlink.social.core.session.StoreUsage
 import org.matrix.rustcomponents.sdk.SyncService
+import uniffi.matrix_sdk_base.MediaRetentionPolicy
+import java.time.Duration
 
 /**
  * [SocialSession] backed by matrix-rust-sdk — §11.6.
@@ -292,6 +296,58 @@ class RustSocialSession private constructor(
 
     override suspend fun setTyping(roomId: RoomId, typing: Boolean): Result<Unit> = ioCatching {
         roomListService.room(roomId.value).typingNotice(typing)
+    }
+
+    // ---- §12.5 storage -----------------------------------------------------
+
+    override suspend fun storeSizes(): Result<StoreUsage> = ioCatching {
+        val s = client.getStoreSizes()
+        // The SDK reports ULong. Every one of these is a byte count on a phone
+        // and cannot plausibly exceed Long.MAX_VALUE, but coerce rather than
+        // convert so a garbage value shows as a huge number instead of a
+        // negative one — a negative size renders as "-2.1 GB" and looks like a
+        // bug in the app rather than in the store.
+        StoreUsage(
+            // Each field is nullable: the SDK reports null for a store it has
+            // not opened, which is not the same as "empty" but renders the same
+            // and is the only honest thing to show before first sync.
+            stateBytes = s.stateStore.bytes(),
+            eventCacheBytes = s.eventCacheStore.bytes(),
+            mediaBytes = s.mediaStore.bytes(),
+            cryptoBytes = s.cryptoStore.bytes()
+        )
+    }
+
+    override suspend fun applyMediaRetention(policy: MediaRetention): Result<Unit> = ioCatching {
+        client.setMediaRetentionPolicy(
+            MediaRetentionPolicy(
+                // null = unlimited. The SDK models that as an absent cap, not
+                // as a very large number.
+                maxCacheSize = policy.maxCacheBytes?.toULong(),
+                maxFileSize = policy.maxFileBytes.toULong(),
+                lastAccessExpiry = Duration.ofDays(policy.lastAccessExpiryDays),
+                // Hourly. Cleanup walks the media store, so it is not free, and
+                // running it on every access would make scrolling a gallery
+                // pay for housekeeping.
+                cleanupFrequency = Duration.ofHours(1)
+            )
+        )
+    }
+
+    /**
+     * §12.5.2 — note what this does **not** do.
+     *
+     * `clearCaches` drops the state and event caches and cached media. It does
+     * not touch the crypto store: that is the SDK's behaviour and it is also
+     * the requirement (§12.5.1). Megolm keys are not regenerable and their loss
+     * is permanent, so "free up space" must never be able to reach them.
+     *
+     * Messages are not lost either — the event cache is a local copy and the
+     * homeserver still holds the events, so the timeline re-populates on the
+     * next sync. It does cost a re-download, which the settings copy says.
+     */
+    override suspend fun clearCaches(): Result<Unit> = ioCatching {
+        client.clearCaches(syncService)
     }
 
     private val typing = mutableMapOf<String, MutableStateFlow<List<String>>>()
@@ -670,3 +726,13 @@ class RustSocialSession private constructor(
         }
     }
 }
+
+
+/**
+ * ULong bytes to Long, defensively.
+ *
+ * Coerced rather than converted so a garbage value shows as a huge number
+ * instead of a negative one: a store size rendering as "-2.1 GB" reads as a bug
+ * in the app rather than in the store, and sends the user to the wrong place.
+ */
+private fun ULong?.bytes(): Long = (this ?: 0uL).toLong().coerceAtLeast(0)

@@ -83,6 +83,8 @@ class CreateAccountActivity : AppCompatActivity() {
             setPadding(dp(20), dp(28), dp(20), dp(20))
         }
         setContentView(ScrollView(this).apply { addView(root) })
+        // §14.10 — see Insets.kt.
+        root.padForSystemBars(dp(20), dp(24), dp(24))
         render()
     }
 

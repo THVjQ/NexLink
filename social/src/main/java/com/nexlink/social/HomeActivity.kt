@@ -57,11 +57,21 @@ class HomeActivity : AppCompatActivity() {
             setPadding(dp(20), dp(24), dp(20), dp(24))
         }
         setContentView(ScrollView(this).apply { addView(root) })
+        // §14.10 — see Insets.kt.
+        root.padForSystemBars(dp(20), dp(24), dp(24))
 
         val mgr = SessionProvider.manager(this)
 
         lifecycleScope.launch { mgr.state.collectLatest { state = it; render(); observeRooms() } }
-        lifecycleScope.launch { if (mgr.hasStoredSession) mgr.restore() }
+        lifecycleScope.launch {
+            if (mgr.hasStoredSession) mgr.restore()
+            // §12.5.2 — the media-cache limit lives in the SDK's store, and a
+            // client that has just been constructed starts from the SDK's
+            // default, not the user's choice. Re-applying on every session
+            // start is what makes the setting stick across restarts; setting it
+            // only when the user changes it would silently revert.
+            mgr.current()?.applyMediaRetention(StoragePrefs.retention(this@HomeActivity))
+        }
 
         // §13.4 — Android 13+ requires this at runtime. Asked for once, here,
         // because a messenger that cannot notify is not much of one.
@@ -130,6 +140,9 @@ class HomeActivity : AppCompatActivity() {
                 })
                 root.addView(button("Your devices") {
                     startActivity(DevicesActivity.intent(this))
+                })
+                root.addView(button("Storage") {
+                    startActivity(StorageActivity.intent(this))
                 })
                 root.addView(button("New conversation") {
                     startActivity(NewChatActivity.intent(this))
