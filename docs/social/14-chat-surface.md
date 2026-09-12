@@ -266,6 +266,82 @@ Not a late pass. Requirements:
 - Touch targets at least 48dp, including reaction chips, which are the most
   commonly undersized element in messaging apps.
 
+### 14.10.1 Audited 2026-09-12 — four failures, three of them invisible in dark mode
+
+Audited on hardware (SM-G990E, Android 16) with two tools written for it, both
+kept in `tools/`:
+
+- **`check-contrast.py`** computes WCAG ratios from the palette. Contrast is the
+  one requirement above that is fully decidable from source, so it should never
+  have been a judgement made by eye. It is now part of
+  `check-invariants.sh`.
+- **`a11y-audit.py`** walks the live uiautomator tree for touch-target sizes and
+  missing content descriptions. Neither is answerable from source: a `TextView`
+  with 12sp text and no `minHeight` measures 20dp no matter how the code reads.
+
+**1. The light theme failed AA on five colours.** The palette is mirrored from
+NexLink's, which is iOS-like and assumes dark mode; the development phone runs
+dark, so nobody had ever seen it.
+
+| colour | was | now | used for |
+|---|---|---|---|
+| `social_muted` | **2.92** | 4.83 | nearly every explanatory line in the app |
+| `social_accent` | **3.67** | 4.81 | Retry, Discard, the selected radio |
+| `social_danger` | **3.51** | 4.81 | "Not sent" on a failed message |
+| `social_cannot_see` | **3.92** | 4.81 | §9.6.1's left column |
+| `social_can_see` | **4.19** | 4.81 | §9.6.1's right column |
+
+Darkened in HSV so hue and saturation are unchanged. Targeted 4.8 rather than
+4.5 for headroom. The last two are at an **identical** ratio on purpose: §9.6.1
+requires the two columns to carry equal visual weight, and a contrast fix must
+not quietly make one louder than the other.
+
+`social_divider` is 1.53:1 and is **not** fixed. WCAG 1.4.11 covers what is
+needed to identify a component or state; a hairline between rows that are
+already separated by whitespace and bold labels identifies nothing. It stays
+listed in the tool's output as `info` rather than deleted, so the claim can be
+re-checked if a divider ever becomes load-bearing.
+
+**2. Reaction chips were 44 × 27 dp.** Exactly the element this section names by
+name. Padding does not reach 48dp at 14sp; the minimum has to be stated.
+
+**3. Reactions announced as "❤️ 1".** Now: *"❤️ reaction, 1 person, including
+you. Tap to remove."* The third clause is the one that is easy to omit and the
+most useful — reacting is a toggle (§14.4), so whether you are already in the
+list is what decides what tapping does. The emoji is passed through whole
+(§14.4.3) and named by the platform's own TTS, which is better localised than
+any table this app could carry.
+
+**4. The composer collapsed at large font sizes.** At font scale 1.8 the three
+buttons kept their minimum widths, the weight-1 input took what was left, and
+the hint "Message" wrapped to "Mes / sage" in a field too narrow to type in. A
+layout weight cannot help once the siblings' minimums exceed the row. Above 1.3
+the composer now stacks: input full-width on its own line, buttons beneath.
+
+> Capping the buttons' text size would have been the one-line fix, and it is
+> precisely the wrong one — it repairs the layout by undoing the accessibility
+> setting that exposed the problem.
+
+**Also fixed:** `☰` and `+` had no content descriptions ("People in this
+conversation", "Attach a photo or file"). A screen reader reads a glyph as
+punctuation or skips it, leaving the control unidentifiable.
+
+**Also found, and not an accessibility bug:** only 2 of 11 screens handled
+window insets, so titles sat under the status bar and the last row of a
+scrolling screen sat under the gesture bar — where it is both unreadable and
+**untappable**, because the gesture bar takes the touch. Fixed for all of them
+with `Insets.kt`; recorded here because the symptom presents as an
+accessibility failure even though the cause is layout.
+
+**One trap in `a11y-audit.py`, hit on first use:** uiautomator reports bounds
+*clipped to the viewport*, so a perfectly good 48dp control at the edge of a
+`ScrollView` is reported at its visible height — 19dp, in the case that caused
+the false alarm. Scroll each screen to the end before believing it.
+
+**Not verified:** screen-reader *order* through a long timeline, which needs
+TalkBack driven by hand, and contrast of text over image attachments, which
+depends on the image. Both recorded rather than claimed.
+
 ---
 
 ## 14.11 Open questions

@@ -61,21 +61,59 @@ class ConversationActivity : AppCompatActivity() {
         }
         root.addView(scroll)
 
+        // §14.10 — "Text scales with system font size without clipping".
+        //
+        // Measured at font scale 1.8 on a 1080px screen: the three buttons keep
+        // their minimum widths, the weight-1 input gets whatever is left, and
+        // the hint "Message" wrapped to "Mes / sage" in a field too narrow to
+        // type in. The input had a weight already; a weight cannot help when the
+        // siblings' minimums already exceed the row.
+        //
+        // Above 1.3 the row is given up on and the composer stacks: input on its
+        // own full-width line, buttons beneath. Capping the buttons' text size
+        // would have been the smaller change and is precisely the wrong one —
+        // it fixes the layout by undoing the accessibility setting that
+        // exposed it.
+        val stacked = resources.configuration.fontScale > 1.3f
         val composer = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
+            orientation = if (stacked) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
             setPadding(dp(12), dp(8), dp(12), dp(12))
-            gravity = Gravity.CENTER_VERTICAL
+            gravity = if (stacked) Gravity.START else Gravity.CENTER_VERTICAL
         }
         val input = EditText(this).apply {
             hint = "Message"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-            layoutParams = LinearLayout.LayoutParams(0, WRAP, 1f)
+            layoutParams =
+                if (stacked) LinearLayout.LayoutParams(MATCH, WRAP)
+                else LinearLayout.LayoutParams(0, WRAP, 1f)
         }
-        val people = Button(this).apply { text = "☰"; isAllCaps = false }
+        // §14.10 — "☰" and "+" are glyphs, not words. A screen reader reads them
+        // as punctuation or skips them, so the button is unidentifiable without
+        // sight. The visible label stays; the description is what is announced.
+        val people = Button(this).apply {
+            text = "☰"; isAllCaps = false
+            contentDescription = "People in this conversation"
+        }
         people.setOnClickListener { showParticipants() }
-        val attach = Button(this).apply { text = "+"; isAllCaps = false }
+        val attach = Button(this).apply {
+            text = "+"; isAllCaps = false
+            contentDescription = "Attach a photo or file"
+        }
         val send = Button(this).apply { text = "Send"; isAllCaps = false }
-        composer.addView(people); composer.addView(attach); composer.addView(input); composer.addView(send)
+        if (stacked) {
+            // Input first: at this font size it is the only thing that needs to
+            // be full width, and putting it on top keeps it next to the message
+            // it is replying to rather than below a row of buttons.
+            composer.addView(input)
+            composer.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(people); addView(attach); addView(send)
+            })
+        } else {
+            composer.addView(people); composer.addView(attach)
+            composer.addView(input); composer.addView(send)
+        }
         attach.setOnClickListener {
             androidx.appcompat.app.AlertDialog.Builder(this)
                 .setItems(arrayOf("Photo", "File")) { _, i ->
@@ -422,9 +460,42 @@ class ConversationActivity : AppCompatActivity() {
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 setTextColor(ContextCompat.getColor(this@ConversationActivity, UiR.color.social_text2))
                 setPadding(dp(8), dp(4), dp(8), dp(4))
+                // §14.10 — measured at 44 x 27 dp before this, which is exactly
+                // the failure that section predicts by name: "reaction chips,
+                // which are the most commonly undersized element in messaging
+                // apps". Padding alone does not get there at 14sp; the minimum
+                // has to be stated.
+                minWidth = dp(48)
+                minHeight = dp(48)
+                gravity = android.view.Gravity.CENTER
+                // §14.10 — "reactions announce as 'heart reaction, three
+                // people'". Without this a screen reader reads the raw label,
+                // "❤️ 1", which says neither what it is nor what tapping does.
+                contentDescription = reactionDescription(emoji, senders.size, item)
                 setOnClickListener { react(item, emoji) }
             })
         }
+    }
+
+    /**
+     * §14.10 — how a reaction chip announces itself.
+     *
+     * Three things a sighted user reads off the chip instantly and a screen
+     * reader user cannot: which emoji it is, how many people, and **whether one
+     * of them is you** — because that last one is what decides whether tapping
+     * adds or removes a reaction (§14.4's toggle). Leaving it out makes the
+     * control unpredictable for exactly the people who can least afford to
+     * discover it by trial.
+     *
+     * The emoji is passed through whole (§14.4.3); the platform's own
+     * text-to-speech names it, which is more reliable and better localised than
+     * any table this app could carry.
+     */
+    private fun reactionDescription(emoji: String, count: Int, item: TimelineItem): String {
+        val mine = item.reactions[emoji]?.any { it.value == myUserId() } == true
+        val people = if (count == 1) "1 person" else "$count people"
+        return "$emoji reaction, $people" + if (mine) ", including you. Tap to remove"
+            else ". Tap to add yours"
     }
 
     /**

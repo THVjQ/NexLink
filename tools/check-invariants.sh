@@ -110,6 +110,18 @@ else
   echo "$hits" | sed 's/^/          /'
 fi
 
+# ── WCAG AA contrast in both themes (§14.10) ────────────────────────────────
+# Mechanically decidable from the palette, so it should not be a judgement made
+# by eye. Added after the light theme was found failing on five colours — the
+# development phone runs dark, so nobody had ever looked.
+if python3 "$(dirname "$0")/check-contrast.py" >/tmp/contrast.$$ 2>&1; then
+  pass "WCAG AA contrast in both themes (§14.10)"
+else
+  bad "a colour pair is below WCAG AA — §14.10 requires it in BOTH themes:"
+  grep -E "FAIL|MISSING|\?\?\?\?" /tmp/contrast.$$ | sed 's/^/        /'
+fi
+rm -f /tmp/contrast.$$
+
 echo
 if [ "$fail" -eq 0 ]; then
   echo "All invariant checks passed."

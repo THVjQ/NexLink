@@ -8,20 +8,44 @@
   Prefixed `social_` so that if the two palettes ever DO land in one module, the
   merge is a rename rather than a silent collision.
 -->
+<!--
+  LIGHT THEME. Five colours here were darkened on 2026-09-12 because
+  tools/check-contrast.py found them below WCAG AA against social_bg — a §14.10
+  requirement that had never been checked. They were mirrored from NexLink's
+  iOS-like palette, which assumes a white background and a dark-mode-first user;
+  the phone this is developed on runs dark, so nobody saw it.
+
+  Measured before -> after, against #F2F2F7:
+
+    social_muted       2.92 -> 4.83   (the colour of nearly every explanatory line)
+    social_accent      3.67 -> 4.81
+    social_danger      3.51 -> 4.81
+    social_cannot_see  3.92 -> 4.81
+    social_can_see     4.19 -> 4.81
+
+  Darkened in HSV so hue and saturation are unchanged and the palette still
+  reads as the same family. Targeted 4.8 rather than 4.5 so a later nudge does
+  not silently drop below the line. The dark theme already passed and is
+  untouched.
+
+  social_cannot_see and social_can_see are deliberately at the SAME ratio: §9.6.1
+  requires the two columns to carry equal visual weight, and fixing contrast
+  must not quietly make one of them louder than the other.
+-->
 <resources>
     <color name="social_bg">#F2F2F7</color>
     <color name="social_surface">#FFFFFF</color>
     <color name="social_surface2">#F2F2F7</color>
     <color name="social_surface3">#E5E5EA</color>
-    <color name="social_accent">#0178FF</color>
+    <color name="social_accent">#0166DA</color>
     <color name="social_accent2">#4ca3ff</color>
     <color name="social_text">#000000</color>
     <color name="social_text2">#3C3C43</color>
-    <color name="social_muted">#8E8E93</color>
+    <color name="social_muted">#6A6A6E</color>
     <color name="social_divider">#C6C6C8</color>
-    <color name="social_danger">#E5484D</color>
+    <color name="social_danger">#BE3C40</color>
     <!-- §9.6.1 screen 2: the two columns carry equal visual weight, so these
          are deliberately the same saturation. Green-vs-red would editorialise. -->
-    <color name="social_cannot_see">#1F8A4C</color>
-    <color name="social_can_see">#B25E00</color>
+    <color name="social_cannot_see">#1C7A43</color>
+    <color name="social_can_see">#A45600</color>
 </resources>
