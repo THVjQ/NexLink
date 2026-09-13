@@ -54,7 +54,7 @@
 
 | # | Question | Lean | § |
 |---|---|---|---|
-| **Q44** | **Reactions are NOT encrypted** — the server sees which emoji, from whom, on which event. §9.6.1's screen does not mention it. Add a line to the "We can see" column, or stop using reactions in encrypted rooms? | **Add the line.** §9.6.1 already argues the honest version is the more trustworthy one, and dropping reactions contradicts §1.2 | §5.5 |
+| **Q44** | **Reactions are NOT encrypted** — the server sees which emoji, from whom, on which event. §9.6.1's screen does not mention it. Add a line to the "We can see" column, or stop using reactions in encrypted rooms? | **Add the line.** §9.6.1 already argues the honest version is the more trustworthy one, and dropping reactions contradicts §1.2 | §5.5 — **ANSWERED 2026-09-13: disclosed.** Encrypting reactions was asked for and is not available; see §9.6.1. |
 
 ---
 

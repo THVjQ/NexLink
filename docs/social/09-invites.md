@@ -154,11 +154,29 @@ overclaiming. Two columns, equal visual weight:
 >
 > **We can see**
 > Who you message, and when. How often, and roughly how much. Your IP address.
-> Which devices you use.
+> Which devices you use. **Which emoji you react with, and to whose message.**
 
 Overclaiming here — "we can't see anything" — is both false and, under
 consumer protection law, a misrepresentation. The honest version is also the
 more trustworthy one.
+
+**The reactions line was added 2026-09-13, answering Q44.** Matrix sends
+`m.reaction` unencrypted — verified against the live homeserver (§5.5) — so the
+emoji, who sent it and which event it targets are all readable by the operator.
+The message being reacted to stays encrypted.
+
+The operator's first instinct was to encrypt reactions instead. **That is not
+available**: encrypting relation events breaks the server-side aggregation that
+makes reactions renderable at all, and the alternatives were to drop reactions
+from encrypted rooms — which is every room — or to implement a non-standard
+encrypted-reaction scheme that no other client would understand and that this
+project would then own forever, the precise liability §11 exists to avoid.
+
+So the choice was between losing a feature the brief asked for by name
+("reactions like hearts etc") and disclosing a metadata leak. Disclosure won,
+which is the same conclusion this section reaches in general: **the honest
+version is the more trustworthy one, and it is the only one that survives
+someone checking.**
 
 **Screen 3 — Your data lives on your device**
 
