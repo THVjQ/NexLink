@@ -33,6 +33,26 @@ class FakeSocialSession(
 
     override fun rooms(): Flow<List<RoomSummary>> = _rooms.asStateFlow()
 
+    // ---- §13.3 push --------------------------------------------------------
+
+    /** Records the last registration so a test can assert it happened. */
+    var registeredPush: Triple<String, String, String>? = null
+        private set
+
+    override suspend fun registerPush(
+        pushToken: String,
+        appId: String,
+        gatewayUrl: String
+    ): Result<Unit> {
+        registeredPush = Triple(pushToken, appId, gatewayUrl)
+        return Result.success(Unit)
+    }
+
+    override suspend fun unregisterPush(pushToken: String, appId: String): Result<Unit> {
+        registeredPush = null
+        return Result.success(Unit)
+    }
+
     // ---- §12.5 storage -----------------------------------------------------
     //
     // Plausible numbers rather than zeroes: a storage screen that shows 0 B for

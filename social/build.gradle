@@ -5,6 +5,9 @@
 // is why a policy problem here cannot remove the user's SMS client and dialer
 // (§1.4.3).
 plugins {
+    // §13.3 — reads social/google-services.json, which is gitignored. The build
+    // must still work without it for anyone who clones this repo, so the plugin
+    // is applied conditionally below rather than here.
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
 }
@@ -92,6 +95,12 @@ dependencies {
     implementation project(':social-contract')
     implementation project(':social-rtc')     // §19 Telecom, §17 call state (phase 4)
 
+    // §13.3 — FCM. Confined to :social; nothing in :social-core or :app sees it,
+    // so §13.3.3's "abstracted enough that UnifiedPush is an addition rather
+    // than a rewrite" stays true.
+    implementation platform(libs.firebase.bom)
+    implementation libs.firebase.messaging
+
     implementation libs.androidx.core.ktx
     implementation libs.androidx.appcompat
     implementation libs.google.material
@@ -102,4 +111,37 @@ dependencies {
     androidTestImplementation libs.androidx.test.ext.junit
     androidTestImplementation 'androidx.test:runner:1.5.2'
     androidTestImplementation 'androidx.test:rules:1.5.0'
+}
+
+// §13.3 — apply the Google Services plugin only when EVERY variant has a client.
+//
+// google-services.json is gitignored (this repository is public), so a clean
+// clone has no copy at all. And the file the operator downloads covers only the
+// packages registered in Firebase: with the release package registered and
+// `.debug` not, `assembleDebug` fails with
+//
+//   No matching client found for package name 'com.thvjq.nexlink.social.debug'
+//
+// which would leave the debug variant unbuildable — and the debug variant is
+// what everything else in this repo is tested against, including §8.4's
+// two-device verification, which needs debug and release installed together.
+//
+// So the plugin is applied only when the config covers both applicationIds.
+// Push is a feature that is absent without it; the build is not a casualty.
+def gsFile = file('google-services.json')
+def gsCovers = { ->
+    if (!gsFile.exists()) return false
+    def json = new groovy.json.JsonSlurper().parse(gsFile)
+    def packages = json.client.collect { it.client_info.android_client_info.package_name }
+    return packages.contains('com.thvjq.nexlink.social') &&
+           packages.contains('com.thvjq.nexlink.social.debug')
+}
+
+if (gsCovers()) {
+    apply plugin: 'com.google.gms.google-services'
+} else if (gsFile.exists()) {
+    logger.lifecycle(":social — google-services.json does not cover both debug and release; " +
+                     "building WITHOUT push (§13.3). Add com.thvjq.nexlink.social.debug in Firebase.")
+} else {
+    logger.lifecycle(":social — no google-services.json, building without push (§13.3)")
 }

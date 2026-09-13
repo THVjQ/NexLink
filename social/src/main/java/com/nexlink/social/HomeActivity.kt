@@ -19,6 +19,7 @@ import com.nexlink.social.ui.onboarding.AcceptanceGateActivity
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import com.nexlink.social.ui.R as UiR
+import com.nexlink.social.push.PushRegistration
 
 /**
  * The inbox — §14.
@@ -63,7 +64,21 @@ class HomeActivity : AppCompatActivity() {
 
         val mgr = SessionProvider.manager(this)
 
-        lifecycleScope.launch { mgr.state.collectLatest { state = it; render(); observeRooms() } }
+        lifecycleScope.launch {
+            mgr.state.collectLatest {
+                state = it
+                render()
+                observeRooms()
+                // §13.3 — register push when the session BECOMES signed in.
+                //
+                // The first version did this once in onCreate, which is wrong
+                // in the commonest case: HomeActivity is created before the
+                // user signs in, so the call ran against no session and never
+                // ran again. The symptom was silent — the app worked, and push
+                // simply never arrived.
+                if (it is SessionState.SignedIn) ensurePushRegistered()
+            }
+        }
         lifecycleScope.launch {
             if (mgr.hasStoredSession) mgr.restore()
             // §12.5.2 — the media-cache limit lives in the SDK's store, and a
@@ -72,6 +87,7 @@ class HomeActivity : AppCompatActivity() {
             // start is what makes the setting stick across restarts; setting it
             // only when the user changes it would silently revert.
             mgr.current()?.applyMediaRetention(StoragePrefs.retention(this@HomeActivity))
+
         }
 
         // §13.4 — Android 13+ requires this at runtime. Asked for once, here,
@@ -91,6 +107,29 @@ class HomeActivity : AppCompatActivity() {
         val s = SessionProvider.manager(this).current() ?: return
         watching = true
         lifecycleScope.launch { s.rooms().collectLatest { rooms = it; render() } }
+    }
+
+    /** Guard so a re-emitted SignedIn state does not re-register on every render. */
+    private var pushRegistered = false
+
+    /**
+     * §13.3 — idempotent by design.
+     *
+     * `append = false` replaces the pusher for this pushkey rather than
+     * accumulating duplicates, so calling this more than once is harmless. The
+     * guard exists only to avoid a network call per state emission.
+     */
+    private fun ensurePushRegistered() {
+        if (pushRegistered) return
+        pushRegistered = true
+        lifecycleScope.launch {
+            val ok = runCatching { PushRegistration.register(this@HomeActivity) }
+                .getOrDefault(false)
+            // Allow a retry on the next state change if it did not take —
+            // otherwise a transient failure disables push for the process
+            // lifetime and nothing ever says so.
+            if (!ok) pushRegistered = false
+        }
     }
 
     private fun render() {
@@ -147,6 +186,11 @@ class HomeActivity : AppCompatActivity() {
                 root.addView(gap(8))
                 root.addView(button("Sign out") {
                     lifecycleScope.launch {
+                        // §32.3 — stop push BEFORE the session goes, while the
+                        // access token still exists. Signing out first leaves
+                        // the pusher registered and the homeserver notifying a
+                        // device that can no longer read anything.
+                        runCatching { PushRegistration.unregister(this@HomeActivity) }
                         SessionProvider.manager(this@HomeActivity).signOut()
                         rooms = emptyList(); watching = false; render()
                     }

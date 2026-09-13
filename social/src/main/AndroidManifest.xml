@@ -88,6 +88,16 @@
             android:exported="false"
             android:label="@string/app_name" />
 
+        <!-- §13.3 — FCM receiver. exported=false; FCM binds it through the
+             Play Services permission, not through an exported component. -->
+        <service
+            android:name=".push.SocialPushService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <activity
             android:name=".VerifyActivity"
             android:exported="false"

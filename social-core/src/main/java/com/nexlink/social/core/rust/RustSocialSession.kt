@@ -35,6 +35,10 @@ import org.matrix.rustcomponents.sdk.SqliteStoreBuilder
 import org.matrix.rustcomponents.sdk.SlidingSyncVersionBuilder
 import com.nexlink.social.core.session.MediaRetention
 import com.nexlink.social.core.session.StoreUsage
+import org.matrix.rustcomponents.sdk.HttpPusherData
+import org.matrix.rustcomponents.sdk.PushFormat
+import org.matrix.rustcomponents.sdk.PusherIdentifiers
+import org.matrix.rustcomponents.sdk.PusherKind
 import org.matrix.rustcomponents.sdk.SyncService
 import uniffi.matrix_sdk_base.MediaRetentionPolicy
 import java.time.Duration
@@ -321,6 +325,40 @@ class RustSocialSession private constructor(
     override suspend fun setTyping(roomId: RoomId, typing: Boolean): Result<Unit> = ioCatching {
         roomListService.room(roomId.value).typingNotice(typing)
     }
+
+    // ---- §13.3 push --------------------------------------------------------
+
+    override suspend fun registerPush(
+        pushToken: String,
+        appId: String,
+        gatewayUrl: String
+    ): Result<Unit> = ioCatching {
+        client.setPusher(
+            identifiers = PusherIdentifiers(pushkey = pushToken, appId = appId),
+            kind = PusherKind.Http(
+                HttpPusherData(
+                    url = gatewayUrl,
+                    // EventIdOnly is the point, not an optimisation. §13.3.1:
+                    // "The homeserver never sends content to the gateway for an
+                    // encrypted room. The push carries an event ID and a room
+                    // ID at most." Choosing the richer format would hand the
+                    // gateway and FCM exactly what §2.8 #1 exists to withhold.
+                    format = PushFormat.EVENT_ID_ONLY,
+                    defaultPayload = null
+                )
+            ),
+            appDisplayName = "NexLink Social",
+            deviceDisplayName = android.os.Build.MODEL ?: "Android",
+            profileTag = "",
+            lang = "en",
+            append = false
+        )
+    }
+
+    override suspend fun unregisterPush(pushToken: String, appId: String): Result<Unit> =
+        ioCatching {
+            client.deletePusher(PusherIdentifiers(pushkey = pushToken, appId = appId))
+        }
 
     // ---- §12.5 storage -----------------------------------------------------
 

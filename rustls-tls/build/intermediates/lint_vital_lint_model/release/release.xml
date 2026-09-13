@@ -26,6 +26,6 @@
       applicationId="org.rustls.platformverifier"
       generatedSourceFolders="build/generated/ap_generated_sources/release/out:build/generated/source/buildConfig/release"
       generatedResourceFolders="build/generated/res/resValues/release"
-      desugaredMethodsFiles="/home/Luca-Reifler/.gradle/caches/transforms-3/e9d29a06039d58e5a153f337b294c9fd/transformed/D8BackportedDesugaredMethods.txt">
+      desugaredMethodsFiles="/home/Luca-Reifler/.gradle/caches/transforms-3/aba775e06976184530e5ab0b76dc2edd/transformed/D8BackportedDesugaredMethods.txt">
   </artifact>
 </variant>

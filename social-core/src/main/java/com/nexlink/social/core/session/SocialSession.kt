@@ -179,6 +179,27 @@ interface SocialSession {
     suspend fun applyMediaRetention(policy: MediaRetention): Result<Unit>
 
     /**
+     * §13.3 — tell the homeserver where to send push for this device.
+     *
+     * [pushToken] is the FCM registration token. It is an opaque routing
+     * address, not a secret, but it identifies the device to a third party and
+     * so is never logged (§27.5.1).
+     *
+     * Deliberately expressed in terms the application chooses rather than
+     * FCM's: §13.3.3 asks for push to be "abstracted enough that UnifiedPush is
+     * an addition rather than a rewrite", and nothing in this signature names
+     * Google.
+     */
+    suspend fun registerPush(
+        pushToken: String,
+        appId: String,
+        gatewayUrl: String
+    ): Result<Unit>
+
+    /** §32.3 — sign-out must stop push, or the device keeps being notified. */
+    suspend fun unregisterPush(pushToken: String, appId: String): Result<Unit>
+
+    /**
      * §12.5.2 — "Clear cache". Drops cached media and the local event cache.
      *
      * **Does not touch the crypto store**, which is the whole point: Megolm

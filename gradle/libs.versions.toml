@@ -36,6 +36,10 @@ securityCrypto  = "1.1.0-alpha06"
 okhttp          = "4.12.0"
 
 [libraries]
+# §13.3 — push. The BOM pins the whole Firebase family to one tested set, which
+# matters because messaging pulls in play-services-basement and friends.
+firebase-bom = { module = "com.google.firebase:firebase-bom", version = "33.5.1" }
+firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
 androidx-core-ktx        = { module = "androidx.core:core-ktx",                       version.ref = "coreKtx" }
 androidx-appcompat       = { module = "androidx.appcompat:appcompat",                 version.ref = "appcompat" }
 androidx-constraintlayout = { module = "androidx.constraintlayout:constraintlayout",  version.ref = "constraintlayout" }

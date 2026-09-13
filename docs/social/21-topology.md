@@ -252,7 +252,7 @@ that was already the largest open risk on the appliance.
 | Federation listener (8448) | §21.3 |
 | An identity server | §1.3 |
 | A TURN server on Willard | §17.4. It would advertise an unroutable address. |
-| Sygnal (push gateway) | FCM direct is the phase-3 default (§13.3.3). Revisit only if UnifiedPush becomes a requirement. |
+| ~~Sygnal (push gateway)~~ | **WRONG — corrected 2026-09-13. Sygnal IS deployed** (app `nexlink-social-push`, port 8062). "FCM direct" is not implementable: Synapse ships only `emailpusher` and `httppusher`, so it cannot reach FCM at all. See §13.3.4. |
 | Redis | Only needed for workers. |
 | Object storage for media | §25.3. Filesystem on a replicated pool, until the pool is the constraint. |
 

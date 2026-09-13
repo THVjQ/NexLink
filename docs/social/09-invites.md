@@ -155,6 +155,8 @@ overclaiming. Two columns, equal visual weight:
 > **We can see**
 > Who you message, and when. How often, and roughly how much. Your IP address.
 > Which devices you use. **Which emoji you react with, and to whose message.**
+> **That a message arrived for you, and when** — Google's push service is told
+> this, though never what the message says (§13.3.3).
 
 Overclaiming here — "we can't see anything" — is both false and, under
 consumer protection law, a misrepresentation. The honest version is also the

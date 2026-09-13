@@ -96,6 +96,75 @@ most do not mention it.
 
 ---
 
+## 13.3.4 Built and verified 2026-09-13
+
+End to end on hardware: a message sent from another account produced a
+notification reading **"sender205427: Third push test — …"** on a phone whose
+app process had been killed. Real sender, decrypted body, ~8 seconds. Not the
+fallback — §13.3.2's full resolve path.
+
+**§21.7 was wrong and is corrected.** It listed Sygnal as deliberately not
+deployed because *"FCM direct is the phase-3 default"*. Synapse cannot talk to
+FCM: it ships `emailpusher` and `httppusher` and nothing else — verified by
+listing `synapse/push/` inside the container. A Matrix push gateway is
+mandatory, not a matter of preference. Sygnal runs as TrueNAS app
+`nexlink-social-push` on port 8062.
+
+Sygnal rather than a hand-rolled gateway because FCM v1 needs OAuth2 with a
+signed service-account assertion. That is protocol-adjacent code this project
+would then own — §11's argument, applied to push.
+
+The pusher registers with `PushFormat.EVENT_ID_ONLY`, so the payload is a room
+id and an event id and nothing else. The notification's text comes from the
+local store after decryption, never from the server.
+
+### Three failures, each invisible from the code
+
+**1. Synapse refuses to talk to its own push gateway.**
+
+```
+synapse.http.client: Blocking access to 192.168.0.10
+SynapseError 403: IP address blocked
+```
+
+Synapse blocks outbound requests to private addresses by default — SSRF
+protection, and a good default. Fixed with an `ip_range_whitelist` of a **single
+/32**, not the RFC1918 range: the blacklist exists to stop a malicious pusher
+URL turning the homeserver into a probe of the local network, and opening
+192.168.0.0/16 would hand that straight back.
+
+**2. A cold push had no session, and the handler reacted by destroying push.**
+
+FCM revives a killed process to deliver, so nothing has run `restore()` and
+`current()` is null even though credentials are on disk. The first version read
+that as "signed out" and called `unregister` — **one cold delivery would have
+disabled push permanently**, and the symptom would have been "push worked for a
+day and then stopped". It survived only because `unregister` also needs a
+session and quietly did nothing.
+
+The handler now restores the session, which is the entire point of being woken:
+§13.3.1's chain is *wake, sync, decrypt, notify*, and this is the wake. It no
+longer unregisters from a push handler at all — that is the wrong place to make
+a destructive change to server state that nobody will observe.
+
+**3. Registration ran once, before there was anything to register.**
+
+It was called from `onCreate`, and `HomeActivity` is created *before* the user
+signs in. So it ran against a null session and never ran again. Now driven by
+the session state reaching `SignedIn`, with a retry if it fails — a transient
+failure must not disable push for the process lifetime with nothing said.
+
+### Outstanding
+
+`google-services.json` covers only the release package. Until
+`com.thvjq.nexlink.social.debug` is registered in Firebase, the build applies
+the plugin to **neither** variant and logs why — because the debug variant is
+what the rest of this repository is tested against, including §8.4's two-device
+verification, and an unbuildable debug variant is a worse outcome than absent
+push.
+
+---
+
 ## 13.4 Notifications
 
 ### 13.4.1 Requirements

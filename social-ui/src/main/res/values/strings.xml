@@ -46,7 +46,7 @@
          m.reaction unencrypted (§5.5, proven against the live server), so the
          emoji, the sender and the target event are all readable. Leaving it off
          would have made this screen the overclaim it exists to avoid. -->
-    <string name="gate2_can_items">Who you message, and when\nHow often, and roughly how much\nYour IP address\nWhich devices you use\nWhich emoji you react with, and to whose message</string>
+    <string name="gate2_can_items">Who you message, and when\nHow often, and roughly how much\nYour IP address\nWhich devices you use\nWhich emoji you react with, and to whose message\nThat a message arrived for you, and when — Google\'s push service is told this, though never what the message says</string>
     <string name="gate2_footer">We are telling you the right-hand column because it is true. Any app that tells you it can see nothing at all is not being straight with you.</string>
 
     <!-- ── Screen 3: Your data lives on your device ───────────────────── -->
