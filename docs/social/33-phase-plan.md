@@ -551,7 +551,7 @@ This phase proves it or falsifies it, and the whole D1 argument rests on it.
 |---|---|
 | Goal | Voice, video, groups and screen share. |
 | Estimate | 4–8 weeks, **preceded by a 5-day spike** (§17.6.1) |
-| Blocked by | Phase 3, and the **first recurring cost** — the VPS (§24.2) |
+| Blocked by | Phase 3. ~~The first recurring cost — the VPS~~ — **no longer true as of 2026-09-13: §24.1.1 takes a free hosted SFU, and the VPS is deferred until the free tier is outgrown.** |
 
 **Work:** provision the VPS, LiveKit and coturn (§24); lk-jwt-service on Willard;
 Synapse's MatrixRTC configuration (§17.3.1); `:social-rtc`; the §17.6 decision;

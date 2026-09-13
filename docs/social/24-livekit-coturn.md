@@ -30,6 +30,89 @@ The connect-but-silent failure in row one is worth internalising. **If calls
 connect and nobody can hear anything, check ICE candidates before anything
 else.**
 
+### 24.1.1 A fifth option, taken 2026-09-13: a hosted SFU
+
+The table above is right about every attempt to make *Willard* serve media. It
+asks the wrong question. The constraint is not "Willard must host the SFU" — it
+is "the SFU must be reachable". Those are different, and the second one can be
+satisfied by someone else's box.
+
+**The `.well-known` detail that makes this work.** MatrixRTC's focus config
+points at the **JWT service**, not the SFU:
+
+```json
+"org.matrix.msc4143.rtc_foci": [
+  { "type": "livekit", "livekit_service_url": "https://.../livekit/jwt" }
+]
+```
+
+`lk-jwt-service` is plain HTTP. Cloudflare Tunnel carries it perfectly — it is
+the media path that cannot traverse a tunnel, and the JWT service is not on it.
+So the split is:
+
+| Component | Where | Reachability |
+|---|---|---|
+| Synapse, media repo, Element Web | Willard | HTTP via tunnel — already live |
+| `lk-jwt-service` | Willard | HTTP via tunnel |
+| **LiveKit SFU** | **LiveKit Cloud** | Theirs, and routable |
+
+**Cost: nothing.** LiveKit Cloud's Build tier is permanently free — 5,000 WebRTC
+minutes per month, 50 GB egress, 100 concurrent connections. Minutes are counted
+**per participant**, so a four-person half-hour call costs 120 of them: roughly
+41 hours of 1:1 calling a month, or ~41 four-person half-hour calls.
+
+**What this changes about phase 4.** §33.5 lists the phase as blocked by "the
+first recurring cost". It is not, any more. The §17.6.1 spike — 1:1, a third
+participant on Element Web, screen share, E2EE key rotation — fits inside the
+free tier with room to spare. The decision that gates phase 4 can now be made
+before any money is spent.
+
+**Why this is better than buying the VPS first**, rather than merely cheaper:
+the VPS moves from *pay before knowing whether calling works* to *pay because
+calling works and people are using it*. If §17.6 resolves badly, or calling
+turns out not to matter to this product, nothing was spent.
+
+#### What it costs that is not money
+
+Three things, recorded because they are the reasons this might later be undone:
+
+1. **A third party carries the media.** §17.5's E2EE means LiveKit sees
+   ciphertext, not conversations. But **metadata is visible to them** — who was
+   in a call, when, and for how long. That is a §9.6.1 disclosure line by the
+   same standard as Q44, and it must be on the "We can see" side of the wall
+   before anyone but the operator uses calling.
+2. **No confirmed Australian region.** §24.2 is emphatic that media latency is
+   the quality metric users actually feel. LiveKit advertises a global edge and
+   probably terminates in Sydney; **unverified**, and it should be measured
+   during the spike rather than assumed.
+3. **The free tier is documented as being for development.** No SLA. For an
+   invite-only product whose operator is also its first support channel that is
+   an acceptable risk; it stops being acceptable at the point §33.7's private
+   launch has real users depending on calls.
+
+#### The economics invert later, and that is the trigger to revisit
+
+| | monthly |
+|---|---|
+| LiveKit Cloud Build | **free** |
+| LiveKit Cloud Ship (next tier up) | **$50** |
+| The §24.2 VPS | **$10–15** |
+
+So the moment the free tier is outgrown, self-hosting becomes the *cheap*
+option, not the expensive one. **The trigger to provision the VPS is exceeding
+the free tier, not reaching phase 4** — and by then the §29.6 rebuild runbook
+has a working configuration to describe rather than a hypothetical one.
+
+#### Cloudflare specifically, since it is the obvious thing to ask
+
+| Product | Why not |
+|---|---|
+| Tunnel | The table above. Media does not traverse it. |
+| Realtime **SFU** | Not LiveKit-compatible. Deliberately unopinionated — no rooms concept, just Sessions and Tracks in a pub/sub model. MatrixRTC's focus type is `livekit` and Element Call speaks LiveKit's protocol, so adopting it means implementing a new focus, which is protocol work on a moving target — the exact liability §17.6 leans away from. |
+| Realtime **TURN** | Free only alongside their own SFU, and it does not address the problem: TURN relays a client that cannot reach a **reachable** server. The unreachable thing here is the server. |
+
+---
+
 ---
 
 ## 24.2 The VPS
