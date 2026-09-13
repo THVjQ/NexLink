@@ -114,8 +114,18 @@ class SocialSessionManager(private val context: Context) {
         key
     }
 
+    /**
+     * The FULL MXID, `@user:server` — not the localpart.
+     *
+     * This stripped the sigil and the server before, and the SDK's
+     * user-interactive auth rejects that with
+     * `MissingLeadingSigil`. It had never fired in the recovery flow because
+     * `resetIdentity()` usually returns null there and the call that needs the
+     * identifier is never reached — so the bug sat behind a path that normally
+     * does nothing. §8.4's verification hits it immediately.
+     */
     private fun currentUserId(): String =
-        (_state.value as? SessionState.SignedIn)?.userId?.value?.substringAfter('@')?.substringBefore(':')
+        (_state.value as? SessionState.SignedIn)?.userId?.value
             ?: error("not signed in")
 
     /**

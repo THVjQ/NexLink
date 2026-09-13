@@ -738,9 +738,22 @@ class RustSocialSession private constructor(
      * so the user's password is required; that is the platform's rule, not a
      * design choice, and §8.6 hits the same requirement for device deletion.
      */
-    suspend fun bootstrapCrossSigning(username: String, password: String) = io {
-        val handle = client.encryption().resetIdentity() ?: return@io
+    suspend fun bootstrapCrossSigning(username: String, password: String): Boolean = io {
+        // A null handle means the SDK sees no reset to perform — usually because
+        // an identity already exists. That is a legitimate outcome and it is
+        // returned rather than swallowed.
+        //
+        // The previous version was `?: return@io`, which made "an identity was
+        // created", "one already existed" and "this silently did nothing"
+        // indistinguishable to the caller. §7.4.4 exists because a missing
+        // cross-signing identity fails LATER and invisibly — a new device reads
+        // nothing, forever, with no error — so this is precisely the place not
+        // to discard the answer.
+        val handle = client.encryption().resetIdentity() ?: return@io false
+        // `username` must be the full MXID. A localpart is rejected with
+        // MissingLeadingSigil.
         handle.reset(AuthData.Password(AuthDataPasswordDetails(username, password)))
+        true
     }
 
     companion object {

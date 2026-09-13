@@ -334,7 +334,7 @@ Work done so far, all of it without a device:
 | Step 3: send encrypted | Sent; the test's assertion was wrong (§11.7.4) |
 | **Step 4: cross-signing + recovery key — the gate** | **PASS** |
 | Step 6: history restore from key backup | **PASS** — `RecoveryRestoreTest` |
-| **Step 5: second-device verification** | **Partial — see §33.3.2.** Implemented; the SAS handshake stalls on the test rig |
+| **Step 5: second-device verification** | **PASS 2026-09-13** — see §33.3.3 |
 | Step 7: multi-code-point reaction | **PASS** |
 
 ### 33.3.2 Step 5 — implemented, not yet completed end to end (2026-09-12)
@@ -359,6 +359,9 @@ complete.** The next attempt should use Element Web as the second device, which
 is what §33.3.1 said in the first place: it runs on another machine, syncs
 continuously, and is the reference implementation, so a failure there is a real
 failure rather than an artefact of two apps fighting over one foreground.
+
+> **Resolved 2026-09-13 — see §33.3.3. Step 5 passes and phase 2 is complete.**
+> The diagnosis below was right: the rig was the problem, not the code.
 
 **Three real bugs were found getting this far, and they are the return on the
 attempt even though the step did not pass:**
@@ -397,6 +400,53 @@ unconditionally made both send `.start` — observed as four `.start` events per
 attempt — and the handshake stalled with both sides showing "connecting" and no
 error. Nothing in the SDK's API tells you which side you are on; it is knowable
 only from which call you made.
+
+### 33.3.3 Step 5 — PASS, 2026-09-13
+
+`DeviceVerificationTest`, on hardware, against the live homeserver. Two devices
+requested, accepted, exchanged SAS, showed **the same seven emoji**, and both
+reached `Verified`. The server confirms it was real rather than a UI state
+change: `e2e_cross_signing_signatures` gained a row.
+
+**The rig, not the code.** §33.3.2 suspected the two-apps-on-one-phone setup and
+that was correct — only one app can be foreground, so whichever side was
+backgrounded stopped syncing, and SAS needs several round trips with both ends
+responsive. The fix was **two SDK clients inside one instrumentation process**,
+both syncing for the whole test. That is a better rig than Element Web would
+have been: it removes the failing variable while testing exactly the code that
+ships, and it is repeatable in CI.
+
+The emoji-equality assertion is the real content of the test. SAS's entire
+security property is that both devices independently derive the *same* short
+string; if they differed a user would reject a legitimate device, and if they
+were constant the check would be theatre.
+
+**Two production bugs found on the way, neither in verification itself:**
+
+1. **`currentUserId()` returned a bare localpart** where the SDK's
+   user-interactive auth requires a full MXID, and rejects anything else with
+   `MissingLeadingSigil`. It had never fired in the recovery flow because
+   `resetIdentity()` usually returns null there and the call needing the
+   identifier is never reached — the bug sat behind a path that normally does
+   nothing. §8.4 hits it on the first attempt.
+
+2. **`bootstrapCrossSigning` silently no-opped.** It was
+   `client.encryption().resetIdentity() ?: return@io`, which made "an identity
+   was created", "one already existed" and "this did nothing" indistinguishable
+   to the caller. §7.4.4 exists precisely because a missing cross-signing
+   identity fails *later and invisibly* — a new device reads nothing, forever,
+   with no error — so discarding that answer was the wrong thing to do. It now
+   returns whether it acted.
+
+**A precondition worth stating plainly, because the error does not say it:**
+verification is impossible without a cross-signing identity, and the failure is
+`ClientException$Generic: Failed retrieving user identity` — which names neither
+cross-signing nor the fix. The same message appears when the identity *exists*
+but the requesting client has not synced it yet, so the two cases are
+indistinguishable from the message alone. The test retries rather than treating
+the first failure as fatal; an app should do the same.
+
+---
 
 **API friction (a §11.7.1 measure), recorded while it is fresh:** the API shape
 was derived by running `javap` over the published AAR, and the implementation
