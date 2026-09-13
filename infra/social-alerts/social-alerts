@@ -1,0 +1,234 @@
+#!/usr/bin/env python3
+"""
+NexLink Social — the five alerts. docs/social/27-observability.md §27.3.
+
+§27.3 is emphatic that the list is short on purpose: *"an alert that fires and
+is ignored has trained the operator to ignore alerts."* So this sends on
+TRANSITION only — when a check goes OK→FIRING, and again when it recovers. A
+condition that stays broken does not re-send every run.
+
+  social-alerts run      # check everything, mail on transitions
+  social-alerts status   # print current state, send nothing
+  social-alerts test N   # force alert N to fire once, to prove delivery
+
+Alert 5 (certificate expiry) is VPS-only and there is no VPS: §24.1.1 took a
+hosted SFU instead. It is present and reports NOT_APPLICABLE rather than being
+deleted, so that the count stays five and the reason stays visible.
+"""
+import json, os, re, subprocess, sys, time, urllib.error, urllib.request
+
+STATE = "/mnt/Pool1-MAIN/social/alerts-state.json"
+HS_PUBLIC = "https://nexlink.thvjq.com.au"
+BACKUP_STATUS = "/mnt/Pool1-MAIN/social/backups/last-run.status"
+MEDIA_DATASET = "Pool1-MAIN/social/media"
+SYNAPSE_CONTAINER = "ix-nexlink-social-social-synapse-1"
+
+# Identifies the monitor in the homeserver's access log, and gets past the WAF
+# rule that rejects Python's default agent — see check_homeserver.
+USER_AGENT = "NexLink-Social-Monitor/1.0 (+willard)"
+
+BACKUP_MAX_AGE_H = 30          # §27.3
+MEDIA_WARN_PCT = 80            # §27.3
+INVITE_FAIL_THRESHOLD = 12     # §27.3.1 — "a dozen failures in an hour"
+INVITE_WINDOW = "60m"
+
+
+def sh(args, timeout=60):
+    try:
+        r = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+        return r.returncode, r.stdout.strip(), r.stderr.strip()
+    except Exception as e:
+        return 1, "", str(e)
+
+
+# ── the checks ──────────────────────────────────────────────────────────────
+# Each returns (ok: bool|None, detail: str). None means "not applicable".
+
+def check_homeserver():
+    """
+    §27.3 — "fails twice, 2 min apart". The two probes are in ONE run rather
+    than across runs, because a check that needs two scheduled runs to decide
+    cannot distinguish "down" from "the alerting host just rebooted".
+    """
+    def probe():
+        try:
+            # The User-Agent is load-bearing, not politeness.
+            #
+            # Cloudflare's WAF answers **403 to `Python-urllib`** and 200 to the
+            # same request with a normal agent — measured on this host. The
+            # first version of this check used urllib's default and reported the
+            # homeserver down while it was serving traffic perfectly.
+            #
+            # A permanently-false "homeserver down" is the worst possible alert:
+            # §27.3 opens by saying an alert that fires and is ignored has
+            # trained the operator to ignore alerts, and this one would have
+            # done that on its first day.
+            req = urllib.request.Request(
+                HS_PUBLIC + "/_matrix/client/versions",
+                headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                return r.status == 200
+        except Exception:
+            return False
+
+    if probe():
+        return True, "responds"
+    time.sleep(120)
+    if probe():
+        # One failure is a blip, not an outage. §27.3 asks for two.
+        return True, "one failed probe, second succeeded"
+    return False, "no response to /_matrix/client/versions on two probes 2 min apart"
+
+
+def check_backup():
+    """§27.3 — not result=OK, or older than 30h. 'WARN is not success.'"""
+    if not os.path.exists(BACKUP_STATUS):
+        return False, f"{BACKUP_STATUS} does not exist — the backup has never run"
+    age_h = (time.time() - os.path.getmtime(BACKUP_STATUS)) / 3600
+    body = open(BACKUP_STATUS).read().strip()
+    if age_h > BACKUP_MAX_AGE_H:
+        return False, f"last run was {age_h:.1f}h ago (limit {BACKUP_MAX_AGE_H}h): {body}"
+    if "result=OK" not in body:
+        return False, f"last run did not report OK: {body}"
+    return True, f"{body} ({age_h:.1f}h ago)"
+
+
+def check_media_quota():
+    """§27.3 — the media dataset against its quota (§25.5)."""
+    rc, out, err = sh(["zfs", "list", "-Hp", "-o", "used,quota", MEDIA_DATASET])
+    if rc != 0:
+        return False, f"cannot read {MEDIA_DATASET}: {err}"
+    used, quota = out.split()
+    used, quota = int(used), int(quota)
+    if quota == 0:
+        # No quota means no blast-radius protection at all (§21.8) — worse than
+        # a full dataset, and silent. Report it rather than dividing by zero.
+        return False, f"{MEDIA_DATASET} has NO quota set — §25.5 requires one"
+    pct = used * 100.0 / quota
+    if pct >= MEDIA_WARN_PCT:
+        return False, f"{pct:.1f}% of quota used ({used/1e9:.2f}G of {quota/1e9:.0f}G)"
+    return True, f"{pct:.1f}% of quota ({used/1e9:.2f}G of {quota/1e9:.0f}G)"
+
+
+def check_invite_failures():
+    """
+    §27.3.1 — the abuse signal, and the only one that is not infrastructure.
+
+    Counts 401s on POST /_matrix/client/v3/register in the last hour. That is a
+    failed registration-token attempt and nothing else produces it.
+
+    This alert carries more weight than it looks, because **the endpoint is not
+    rate limited**. Measured 2026-09-13: `rc_registration` is configured with
+    burst_count 3 and the dedicated validity endpoint does throttle (429 after
+    three), but twenty consecutive bad-token attempts through the UIA path all
+    returned 401 with no throttling at all. So nothing slows a campaign down
+    except someone noticing, and this is the noticing.
+    """
+    # Synapse writes its access log to STDERR, so `out` alone is empty and the
+    # check silently reported zero failures while 57 were sitting in the log.
+    # Measured: `docker logs 2>/dev/null | grep -c` gives 0, `2>&1` gives 57.
+    rc, out, err = sh(["docker", "logs", "--since", INVITE_WINDOW, SYNAPSE_CONTAINER],
+                      timeout=120)
+    if rc != 0:
+        return False, f"cannot read synapse logs: {err[:200]}"
+    n = len(re.findall(r'401 "POST /_matrix/client/v3/register', out + "\n" + err))
+    if n >= INVITE_FAIL_THRESHOLD:
+        return False, (f"{n} failed invite redemptions in the last hour "
+                       f"(threshold {INVITE_FAIL_THRESHOLD}). §9.7: codes are being "
+                       "guessed, or one has leaked. The endpoint is NOT rate limited.")
+    return True, f"{n} failed redemptions in the last hour"
+
+
+def check_cert_expiry():
+    """§27.3 — VPS only, and §24.1.1 means there is no VPS."""
+    return None, "no VPS — §24.1.1 uses a hosted SFU, so there is no certificate to expire"
+
+
+CHECKS = [
+    ("homeserver_down", "Homeserver down", check_homeserver),
+    ("backup_failed", "Backup failed", check_backup),
+    ("media_quota", "Media store >= 80%", check_media_quota),
+    ("invite_failures", "Invite redemption failures spiking", check_invite_failures),
+    ("cert_expiry", "Certificate expiry < 14 days", check_cert_expiry),
+]
+
+
+# ── delivery ────────────────────────────────────────────────────────────────
+
+def mail(subject, text):
+    payload = json.dumps({"subject": subject, "text": text})
+    rc, out, err = sh(["midclt", "call", "mail.send", payload], timeout=120)
+    return rc == 0, (err or out)[:300]
+
+
+def load_state():
+    try:
+        return json.load(open(STATE))
+    except Exception:
+        return {}
+
+
+def save_state(s):
+    tmp = STATE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(s, f, indent=2)
+    os.replace(tmp, STATE)
+
+
+def run(force=None):
+    state = load_state()
+    changed = False
+    for key, label, fn in CHECKS:
+        ok, detail = fn()
+        if force == key:
+            ok, detail = False, "FORCED by `social-alerts test` — delivery check only"
+        if ok is None:
+            state[key] = {"state": "n/a", "detail": detail}
+            continue
+        was = state.get(key, {}).get("state")
+        now = "ok" if ok else "firing"
+        print(f"  {'OK  ' if ok else 'FIRE'}  {label}: {detail}")
+        # A first run has no previous state. Without this guard every healthy
+        # check mails a "recovered" notice on install — four emails announcing
+        # that nothing had ever been wrong, which is precisely the noise §27.3
+        # says destroys an alerting system's credibility.
+        first_run = was is None
+        if now != was and not (first_run and now == "ok"):
+            changed = True
+            if now == "firing":
+                sent, info = mail(f"[Willard] ALERT: {label}",
+                                  f"{label}\n\n{detail}\n\n"
+                                  f"docs/social/27-observability.md §27.3\n"
+                                  f"Checked at {time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+            else:
+                sent, info = mail(f"[Willard] recovered: {label}",
+                                  f"{label} is OK again.\n\n{detail}\n\n"
+                                  f"Checked at {time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+            print(f"        -> mail {'sent' if sent else 'FAILED: ' + info}")
+        state[key] = {"state": now, "detail": detail, "at": int(time.time())}
+    save_state(state)
+    return 0 if not changed else 0
+
+
+def status():
+    s = load_state()
+    for key, label, _ in CHECKS:
+        e = s.get(key, {})
+        print(f"  {e.get('state','unknown'):8} {label}: {e.get('detail','')}")
+    return 0
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] == "run":
+        return run()
+    if sys.argv[1] == "status":
+        return status()
+    if sys.argv[1] == "test":
+        which = sys.argv[2] if len(sys.argv) > 2 else "backup_failed"
+        return run(force=which)
+    print(__doc__)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
