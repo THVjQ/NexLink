@@ -229,6 +229,60 @@ error anywhere.
 Run them from the operator's machine, not from Willard — a check that runs
 inside the thing it is checking cannot detect the thing being unreachable.
 
+### 27.6.1 Built 2026-09-14
+
+`infra/drift/social-drift-check`, installed at `~/bin/` on the Fedora desktop
+and run daily at 08:30 by the systemd user timer `social-drift.timer` — morning,
+so a failure is seen at the start of a day rather than discovered later.
+
+Six assertions, all passing:
+
+| Assertion | Current |
+|---|---|
+| Homeserver responds | OK |
+| Admin API **not** public (§26.5.2) | OK — 403 |
+| Registration still token-gated (§22.4.1) | OK |
+| Federation **not** public (§21.3) | OK — 404 |
+| **Port 8448 not reachable publicly** (§24.1.2) | OK |
+| Deletion page reachable (§4.2.1) | OK |
+
+The fifth is new and is not in §27.6's original list. §24.1.2 opened a
+federation listener for MatrixRTC, and the entire argument for that being
+acceptable is that it is LAN-only. An assertion costs nothing and is worth more
+than trusting a port binding to stay as written.
+
+The sixth is also new: the public deletion page is a **Play requirement**
+(§4.2.1), so it silently disappearing is a compliance failure, not a cosmetic
+one.
+
+Self-tested by pointing the deletion check at a path that does not exist: it
+failed, named the assertion, exited non-zero and **mailed the alert**.
+
+#### Where it runs, and the limitation stated plainly
+
+§27.6 says to run these from the operator's machine rather than from Willard,
+because *"a check that runs inside the thing it is checking cannot detect the
+thing being unreachable"*. This runs on the Fedora desktop — a separate OS and
+process space, reaching the service by its real public URL through Cloudflare —
+so it catches configuration drift properly.
+
+**It is not fully external.** That desktop is a VM hosted on Willard, so if
+Willard is off, the check is off too. The gap is covered from the other side:
+§27.3's "homeserver down" alert runs *on* Willard and mails out. Neither is
+sufficient alone; together they cover both shapes of failure. Genuinely external
+monitoring remains outstanding and is recorded rather than pretended.
+
+**One thing the operator must do for this to run unattended:**
+`loginctl enable-linger` is **not** set, so the user systemd instance — and this
+timer with it — stops at logout. It needs a password the automation does not
+have:
+
+```
+sudo loginctl enable-linger $USER
+```
+
+Until that is run, the drift checks fire only while someone is logged in.
+
 ---
 
 ## 27.7 Dashboards

@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# NexLink Social — §27.6 security-posture drift assertions.
+#
+# The middle checks are not health checks. They are assertions that the security
+# posture has NOT DRIFTED, and §27.6 explains why they earn a daily run:
+#
+#   "someone edits homeserver.yaml to fix an unrelated problem, loses a line,
+#    and the service is open to the public internet with no error anywhere."
+#
+# Every one of these has been true at some point in this project's history, so
+# none of them is hypothetical.
+#
+# WHERE THIS RUNS — and an honest limitation.
+#
+# §27.6 says to run it from the operator's machine, "not from Willard — a check
+# that runs inside the thing it is checking cannot detect the thing being
+# unreachable". This runs on the Fedora desktop, which is a separate OS, a
+# separate process space, and reaches the service by its real public URL through
+# Cloudflare — so it catches configuration drift properly.
+#
+# It is NOT fully external: that desktop is a VM hosted on Willard, so if Willard
+# is off, this is off too. That gap is covered from the other side — §27.3's
+# "homeserver down" alert runs on Willard and mails out. Neither alone is
+# sufficient; together they cover both failure shapes. True externality needs
+# something off-site, and is recorded as outstanding rather than pretended.
+set -uo pipefail
+
+HS="${SOCIAL_HS:-https://nexlink.thvjq.com.au}"
+UA="NexLink-Social-Drift/1.0"        # §27.3.0 — Cloudflare 403s Python/curl defaults it dislikes
+fails=()
+
+note() { printf '  %-8s %s\n' "$1" "$2"; }
+
+# ── 1. The service answers at all ───────────────────────────────────────────
+if curl -fsS -A "$UA" --max-time 20 "$HS/_matrix/client/versions" >/dev/null 2>&1; then
+  note OK "homeserver responds"
+else
+  note FAIL "homeserver does not respond"
+  fails+=("homeserver unreachable")
+fi
+
+# ── 2. Admin API must NOT be reachable publicly (§26.5.2) ───────────────────
+code=$(curl -sS -A "$UA" -o /dev/null -w '%{http_code}' --max-time 20 \
+  "$HS/_synapse/admin/v1/server_version" 2>/dev/null)
+if [ "$code" != "200" ]; then
+  note OK "admin API not public (HTTP $code)"
+else
+  note FAIL "ADMIN API IS PUBLIC"
+  fails+=("admin API reachable from the internet")
+fi
+
+# ── 3. Registration must NOT be open (§22.4.1) ──────────────────────────────
+reg=$(curl -sS -A "$UA" --max-time 20 -X POST "$HS/_matrix/client/v3/register" \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"driftprobe","password":"driftprobe123456"}' 2>/dev/null)
+if echo "$reg" | grep -q 'registration_token\|M_MISSING_PARAM'; then
+  note OK "registration still token-gated"
+else
+  note FAIL "REGISTRATION MAY BE OPEN: $(echo "$reg" | head -c 120)"
+  fails+=("registration is not token-gated")
+fi
+
+# ── 4. Federation must be off (§21.3) ───────────────────────────────────────
+code=$(curl -sS -A "$UA" -o /dev/null -w '%{http_code}' --max-time 20 \
+  "$HS/_matrix/federation/v1/version" 2>/dev/null)
+if [ "$code" != "200" ]; then
+  note OK "federation not public (HTTP $code)"
+else
+  note FAIL "FEDERATION IS PUBLIC"
+  fails+=("federation answers on the public hostname")
+fi
+
+# ── 5. The LAN-only federation port must not be public (§24.1.2) ────────────
+# Added because §24.1.2 opened a federation listener for MatrixRTC and the whole
+# argument for that being acceptable is that it is LAN-only. An assertion is
+# cheaper than trusting a port binding to stay as written.
+if curl -fsS -A "$UA" --max-time 12 "https://nexlink.thvjq.com.au:8448/_matrix/federation/v1/version" >/dev/null 2>&1; then
+  note FAIL "PORT 8448 IS PUBLIC"
+  fails+=("the LAN-only federation listener is reachable from the internet")
+else
+  note OK "federation port 8448 not reachable publicly"
+fi
+
+# ── 6. The deletion page must stay reachable (§32.3, a Play requirement) ────
+code=$(curl -sSL -A "$UA" -o /dev/null -w '%{http_code}' --max-time 20 "$HS/delete/" 2>/dev/null)
+if [ "$code" = "200" ]; then
+  note OK "deletion page reachable"
+else
+  note FAIL "deletion page returns $code"
+  fails+=("the public deletion page is not reachable — §4.2.1 requires it")
+fi
+
+echo
+if [ ${#fails[@]} -eq 0 ]; then
+  echo "  no drift."
+  exit 0
+fi
+
+echo "  ${#fails[@]} DRIFT FAILURE(S):"
+for f in "${fails[@]}"; do echo "   - $f"; done
+
+# Mail through Willard, which is where SMTP is configured. If Willard is the
+# thing that is broken this will not arrive — see the note at the top about why
+# that gap is covered from the other side rather than papered over here.
+if command -v ssh >/dev/null 2>&1; then
+  body="§27.6 drift assertions failed at $(date -Is):\n\n$(printf ' - %s\n' "${fails[@]}")"
+  printf '%b' "$body" > /tmp/drift-body.txt 2>/dev/null
+  ssh -o ConnectTimeout=10 willard-lan \
+    "sudo midclt call mail.send '{\"subject\":\"[Willard] SECURITY DRIFT on NexLink Social\",\"text\":\"$(printf '%b' "$body" | sed 's/"/\\"/g' | tr '\n' '~' | sed 's/~/\\n/g')\"}'" \
+    >/dev/null 2>&1 && echo "  (alert mailed)" || echo "  (could not mail the alert)"
+fi
+exit 1
