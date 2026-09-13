@@ -15,3 +15,21 @@ social-core/build/
 social-ui/build/
 social-contract/build/
 social-rtc/build/
+
+# ── Firebase (§13.3) ────────────────────────────────────────────────────────
+# google-services.json ships inside the APK and its API key is restricted by
+# package name + signing certificate, so it is not a secret in the strict sense.
+# It is ignored anyway because THIS REPOSITORY IS PUBLIC, and publishing a
+# project number and app id invites quota abuse for no benefit.
+google-services.json
+
+# The service-account key IS a real secret — full admin on the Firebase
+# project. It lives on Willard, never here.
+*-firebase-adminsdk-*.json
+firebase-service-account*.json
+
+# ── LiveKit (§24.1.1) ───────────────────────────────────────────────────────
+# API key and secret for the hosted SFU. Config templates live in infra/ with
+# placeholders (§24.2.1); the filled-in values do not.
+livekit.env
+*.livekit-credentials

@@ -81,10 +81,13 @@ Three things, recorded because they are the reasons this might later be undone:
    in a call, when, and for how long. That is a §9.6.1 disclosure line by the
    same standard as Q44, and it must be on the "We can see" side of the wall
    before anyone but the operator uses calling.
-2. **No confirmed Australian region.** §24.2 is emphatic that media latency is
-   the quality metric users actually feel. LiveKit advertises a global edge and
-   probably terminates in Sydney; **unverified**, and it should be measured
-   during the spike rather than assumed.
+2. ~~No confirmed Australian region.~~ **Measured 2026-09-13 and the concern
+   does not hold.** `nexlink-social-ro8eroxb.livekit.cloud` resolves to
+   `152.67.124.114` / `152.67.126.168` — Oracle Cloud's Sydney range — and TCP
+   connect from the operator's network averaged **24–36 ms** across five
+   samples, against ~25 ms to Willard's own Cloudflare endpoint. Domestic, and
+   comparable to infrastructure already in the media path. §24.2's latency
+   argument for an Australian VPS is satisfied by the hosted SFU as it stands.
 3. **The free tier is documented as being for development.** No SLA. For an
    invite-only product whose operator is also its first support channel that is
    an acceptable risk; it stops being acceptable at the point §33.7's private
