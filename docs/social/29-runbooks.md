@@ -139,6 +139,26 @@ Full procedure in §23.6. Summary for the index:
 Step 6 is the one that gets skipped and the one that makes §23.4.3's RTO claim
 real rather than aspirational.
 
+> **Two steps this list was missing, found by running it 2026-09-14.** Both stop
+> the restore dead with an error that points somewhere else:
+>
+> **2a. `chown -R 991:991` the restored config directory.** It comes out of
+> `tar` owned by root and Synapse runs as 991, so it dies with
+> `PermissionError: … '/data/….log.config'` — which reads like a config problem
+> and is an ownership problem.
+>
+> **4a. Supply a log config, or create the directory the generated one wants.**
+> Synapse writes one with a *file* handler pointing at a directory that does not
+> exist in a fresh container and refuses to start with
+> `ValueError: Unable to configure handler 'file'` — which reads like a logging
+> bug and is a missing directory.
+>
+> In a real outage each of these costs the operator time while the service is
+> down. Scripted in `infra/runbooks/restore-drill.sh`.
+
+**Drilled 2026-09-14: 35 seconds**, all five §23.6.2 checks passing. See
+`infra/runbooks/restore-log.md`.
+
 ---
 
 ## 29.5 Media store is filling
