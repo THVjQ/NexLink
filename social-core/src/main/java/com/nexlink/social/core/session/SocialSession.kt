@@ -178,6 +178,47 @@ interface SocialSession {
      */
     suspend fun applyMediaRetention(policy: MediaRetention): Result<Unit>
 
+    // ---- §31.3 safety ------------------------------------------------------
+
+    /**
+     * §31.3.1 — block a user. **The primary safety control.**
+     *
+     * That section is emphatic about why this matters more than reporting:
+     * blocking *"is instant, it is under the affected user's control, and it
+     * works at 3 a.m."*, whereas a report the operator reads the next working
+     * day is a much worse experience. So this needs nothing from the operator
+     * and must never be gated behind one.
+     *
+     * Implemented as Matrix's ignore list, which the **server** enforces — so
+     * it survives a reinstall and applies on every device the user has.
+     */
+    suspend fun blockUser(userId: UserId): Result<Unit>
+
+    suspend fun unblockUser(userId: UserId): Result<Unit>
+
+    /** Live, because a block made on one device must show on the others. */
+    fun blockedUsers(): Flow<List<UserId>>
+
+    /**
+     * §31.3.2 — report a user to the operator.
+     *
+     * [includeContent] is the consent flag and it defaults to **false**. §31.3.2
+     * requires that consent to be explicit and unticked: this is the only path
+     * by which message content ever becomes readable to the operator, and it
+     * must be the user's deliberate act rather than a default they missed.
+     *
+     * **Reports without content are still actionable** — several independent
+     * reports against one account is a signal on its own — so declining consent
+     * must not feel like declining to report.
+     */
+    suspend fun reportUser(
+        userId: UserId,
+        reason: String,
+        includeContent: Boolean = false,
+        roomId: RoomId? = null,
+        eventId: EventId? = null
+    ): Result<Unit>
+
     /**
      * §13.3 — tell the homeserver where to send push for this device.
      *

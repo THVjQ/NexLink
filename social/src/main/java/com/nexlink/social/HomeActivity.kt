@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import com.nexlink.social.ui.R as UiR
 import com.nexlink.social.push.PushRegistration
+import com.google.android.material.snackbar.Snackbar
+import androidx.appcompat.app.AlertDialog
 
 /**
  * The inbox — §14.
@@ -205,6 +207,9 @@ class HomeActivity : AppCompatActivity() {
                 root.addView(button("Verify this device") {
                     startActivity(VerifyActivity.intent(this))
                 })
+                root.addView(button("Blocked people") {
+                    startActivity(BlockedActivity.intent(this))
+                })
                 root.addView(button("Storage") {
                     startActivity(StorageActivity.intent(this))
                 })
@@ -269,10 +274,69 @@ class HomeActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * §31.3.1 — block or leave, straight from the list.
+     *
+     * Blocking is offered only for a one-to-one conversation. In a group
+     * "block the other person" has no single referent, and an option that
+     * silently picks the wrong one is worse than an option that is absent.
+     *
+     * The other member is resolved when the action is taken rather than while
+     * building the menu, so opening the menu costs no network call — this is a
+     * long-press on a list someone may be scrolling.
+     */
+    private fun showRoomSafetyMenu(r: RoomSummary) {
+        val actions = buildList {
+            if (!r.isGroup) add("Block ${r.title}")
+            add("Leave conversation")
+        }
+        AlertDialog.Builder(this)
+            .setTitle(r.title)
+            .setItems(actions.toTypedArray()) { _, i ->
+                val chosen = actions[i]
+                lifecycleScope.launch {
+                    val s = SessionProvider.manager(this@HomeActivity).current()
+                        ?: return@launch
+                    if (chosen == "Leave conversation") {
+                        s.leaveRoom(r.id)
+                        return@launch
+                    }
+                    // isSelf rather than comparing ids: the summary already
+                    // knows, and a mismatched-id comparison would silently pick
+                    // the wrong person to block.
+                    val other = s.members(r.id).getOrNull()
+                        ?.firstOrNull { !it.isSelf }?.id
+                    if (other == null) {
+                        Snackbar.make(findViewById(android.R.id.content),
+                            "Couldn't work out who to block", Snackbar.LENGTH_LONG).show()
+                        return@launch
+                    }
+                    s.blockUser(other).onSuccess {
+                        Snackbar.make(findViewById(android.R.id.content),
+                            "Blocked ${r.title}", Snackbar.LENGTH_LONG)
+                            .setAction("Undo") {
+                                lifecycleScope.launch { s.unblockUser(other) }
+                            }.show()
+                    }.onFailure {
+                        Snackbar.make(findViewById(android.R.id.content),
+                            "Couldn't block: ${it.message ?: "unknown"}",
+                            Snackbar.LENGTH_LONG).show()
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     private fun row(r: RoomSummary): View = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(0, dp(10), 0, dp(10))
         isClickable = true
+        // §31.3.1 — "one tap from a message, from a profile, and from the
+        // conversation list". This is the conversation-list one: long-press
+        // gives block and leave without opening the conversation, which matters
+        // when opening it is the thing you do not want to do.
+        setOnLongClickListener { showRoomSafetyMenu(r); true }
         // §14.10 — the row is one target made of several TextViews, so a screen
         // reader would otherwise read the pieces separately and never say the
         // whole thing is tappable. The unread count is the part most easily

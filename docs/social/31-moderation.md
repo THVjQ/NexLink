@@ -85,6 +85,49 @@ one that can read what a user chose to send.
 **Reports without content are still actionable.** Several independent reports
 against one account is a signal on its own.
 
+### 31.3.2a Built 2026-09-14
+
+**Blocking first, and properly**, as §31.3.1 insists. It is Matrix's ignore
+list, so the **server** enforces it: the block survives a reinstall and applies
+on every device the user has. `BlockingTest` verifies the round trip against the
+live homeserver — block, server confirms, unblock, server confirms — because
+the property worth testing is server enforcement, and a test against a fake
+would only confirm that a flow emitted.
+
+Reachable from all three places §31.3.1 names:
+
+| Where | How |
+|---|---|
+| From a message | Long-press → *Block ‹name›* |
+| From the conversation list | Long-press a row → *Block* / *Leave* |
+| Management and undo | **Blocked people** on the home screen |
+
+**No confirmation dialog.** The action is reversible, the undo is offered in the
+snackbar, and making someone argue with an *"are you sure?"* while being
+harassed is the opposite of §31.3.1's "it works at 3 a.m.". The undo is also
+permanent, in the Blocked people screen, because **a block that cannot be undone
+is a trap rather than a control**.
+
+Blocking is offered from the list only for one-to-one conversations. In a group
+"block the other person" has no single referent, and an option that silently
+picks the wrong person is worse than one that is absent.
+
+**The report's consent checkbox starts unticked**, as §31.3.2 requires, and the
+label says what agreeing means — *"Include this message in the report. The
+operator will be able to read them."* — rather than hiding behind "help us
+investigate". Beneath it, in smaller type: *"You can report without including
+the message. Reports still count without it."* That sentence exists because
+§31.3.2 says reports without content are still actionable, and a user who
+declines consent must not feel they have declined to report.
+
+After a report is sent, the snackbar offers **Also block** — the two are
+different actions and the one that helps immediately should be one tap away.
+
+**One limitation, refused loudly rather than hidden.** There is no Matrix API
+for reporting a user outside a room, so a profile-only report throws rather than
+appearing to succeed. A report the user believes was sent and was not is worse
+than an error.
+
 ### 31.3.3 Operator-side
 
 | Action | Reversible | §29 |

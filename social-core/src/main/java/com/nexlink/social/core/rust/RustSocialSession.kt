@@ -36,6 +36,7 @@ import org.matrix.rustcomponents.sdk.SlidingSyncVersionBuilder
 import com.nexlink.social.core.session.MediaRetention
 import com.nexlink.social.core.session.StoreUsage
 import org.matrix.rustcomponents.sdk.HttpPusherData
+import org.matrix.rustcomponents.sdk.IgnoredUsersListener
 import org.matrix.rustcomponents.sdk.PushFormat
 import org.matrix.rustcomponents.sdk.PusherIdentifiers
 import org.matrix.rustcomponents.sdk.PusherKind
@@ -324,6 +325,82 @@ class RustSocialSession private constructor(
 
     override suspend fun setTyping(roomId: RoomId, typing: Boolean): Result<Unit> = ioCatching {
         roomListService.room(roomId.value).typingNotice(typing)
+    }
+
+    // ---- §31.3 safety ------------------------------------------------------
+
+    private val _blocked = MutableStateFlow<List<UserId>>(emptyList())
+    @Volatile private var blockedHandle: org.matrix.rustcomponents.sdk.TaskHandle? = null
+
+    override suspend fun blockUser(userId: UserId): Result<Unit> = ioCatching {
+        client.ignoreUser(userId.value)
+        refreshBlocked()
+    }
+
+    override suspend fun unblockUser(userId: UserId): Result<Unit> = ioCatching {
+        client.unignoreUser(userId.value)
+        refreshBlocked()
+    }
+
+    override fun blockedUsers(): Flow<List<UserId>> {
+        if (blockedHandle == null) {
+            // Subscribe once. The list also changes from the user's other
+            // devices — §31.3.1 puts blocking under the user's control, and a
+            // block made on the phone that does not show on the tablet is not
+            // under their control.
+            blockedHandle = client.subscribeToIgnoredUsers(
+                object : IgnoredUsersListener {
+                    override fun call(ignoredUserIds: List<String>) {
+                        _blocked.value = ignoredUserIds.map { UserId(it) }
+                    }
+                }
+            )
+        }
+        return _blocked.asStateFlow()
+    }
+
+    private suspend fun refreshBlocked() {
+        runCatching { _blocked.value = client.ignoredUsers().map { UserId(it) } }
+    }
+
+    /**
+     * §31.3.2 — the report.
+     *
+     * With consent the specific event is reported, so the operator sees what
+     * the reporter chose to show and nothing else. Without it, only the room
+     * and the reporter's description travel.
+     *
+     * Nothing here gives the operator a way to read a room. §31.3.2: *"there is
+     * no operator key that can read the room, only one that can read what a
+     * user chose to send."*
+     */
+    override suspend fun reportUser(
+        userId: UserId,
+        reason: String,
+        includeContent: Boolean,
+        roomId: RoomId?,
+        eventId: EventId?
+    ): Result<Unit> = ioCatching {
+        val room = roomId?.let { runCatching { roomListService.room(it.value) }.getOrNull() }
+        when {
+            // Consented: report the specific event, so the operator sees what
+            // the reporter chose to show and nothing beyond it.
+            includeContent && room != null && eventId != null ->
+                room.reportContent(eventId.value, reason)
+
+            // §31.3.2 — "Reports without content are still actionable."
+            // Several independent reports against one account is a signal on
+            // its own, so a report with no consent still has to go somewhere.
+            room != null -> room.reportRoom(reason)
+
+            // No room context at all — a profile-level report. There is no
+            // Matrix API for this, so it is refused loudly rather than
+            // silently dropped: a report the user believes was sent and was
+            // not is worse than an error.
+            else -> error(
+                "a report needs a room; profile-only reporting is not supported " +
+                "by the homeserver API (§31.3.2)")
+        }
     }
 
     // ---- §13.3 push --------------------------------------------------------

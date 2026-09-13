@@ -33,6 +33,35 @@ class FakeSocialSession(
 
     override fun rooms(): Flow<List<RoomSummary>> = _rooms.asStateFlow()
 
+    // ---- §31.3 safety ------------------------------------------------------
+
+    private val _blocked = MutableStateFlow<List<UserId>>(emptyList())
+    /** Reports the UI has sent, so a test can assert consent was honoured. */
+    val reports = mutableListOf<Triple<UserId, String, Boolean>>()
+
+    override suspend fun blockUser(userId: UserId): Result<Unit> {
+        _blocked.update { if (userId in it) it else it + userId }
+        return Result.success(Unit)
+    }
+
+    override suspend fun unblockUser(userId: UserId): Result<Unit> {
+        _blocked.update { it - userId }
+        return Result.success(Unit)
+    }
+
+    override fun blockedUsers(): Flow<List<UserId>> = _blocked.asStateFlow()
+
+    override suspend fun reportUser(
+        userId: UserId,
+        reason: String,
+        includeContent: Boolean,
+        roomId: RoomId?,
+        eventId: EventId?
+    ): Result<Unit> {
+        reports.add(Triple(userId, reason, includeContent))
+        return Result.success(Unit)
+    }
+
     // ---- §13.3 push --------------------------------------------------------
 
     /** Records the last registration so a test can assert it happened. */

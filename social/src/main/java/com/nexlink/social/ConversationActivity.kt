@@ -30,6 +30,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.nexlink.social.ui.R as UiR
+import com.google.android.material.snackbar.Snackbar
+import com.nexlink.social.core.session.UserId
 
 /**
  * One conversation — §14.2 timeline, §14.3 composer.
@@ -443,6 +445,91 @@ class ConversationActivity : AppCompatActivity() {
             .show()
     }
 
+    /** The activity's content view — `root` is a local in onCreate, not a field. */
+    private fun contentView(): android.view.View = findViewById(android.R.id.content)
+
+    /**
+     * §31.3.1 — block, in one tap and with no confirmation maze.
+     *
+     * That section calls blocking *the primary control* and says it must be
+     * good: instant, under the user's own control, and working at 3 a.m. So
+     * there is no "are you sure?" — the action is reversible, the undo is
+     * offered right here in the toast, and making someone argue with a dialog
+     * while being harassed is the opposite of the point.
+     */
+    private fun block(who: UserId, name: String) {
+        lifecycleScope.launch {
+            val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
+            s.blockUser(who)
+                .onSuccess {
+                    Snackbar.make(contentView(), "Blocked $name", Snackbar.LENGTH_LONG)
+                        .setAction("Undo") {
+                            lifecycleScope.launch { s.unblockUser(who) }
+                        }.show()
+                }
+                .onFailure { toast("Couldn't block: " + (it.message ?: "unknown")) }
+        }
+    }
+
+    /**
+     * §31.3.2 — the report, with consent that is explicit and starts unticked.
+     *
+     * This is the only path by which message content ever becomes readable to
+     * the operator, so the checkbox is the whole point of the screen. It is
+     * **not** pre-ticked, and the label says plainly what agreeing to it means
+     * rather than hiding behind "help us investigate".
+     *
+     * Declining must not feel like declining to report: §31.3.2 notes that
+     * reports without content are still actionable, because several independent
+     * reports against one account is a signal on its own. The copy says so.
+     */
+    private fun showReportDialog(item: TimelineItem) {
+        val reason = EditText(this).apply {
+            hint = "What's wrong with this message?"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            minLines = 2
+        }
+        val consent = android.widget.CheckBox(this).apply {
+            text = "Include this message in the report. The operator will be " +
+                   "able to read it."
+            isChecked = false        // §31.3.2 — unticked, deliberately
+        }
+        val note = TextView(this).apply {
+            text = "You can report without including the message. Reports still " +
+                   "count without it."
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextColor(ContextCompat.getColor(this@ConversationActivity, UiR.color.social_muted))
+        }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+            addView(reason); addView(consent); addView(note)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Report ${item.senderDisplayName}")
+            .setView(box)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Send report") { _, _ ->
+                lifecycleScope.launch {
+                    val s = SessionProvider.manager(this@ConversationActivity).current()
+                        ?: return@launch
+                    val rid = roomId ?: return@launch
+                    s.reportUser(
+                        userId = item.sender,
+                        reason = reason.text.toString().ifBlank { "(no description given)" },
+                        includeContent = consent.isChecked,
+                        roomId = rid,
+                        eventId = item.eventId
+                    ).onSuccess {
+                        Snackbar.make(contentView(), "Report sent", Snackbar.LENGTH_LONG)
+                            .setAction("Also block") { block(item.sender, item.senderDisplayName) }
+                            .show()
+                    }.onFailure { toast("Couldn't send the report: " + (it.message ?: "unknown")) }
+                }
+            }
+            .show()
+    }
+
     /**
      * §14.4.4 — each reaction is its own tappable chip showing the count.
      * Tapping one toggles your own, which is how a user removes a reaction
@@ -509,11 +596,19 @@ class ConversationActivity : AppCompatActivity() {
             add("React")
             add("Reply")
             if (mine) { add("Edit"); add("Delete") }
+            // §31.3.1 — "one tap from a message, from a profile, and from the
+            // conversation list". This is the from-a-message one. Offered only
+            // on someone else's message, because blocking yourself is not a
+            // thing and an option that cannot apply is clutter in a menu
+            // someone may be using while distressed.
+            if (!mine) { add("Block ${item.senderDisplayName}"); add("Report message") }
         }
         androidx.appcompat.app.AlertDialog.Builder(this)
             .setItems(actions.toTypedArray()) { _, i ->
                 when (actions[i]) {
                     "React" -> showReactionPicker(item)
+                    "Block ${item.senderDisplayName}" -> block(item.sender, item.senderDisplayName)
+                    "Report message" -> showReportDialog(item)
                     "Reply" -> { replyingTo = item; render(lastItems) }
                     "Edit" -> showEdit(item)
                     "Delete" -> confirmDelete(item)
