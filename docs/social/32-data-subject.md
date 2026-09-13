@@ -140,6 +140,47 @@ disclosing that failure in the privacy policy.
 Final state, both accounts: deactivated, profile erased, 0 threepids, 0 media,
 0 `user_ips` rows. Re-running is idempotent.
 
+### 32.3.5 The public web page, and the gap it revealed — 2026-09-14
+
+§1.2 requires deletion in-app **and** from a public web page, and §4.2.1 makes
+the latter a Play requirement: **it must work without the app installed.**
+
+Live at **`https://nexlink.thvjq.com.au/delete/`**. A static page with no backend
+of its own: it uses the client-server API with the user's own password, so
+nothing privileged is deployed and there is no service to keep running. Served
+by Element Web's nginx at a path, for the same reason as the JWT service
+(§24.1.2) — adding a public hostname needs the Cloudflare account owner.
+
+Verified by driving it in a real browser: a throwaway account with uploaded
+media was deleted from the page and reported *"Your account has been deleted."*
+
+**What that revealed.** A client-side deactivation erases the profile, signs out
+every device and tombstones the account — and **leaves the uploaded media**,
+because no client-facing API removes it. Straight after the web deletion:
+
+```
+deactivated True, display name None, avatar None, threepids 0, media 1
+```
+
+That is §29.5's compliance bug arriving through the self-service door rather
+than the operator's. The operator CLI already handled it (§32.3.4); a user
+deleting their own account did not, and would not have.
+
+**`deletion-sweeper` closes the loop.** Hourly (cronjob id 5), it finds every
+deactivated account with residual media or `user_ips` rows and purges both —
+whatever started the deletion. `deletion-sweeper check` reports without changing
+anything and exits non-zero when residue exists, which is §29.5's cross-check in
+a form an alert can consume later.
+
+Verified: the swept account now reports 0 media and 0 IP rows, and re-checking
+finds nothing.
+
+**One fix the page needed.** nginx builds redirects from the scheme it *sees*,
+and behind the tunnel that is plain http — so `/delete` redirected to
+`http://…/delete/` and relied on Cloudflare to upgrade it. `absolute_redirect
+off` keeps the browser's scheme. A deletion page that downgrades to http is a
+poor look on a product whose whole argument is encryption.
+
 **What this means for the privacy policy (§4.7):** the retained list in §32.3.2
 is complete and correct as written — MXID, `acceptance_record`, `invite_record`
 — and IP logs are **not** on it, because they are now purged rather than aged

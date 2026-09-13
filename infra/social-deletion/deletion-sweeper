@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+"""
+NexLink Social — finish what deactivation does not. §32.3.1 steps 3 and 6, §29.5.
+
+A user who deletes their account from the app or from the public web page
+(§32.3) performs a *client-side* deactivation. That erases the profile, signs
+out every device and tombstones the account — and it does **not** remove their
+uploaded media, and cannot remove their IP logs, because no client-facing API
+does either. Measured after a real deletion through the public page:
+
+    deactivated True, display name None, avatar None, threepids 0, media 1
+
+§29.5 is explicit that leftover media belonging to deactivated accounts means
+"the deletion procedure is broken and that is a compliance bug, not
+housekeeping". This is the part of the procedure that was missing.
+
+So this sweeps: for every deactivated account, purge remaining media and
+`user_ips` rows, and report anything it could not finish. It is the same code
+path as the operator CLI (`delete-account run`), applied on a schedule to
+deletions that were started by the user.
+
+  deletion-sweeper run     # purge, report
+  deletion-sweeper check   # report only, change nothing (for §29.5 audits)
+"""
+import json, os, subprocess, sys, urllib.error, urllib.request
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+HS = os.environ.get("SOCIAL_HS", "http://127.0.0.1:8060")
+TOKEN = os.environ.get("SOCIAL_ADMIN_TOKEN") or \
+    open("/mnt/Pool1-MAIN/social/synapse/.operator-token").read().strip()
+PG = os.environ.get("SOCIAL_PG", "ix-nexlink-social-social-postgres-1")
+
+
+def api(method, path, body=None):
+    req = urllib.request.Request(
+        HS + path, method=method,
+        data=json.dumps(body).encode() if body is not None else None,
+        headers={"Authorization": "Bearer " + TOKEN, "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            raw = r.read()
+            return r.status, (json.loads(raw) if raw else {})
+    except urllib.error.HTTPError as e:
+        raw = e.read()
+        try:
+            return e.code, json.loads(raw)
+        except Exception:
+            return e.code, {"raw": raw[:300].decode("utf-8", "replace")}
+
+
+def psql(sql):
+    out = subprocess.run(
+        ["docker", "exec", PG, "psql", "-U", "synapse", "-d", "synapse", "-t", "-A", "-c", sql],
+        capture_output=True, text=True, timeout=120)
+    return out.returncode, out.stdout.strip(), out.stderr.strip()
+
+
+def deactivated_users():
+    """
+    Straight from the database rather than paging the admin API.
+
+    `GET /_synapse/admin/v2/users` pages, and the filter for deactivated
+    accounts differs between Synapse versions; the column does not.
+    """
+    rc, out, err = psql("SELECT name FROM users WHERE deactivated = 1;")
+    if rc != 0:
+        print("  cannot list deactivated users:", err[:200])
+        return []
+    return [l.strip() for l in out.splitlines() if l.strip()]
+
+
+def media_count(user):
+    code, body = api("GET", f"/_synapse/admin/v1/users/{user}/media")
+    return len(body.get("media", [])) if code == 200 else 0
+
+
+def ip_rows(user):
+    rc, out, _ = psql("SELECT count(*) FROM user_ips WHERE user_id = '%s';"
+                      % user.replace("'", "''"))
+    return int(out) if rc == 0 and out.isdigit() else 0
+
+
+def main():
+    action = sys.argv[1] if len(sys.argv) > 1 else "run"
+    users = deactivated_users()
+    print(f"  {len(users)} deactivated account(s)")
+
+    dirty, fixed, failed = 0, 0, 0
+    for u in users:
+        m, ips = media_count(u), ip_rows(u)
+        if not m and not ips:
+            continue
+        dirty += 1
+        print(f"  {u}: {m} media, {ips} ip row(s)")
+        if action == "check":
+            continue
+
+        if m:
+            code, body = api("DELETE", f"/_synapse/admin/v1/users/{u}/media")
+            if code == 200:
+                n = body.get("total", len(body.get("deleted_media", [])))
+                print(f"    purged {n} media")
+            else:
+                print(f"    media purge FAILED: {code} {body}")
+                failed += 1
+                continue
+        if ips:
+            rc, out, err = psql("DELETE FROM user_ips WHERE user_id = '%s';"
+                                % u.replace("'", "''"))
+            if rc == 0:
+                print(f"    purged {ips} ip row(s)")
+            else:
+                print(f"    ip purge FAILED: {err[:150]}")
+                failed += 1
+                continue
+        fixed += 1
+
+    if action == "check":
+        # §29.5's cross-check as an exit code, so it can be an alert later:
+        # anything left over means the deletion path is broken.
+        print(f"\n  {dirty} account(s) with residue")
+        return 1 if dirty else 0
+
+    print(f"\n  swept {fixed}, failed {failed}")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

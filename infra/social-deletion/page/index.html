@@ -1,0 +1,142 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delete your NexLink Social account</title>
+<!--
+  docs/social/32-data-protection.md §32.3 — deletion from a public web page.
+
+  §1.2 requires deletion in-app AND from a web page, and §4.2.1 makes the latter
+  a Play requirement: it must work WITHOUT THE APP INSTALLED. So this is a plain
+  static page that talks to the Matrix client-server API directly. No backend of
+  its own, no admin credentials, nothing to keep running.
+
+  Deactivation is a normal client operation authenticated by the user's own
+  password, so nothing here is privileged. The media and log purge that
+  deactivation does not do (§32.3.4) is completed server-side by the sweeper.
+-->
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         max-width: 34rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+  h1 { font-size: 1.6rem; line-height: 1.25; }
+  label { display: block; margin: 1rem 0 .25rem; font-weight: 600; }
+  input { width: 100%; padding: .7rem; font-size: 1rem; border: 1px solid #8888;
+          border-radius: .4rem; background: transparent; color: inherit; }
+  button { margin-top: 1.5rem; width: 100%; min-height: 3rem; font-size: 1rem;
+           border: 0; border-radius: .4rem; background: #b3261e; color: #fff;
+           font-weight: 600; cursor: pointer; }
+  button[disabled] { opacity: .5; cursor: default; }
+  .muted { color: #8a8a8e; }
+  .keeps { border-left: 3px solid #8884; padding-left: 1rem; margin: 1.5rem 0; }
+  #out { margin-top: 1.5rem; padding: 1rem; border-radius: .4rem;
+         background: #8881; white-space: pre-wrap; }
+  ul { padding-left: 1.2rem; }
+</style>
+
+<h1>Delete your NexLink Social account</h1>
+
+<p>This removes your account from the server. <strong>It cannot be undone.</strong></p>
+
+<p class="muted">You do not need the app installed to do this.</p>
+
+<h2>What gets deleted</h2>
+<ul>
+  <li>Your account, and every device signed in to it</li>
+  <li>Your display name and picture</li>
+  <li>Photos, videos and files you uploaded</li>
+  <li>Your encrypted message backup</li>
+  <li>Your email address, if you gave one</li>
+  <li>The record of which addresses you connected from</li>
+</ul>
+
+<div class="keeps">
+  <h2 style="font-size:1.1rem;margin-top:0">What is kept, and why</h2>
+  <ul>
+    <li><strong>Your username</strong> — kept permanently so nobody can register
+        it later and be mistaken for you.</li>
+    <li><strong>That you accepted the terms, and confirmed your age</strong> —
+        kept as the record that you did.</li>
+    <li><strong>The invite you joined with</strong> — a one-way code and
+        timestamps, kept so abuse can be traced.</li>
+  </ul>
+  <p class="muted" style="margin-bottom:0">Your messages are end-to-end
+  encrypted, so the server has never been able to read them and has nothing of
+  yours to hand over or keep.</p>
+</div>
+
+<h2>Delete it</h2>
+<label for="u">Username</label>
+<input id="u" autocomplete="username" placeholder="yourname" autocapitalize="none" spellcheck="false">
+<label for="p">Password</label>
+<input id="p" type="password" autocomplete="current-password">
+<button id="go">Delete my account permanently</button>
+<div id="out" hidden></div>
+
+<script>
+const HS = "https://nexlink.thvjq.com.au";
+const $ = id => document.getElementById(id);
+const say = (t) => { const o = $("out"); o.hidden = false; o.textContent = t; };
+
+async function api(path, body, token) {
+  const r = await fetch(HS + path, {
+    method: "POST",
+    headers: Object.assign({ "Content-Type": "application/json" },
+                           token ? { Authorization: "Bearer " + token } : {}),
+    body: JSON.stringify(body)
+  });
+  return { status: r.status, body: await r.json().catch(() => ({})) };
+}
+
+$("go").addEventListener("click", async () => {
+  const user = $("u").value.trim().replace(/^@/, "").split(":")[0];
+  const pass = $("p").value;
+  if (!user || !pass) { say("Enter your username and password."); return; }
+  if (!confirm("This permanently deletes your account. It cannot be undone.\n\nContinue?")) return;
+
+  $("go").disabled = true;
+  try {
+    say("Checking your password…");
+    const login = await api("/_matrix/client/v3/login", {
+      type: "m.login.password",
+      identifier: { type: "m.id.user", user },
+      password: pass
+    });
+    if (login.status !== 200) {
+      // Rate limiting is the likely non-obvious failure here (§17.6.2), so it
+      // is named rather than folded into "wrong password".
+      say(login.body.errcode === "M_LIMIT_EXCEEDED"
+        ? "Too many attempts. Wait a minute and try again."
+        : "That username and password did not work.");
+      $("go").disabled = false; return;
+    }
+    const token = login.body.access_token;
+    const uid = login.body.user_id;
+
+    say("Deleting…");
+    // User-interactive auth: the first call returns a session, the second
+    // completes it with the password.
+    const first = await api("/_matrix/client/v3/account/deactivate", { erase: true }, token);
+    const session = first.body.session;
+    const done = await api("/_matrix/client/v3/account/deactivate", {
+      erase: true,
+      auth: { type: "m.login.password", session,
+              identifier: { type: "m.id.user", user }, password: pass }
+    }, token);
+
+    if (done.status === 200) {
+      say("Your account has been deleted.\n\n" + uid + " is now gone and every " +
+          "device has been signed out. Your username is kept so nobody else can " +
+          "take it. Uploaded files and connection records are removed within an " +
+          "hour.\n\nYou can close this page.");
+    } else {
+      say("Could not delete the account: " +
+          (done.body.error || done.body.errcode || done.status) +
+          "\n\nIf this keeps happening, contact the operator.");
+      $("go").disabled = false;
+    }
+  } catch (e) {
+    say("Something went wrong: " + e.message);
+    $("go").disabled = false;
+  }
+});
+</script>
