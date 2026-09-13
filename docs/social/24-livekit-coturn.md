@@ -106,6 +106,92 @@ option, not the expensive one. **The trigger to provision the VPS is exceeding
 the free tier, not reaching phase 4** — and by then the §29.6 rebuild runbook
 has a working configuration to describe rather than a hypothetical one.
 
+### 24.1.2 Deployed and working, 2026-09-13
+
+The MatrixRTC authentication chain is live end to end:
+
+```
+client → Synapse (OpenID token)
+       → lk-jwt-service  (app nexlink-social-rtc, :8063)
+       → federation openid/userinfo  (LAN only, TLS)
+       → JWT for LiveKit Cloud
+```
+
+`POST /livekit/jwt/sfu/get` returns **HTTP 200** with the SFU URL and an
+817-byte JWT granting `roomJoin`, `canPublish`, `canSubscribe`, scoped to the
+Matrix user and device.
+
+**A privacy property worth recording:** the room name handed to LiveKit is a
+**hash**, not the Matrix room id —
+`"room": "JS02W2AM8CrjynPiQ8MdaahSGGVL8r3NUzPd//UpJ5E"`. So the SFU learns that
+*some* room had participants, not which one. That narrows §24.1.1's metadata
+caveat: LiveKit sees participation and timing, not room identity.
+
+#### Four things that had to be solved, none of them obvious
+
+**1. There is no `rtc.thvjq.com.au`.** Both `homeserver.yaml` and the
+`.well-known` pointed at a hostname that was never created. Public routes live
+in the Cloudflare dashboard and adding one needs the account owner, so the JWT
+service is proxied **through Element Web's nginx** at
+`/livekit/jwt/` instead — §26.2.3's one-hostname-fanned-out-by-path, reused.
+
+**2. Element Web generates its own nginx config at startup.** Mounting a
+`default.conf` over it read-only stops the container booting:
+
+```
+20-envsubst-on-templates.sh: can't create /etc/nginx/conf.d/default.conf:
+Read-only file system
+```
+
+The mount point is `/etc/nginx/templates/default.conf.template`, not the
+generated file. **This took the site down** — see the incident note below.
+
+**3. MatrixRTC authenticates over the FEDERATION API, on a federation-disabled
+homeserver.** `lk-jwt-service` validates the OpenID token against
+`https://<server_name>:8448/_matrix/federation/v1/openid/userinfo`, and §21.3
+deliberately serves no federation listener, so the request simply timed out.
+`LIVEKIT_CS_API_URL_OVERRIDES` does not help — it governs the client-server API
+and leaves this lookup alone (measured).
+
+The resolution keeps §21.3 intact rather than trading it away: a federation
+listener exists but is **LAN-only**, published to `192.168.0.10` and never added
+to the tunnel, with an nginx TLS terminator in front because the lookup is
+https-only. Verified after: `/_matrix/federation/v1/version` answers **404**
+publicly and port 8448 is unreachable from outside. And
+`federation_domain_whitelist: []` blocks federation traffic with every server
+regardless of what is listening — the routing is not the only guard.
+
+**4. The self-signed certificate failed twice, differently.** First
+`CaUsedAsEndEntity`, because `openssl req -x509` produces a CA certificate and
+it was being used as a server certificate — fixed with
+`basicConstraints=critical,CA:FALSE` and `extendedKeyUsage=serverAuth`. Then
+`UnknownIssuer`, because `LIVEKIT_INSECURE_SKIP_VERIFY_TLS=true` **is set and
+the service still reports `SkipVerifyTLS=false`**. Rather than chase an
+undocumented flag, the certificate was added to the container's trust store as a
+CA bundle, which is deterministic and does not depend on the flag working.
+
+#### The incident: the public homeserver went down for about ten minutes
+
+Caused by (2) above, and worth recording because the second-order failure was
+the interesting one.
+
+The bad mount stopped Element Web, which took `/` down. Backing the change out
+did **not** bring it back, because `app.update` on a custom app silently ignored
+the payload: `custom_compose_config` is a **sibling** of `values`, not nested
+inside it, and the wrong shape returns
+`[EINVAL] app_update.custom_compose_config: This field is required` — which was
+being discarded along with the rest of the output.
+
+Then, once the app was finally redeployed from stored config, **Synapse came
+back on port 8016 while the tunnel expects 8060.** The stored config and the
+running container had drifted at some earlier point, and a redeploy is exactly
+what surfaces such drift. This is the same hazard the operator's own host notes
+record for `crafty-4`'s memory limit: *the middleware does not know about
+changes made outside it.*
+
+Lessons applied: the replacement nginx config was validated with `nginx -t` in a
+throwaway container **before** being mounted, and it deployed without incident.
+
 #### Cloudflare specifically, since it is the obvious thing to ask
 
 | Product | Why not |
