@@ -275,6 +275,67 @@ a liability.
 This lean is weaker than §11.4's and should not be treated as settled. Record
 the findings here and raise the confidence marker when it is.
 
+### 17.6.2 Spike evidence, 2026-09-13 — the backend is proven, the client is not
+
+**The whole server-side chain works, verified end to end:**
+
+```
+Matrix user → Synapse OpenID token
+            → lk-jwt-service
+            → federation openid/userinfo (LAN, TLS)
+            → LiveKit JWT
+            → SFU WebSocket: ADMITTED
+```
+
+The last step is the one that matters and it is not inferred. Opening LiveKit's
+signalling socket with a token minted by our own chain returned a JoinResponse
+containing the hashed room and the identity
+`@ver211011:nexlink.thvjq.com.au:SPIKEDEV`. **The SFU validated the token,
+accepted the room grant and admitted the participant.**
+
+Element Web, signed in against this homeserver, independently confirms the
+discovery half: it reads `rtc_foci` as
+`https://nexlink.thvjq.com.au/livekit/jwt`, fetches
+`/_matrix/client/unstable/org.matrix.msc4143/rtc/transports` (**200**) and
+starts its `GroupCallEventHandler`.
+
+#### What this does and does not settle
+
+It settles that **§24.1.1's free hosted SFU is a working MatrixRTC backend**, and
+that nothing about the CGNAT constraint (§17.4) survives into the client.
+
+It does **not** settle §17.6. Steps 1–5 of §17.6.1 all require a client that can
+place a call, and that client is the thing being chosen between. The spike's
+gate — step 2, a third participant from Element Web — is still unrun.
+
+#### It does move the lean, though, and in Option A's favour
+
+The backend that now works is the **standard MatrixRTC contract**, and Element
+Call is the reference implementation of exactly that contract. The evidence is
+that everything upstream expects is already in place and answering correctly.
+Option B would have to reimplement the call-membership state machine and, worse,
+**match Element Call's E2EE layer** against a moving target — §17.6's own
+"Against" column, and the failure mode it names is a call that connects and
+shows black frames.
+
+Set against that, the one thing measured today that counts *against* Option A:
+Element Web's `element_call` config has no `url`, so it loads the widget from
+**`call.element.io`** — a third party serving executable code into the call
+surface of a privacy product. Self-hosting Element Call removes that and is a
+deployment, not a rewrite. **If Option A is taken, self-hosting the widget is
+not optional.**
+
+#### Two operational findings from the spike
+
+**Login rate limiting bites automation, not users.** `rc_login` is
+`per_second: 0.05, burst_count: 5` — one login per twenty seconds. Repeated
+browser-driven sign-ins hit `M_LIMIT_EXCEEDED` and the *browser* reports only
+"There was a problem communicating with the homeserver". Fine for real use;
+plan around it in any automated client test.
+
+**The SFU never learns the Matrix room id.** The room in both the JWT grant and
+the JoinResponse is a hash. See §24.1.2.
+
 ---
 
 ## 17.7 Call lifecycle

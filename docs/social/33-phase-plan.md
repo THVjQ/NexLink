@@ -607,6 +607,25 @@ This phase proves it or falsifies it, and the whole D1 argument rests on it.
 Synapse's MatrixRTC configuration (§17.3.1); `:social-rtc`; the §17.6 decision;
 Telecom integration (§19); screen sharing (§18).
 
+### 33.5.1 Phase 4 — progress at 2026-09-13
+
+| Piece | Status |
+|---|---|
+| ~~Provision the VPS~~ | **Not needed** — §24.1.1 takes a free hosted SFU |
+| LiveKit SFU | **Done** — LiveKit Cloud, credentials verified, Sydney, 24–36 ms |
+| `lk-jwt-service` on Willard | **Done** — app `nexlink-social-rtc`, proxied at `/livekit/jwt` |
+| Synapse MatrixRTC config (§17.3.1) | **Done** — transports endpoint answers 200 |
+| **Full auth chain → SFU admits a participant** | **Verified** — §17.6.2 |
+| `:social-rtc` | **Created** — §17.7 call state, §19 Telecom, §15 call service |
+| §19 Telecom | **Done** — self-managed account registered, verified on the handset |
+| §15 call foreground service | **Done** — 3 instrumented tests pass |
+| **§17.6 decision** | **Open** — needs a client that can place a call (§17.6.2) |
+| §18 screen sharing | Not started — waits on §17.6 |
+| Call UI (§19.5), §15.6 incoming surface | Not started |
+
+**The phase is now blocked on client work rather than on infrastructure or
+money**, which is a materially better position than §33.5 assumed.
+
 **Acceptance:**
 
 - [ ] 1:1 audio and video between two Android devices.
