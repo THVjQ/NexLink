@@ -58,6 +58,60 @@ has trained the operator to ignore alerts.
 
 Everything else is a dashboard. Resist adding a sixth without removing one.
 
+### 27.3.0 Live 2026-09-13, each one verified by breaking it
+
+`infra/social-alerts/social-alerts`, TrueNAS **cronjob id 4**, every 10 minutes.
+Sends on **transition only** — OK→firing, and again on recovery — because this
+section's own first line says an alert that fires and is ignored has trained the
+operator to ignore alerts.
+
+Phase 5 (§33.6) asks for these "verified **by deliberately breaking each one**".
+Done, not assumed:
+
+| Alert | How it was broken | Result |
+|---|---|---|
+| Homeserver down | `app.stop nexlink-social`; public URL returned 502 | **FIRED** after two probes 2 min apart, mailed; recovered 6 s after restart and mailed again |
+| Backup failed | Wrote `result=WARN` into `last-run.status` | **FIRED** — "last run did not report OK" |
+| Media store ≥ 80% | Quota to 1 GiB, wrote a 900 MB file | **FIRED** at 87.9% |
+| Invite failures | 20 bad-token registration attempts (plus earlier probing) | **FIRED** at 56 in the hour |
+| Certificate expiry | — | **NOT APPLICABLE** — §24.1.1 took a hosted SFU, so there is no VPS and no certificate |
+
+The fifth is reported as not-applicable rather than deleted, so the count stays
+five and the reason stays visible in the output.
+
+**Three bugs, all found by running it rather than reading it.** Each would have
+been invisible in review:
+
+1. **"Homeserver down" fired while the homeserver was serving traffic.**
+   Cloudflare's WAF answers **403 to `Python-urllib`** and 200 to the identical
+   request with an ordinary User-Agent. A permanently-false outage alert is the
+   worst failure available here — it is this section's opening warning,
+   delivered on day one, and it would have discredited the other four.
+2. **The invite counter read zero with 57 failures in the log.** Synapse writes
+   its access log to **stderr**; capturing stdout alone found nothing.
+   `docker logs 2>/dev/null | grep -c` → 0, `2>&1` → 57. A silently-zero abuse
+   counter is worse than no counter, because it looks like evidence of calm.
+3. **Every healthy check mailed a "recovered" notice on install** — four emails
+   announcing that nothing had ever been wrong.
+
+### 27.3.2 The registration endpoint is not rate limited
+
+Found while building the invite alert, and it changes how much that alert
+matters. `rc_registration` is configured (`burst_count: 3`) and the dedicated
+`rc_registration_token_validity` endpoint **does** throttle — three probes then
+429. But the token check **through the UIA registration path does not**:
+
+```
+20 bad-token POST /_matrix/client/v3/register  ->  20 × 401, zero 429
+```
+
+The code space makes brute force impractical — §9.3's Crockford base32 codes are
+32¹² ≈ 1.15 × 10¹⁸ — so this is not an emergency. But §9.7 calls the redemption
+endpoint the service's single unauthenticated write path, and **nothing slows a
+campaign against it except someone noticing.** §27.3.1 already said to "set the
+threshold low and expect it never to fire"; this is why that instruction is
+right.
+
 ### 27.3.1 The invite alert is the unusual one
 
 The other four are infrastructure. This one is **abuse detection**, and it is
