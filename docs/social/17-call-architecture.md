@@ -415,9 +415,9 @@ Social app, and a second account on the same handset joined it.
 |---|---|
 | 1. Two parties in a call, media both ways | **Pass** — two accounts, each seeing the other's decrypted video, `Subscribed: video camera TR_… of @push204943:…` |
 | 2. A third participant from Element Web | **Pass** — the gate; see §17.6.4.4 |
-| 3. Screen share from Android | Not run (§18) |
-| 4. E2EE on, keys rotate | **Partly** — `encrypted=true` per participant and `MatrixKeyProvider: Sent new key to livekit … encryptionKeyIndex=0`; rotation on leave not yet observed |
-| 5. Incoming call from a cold start | Not run (§15.6) |
+| 3. Screen share from Android | **Cannot be done on Option A** — §18.2.1 |
+| 4. E2EE on, keys rotate | **Pass** — `encrypted=true` per participant, and on the second participant leaving: `creating new outbound key index:2` … `Rollout completed` |
+| 5. Incoming call from a cold start | **Pass** — §15.6.1 |
 
 Supporting evidence, all from the device:
 

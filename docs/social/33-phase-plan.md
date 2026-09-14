@@ -686,7 +686,7 @@ The credential handoff is **done**, and with it the first real calls.
 | §17.6.1 step 2 — a third party from Element Web | **Done** — the gate, §17.6.4.4 |
 | Back backgrounds the call; the notification returns to it | **Done** — §19.5.4 |
 | §17.6.1 step 3 — screen share from Android | **Cannot be done on Option A** — §18.2.1 |
-| §17.6.1 step 4 — key rotation observed on leave | Partly — encryption confirmed on, rotation not yet observed |
+| §17.6.1 step 4 — key rotation observed on leave | **Done** — `creating new outbound key index:2` on leave |
 | §17.6.1 step 5 — incoming call from a cold start | **Done** — §15.6.1; the other gate |
 
 Three bugs, all of which connected a call and then failed silently — see
@@ -707,15 +707,19 @@ Invariant 8 (§2.8) now guards 1 and 2 mechanically.
 - [ ] **Four participants, mixed Android and Element Web, with one screen
       share, on a mid-range phone over domestic broadband.** This is §1.5's
       success criterion verbatim and it is the gate for the phase.
-- [ ] E2EE confirmed **on**, and keys observed rotating on join and leave
-      (§17.5). Not assumed — observed.
+- [x] E2EE confirmed **on**, and keys observed rotating on join and leave
+      (§17.5). Not assumed — observed: `encrypted=true` per participant, and
+      `creating new outbound key index:2` when the second participant left.
 - [ ] A cellular call interrupts a Social call correctly: hold, mic released,
       resume (§19.4).
-- [ ] Incoming call with the app swiped away reaches the user (§15.6).
+- [x] Incoming call with the app swiped away reaches the user (§15.6) — §15.6.1.
 - [ ] Calls work from a network that permits only outbound TCP 443 (§24.5).
 - [ ] Force-stopping a client during a call leaves no ghost participant (§17.7).
-- [ ] CI asserts no `MediaRecorder` / `MediaMuxer` anywhere in `:social-*`
-      (§18.2).
+      **Measured and currently FAILS: the ghost lasts an hour** (§17.7.2). The
+      delayed leave is upstream's, at `delay=3600000`, and no server setting
+      shortens it. This is a decision to take, not a bug to fix.
+- [x] CI asserts no `MediaRecorder` / `MediaMuxer` anywhere in `:social-*`
+      (§18.2) — `tools/check-invariants.sh`, check 1.
 
 ---
 
