@@ -154,14 +154,23 @@ signs in. So it ran against a null session and never ran again. Now driven by
 the session state reaching `SignedIn`, with a retry if it fails — a transient
 failure must not disable push for the process lifetime with nothing said.
 
-### Outstanding
+### Both variants, 2026-09-14
 
-`google-services.json` covers only the release package. Until
-`com.thvjq.nexlink.social.debug` is registered in Firebase, the build applies
-the plugin to **neither** variant and logs why — because the debug variant is
-what the rest of this repository is tested against, including §8.4's two-device
-verification, and an unbuildable debug variant is a worse outcome than absent
-push.
+`com.thvjq.nexlink.social.debug` was registered in the same Firebase project —
+**the same project, a second app**, because push credentials are per-project and
+a new project would have invalidated the service-account key already working on
+Willard.
+
+Verified: `FirebaseApp initialization successful` in the debug build, the pusher
+registers as `com.thvjq.nexlink.social.debug.android`, and a message sent to a
+**killed** debug process produced a notification in **8 seconds**. Sygnal was
+already configured with both app ids, which is why nothing server-side needed
+changing — and that mapping is worth checking first if a variant ever stops
+receiving, because a mismatched app id fails silently on both sides.
+
+The conditional plugin application in `social/build.gradle` stays. A clean clone
+of this public repository still has no `google-services.json`, and it must build
+without one.
 
 ---
 
