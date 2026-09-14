@@ -98,9 +98,14 @@ through an outbound-initiated tunnel. Nothing about CGNAT affects it.
   "defaultCountryCode": "AU",
   "showLabsSettings": false,
 
-  // §17 — MatrixRTC
+  // §17 — MatrixRTC. The `url` is NOT optional: without it Element Web
+  // loads the call widget from call.element.io — a third party serving
+  // executable code into the call surface of a privacy product (§17.6.3).
   "features": { "feature_video_rooms": false },
-  "element_call": { "use_exclusively": true },
+  "element_call": {
+    "url": "https://nexlink.thvjq.com.au/call",
+    "use_exclusively": true
+  },
 
   // §1.3 — nothing that leaks content or metadata to third parties
   "integrations_ui_url": null,
@@ -122,6 +127,23 @@ through an outbound-initiated tunnel. Nothing about CGNAT affects it.
   }
 }
 ```
+
+### 20.4.1 The config is copied at container start, not read per request
+
+Applied 2026-09-14. The file is bind-mounted at `/app/config.json`, but nginx
+serves `/config` from `/tmp/element-web-config`, which the image's entrypoint
+populates on startup. **Editing the mounted file changes nothing until the app
+is redeployed** — and the symptom is the worst kind: `docker exec … cat
+/app/config.json` shows the new content while the site serves the old.
+
+```bash
+sudo midclt call -j app.redeploy nexlink-social-web
+```
+
+`config.json` is served `Cache-Control: no-cache` and comes back
+`cf-cache-status: DYNAMIC`, so unlike §17.6.3's assets there is no edge cache
+to wait out. Verify at the origin *and* through the edge; they answered
+identically here.
 
 Three of these are load-bearing rather than cosmetic and should be treated as
 invariants alongside §2.8:

@@ -672,6 +672,33 @@ live call*, so a stale one is a button that takes the user to a call which is
 not happening. Fixed in `onDestroy`, and the §15.9 tests pass with no stale
 notification left behind.
 
+### 33.5.3 Phase 4 — progress at 2026-09-14 (evening)
+
+The credential handoff is **done**, and with it the first real calls.
+
+| Piece | Status |
+|---|---|
+| Credential handoff to the widget | **Done** — Rust `WidgetDriver` behind a real iframe (§17.6.4.1) |
+| A call that connects, encrypts and carries media | **Done** — verified on the handset |
+| Two parties, each decrypting the other | **Done** — two accounts, video both ways |
+| Hang-up closes the surface and withdraws membership | **Done** — `io.element.close`, both `m.call.member` events emptied |
+| Element Web loads **our** widget, not `call.element.io` | **Done** — §20.4.1, §17.6.3's condition met |
+| §17.6.1 step 2 — a third party from Element Web | In progress |
+| §18 screen sharing | Not started |
+| §19.5 native call UI, §15.6 incoming call | Not started |
+
+Three bugs, all of which connected a call and then failed silently — see
+§17.6.4.1 for each in full:
+
+1. A shimmed `window.parent` cannot satisfy the widget API's check that a reply
+   came from the frame it posted to. Every request timed out.
+2. `loadDataWithBaseURL` does not reliably give the host page the base URL's
+   origin, and the transport drops mismatched messages without an error.
+3. `MODIFY_AUDIO_SETTINGS` was missing, so the call joined the SFU and was
+   silent. Nothing at the Matrix layer said so.
+
+Invariant 8 (§2.8) now guards 1 and 2 mechanically.
+
 **Acceptance:**
 
 - [ ] 1:1 audio and video between two Android devices.
