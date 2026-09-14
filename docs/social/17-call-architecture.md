@@ -584,19 +584,69 @@ Independent of which option wins.
 | **Leave** | Membership state removed, SFU disconnected, foreground service stopped cleanly (§15.2.1) |
 | **Crash** | Nothing removes the state — so the delayed event fires and does it. This is why §17.3.1 exists |
 
-### 17.7.1 Ringing is state, not a message
+### 17.7.1 Ringing — corrected 2026-09-14
 
-There is no "ring" event. A client rings because it observes membership state
-appear in a room it is in. Two consequences worth stating because they surprise
-people:
+**This section said "there is no ring event; a client rings because it observes
+membership state". That is wrong, and it mattered:** state events do not
+generate pushes, so a client built on that premise rings only while it is
+already awake and running. Measured on the wire, there *is* a ring event, and
+it is a separate message-like one the **caller** sends:
 
-- **A call to an offline device is not lost.** The state persists; the device
-  rings when it syncs, and the UI must decide whether a two-minute-old call is
-  still worth ringing for. Proposed: ring if the membership is under 60 seconds
-  old, otherwise present it as missed.
+```json
+{"type":"org.matrix.msc4075.rtc.notification",
+ "content":{"notification_type":"ring","lifetime":90000,
+            "m.mentions":{"user_ids":[],"room":true},
+            "m.relates_to":{"rel_type":"m.reference","event_id":"$…"}}}
+```
+
+`m.mentions.room: true` is what makes the homeserver push it. `lifetime` is the
+ring timeout. It is sent only if the caller's client is configured to send it
+(§15.6.1) — with that off, every other part of a call works and the callee's
+phone stays silent.
+
+Membership state is still what says *who is in the call*. The ring is what says
+*answer your phone*. Both exist, and the distinction is the difference between
+an app that rings from cold and one that does not.
+
+Two consequences, restated against that:
+
+- **A call to an offline device is not lost, but it does go stale.** The ring
+  carries its own deadline — 90 seconds as Element Call sends it — so a device
+  that syncs late has an explicit, sender-chosen answer to "is this still worth
+  ringing for", and §15.6.1 uses it rather than inventing one. The membership
+  state that outlives it is a ghost, not a ring (§17.7.2).
 - **Every one of the user's devices rings.** Answering on one must visibly
   cancel the others, which is a UI obligation (§19), not something the protocol
   does.
+
+### 17.7.2 How long a ghost participant actually lasts — measured 2026-09-14
+
+§17.9 asks whether `max_event_delay_duration: 24h` is the right value, on the
+grounds that it *"bounds how long a ghost participant can persist"*. **It does
+not, and the server cap is not the lever.**
+
+Measured by force-stopping a client mid-call and reading the server:
+
+- The membership stays in room state with full content — a ghost — and the
+  other participant still sees it.
+- The leave is a **delayed event** (MSC4157), and the client chooses the delay.
+  Element Call asks for **3 600 000 ms — one hour**, visible both on the widget
+  bridge (`"delay":3600000` on the empty-content `m.call.member`) and in
+  `GET /_matrix/client/unstable/org.matrix.msc4140/delayed_events`.
+- A live client restarts that timer as it refreshes. A dead one does not, so
+  the ghost clears an hour after the crash.
+
+So `max_event_delay_duration` only has to be **at least** what the client asks
+for. Lowering it from 24h to 2h would change nothing about ghosts; lowering it
+below an hour would break Element Call's refresh scheme rather than tidy it.
+**The one-hour ghost is upstream's decision, and §17.9's question is answered
+by closing it rather than by tuning the server.**
+
+What this costs in practice: after a crash, a 1:1 call shows a participant who
+is not there for up to an hour, and the SFU room is held open for as long
+(§28's idle-room cost, §17.9's other open question). If that is unacceptable
+the fix is a client-side one — notice a membership whose device has gone quiet
+and stop rendering it — not a server setting.
 
 ---
 
@@ -634,6 +684,8 @@ an error.
   uplink is not in the media path. But the operator's own testing will be over
   Starlink, and Starlink's jitter is not representative of what users see.
   Test from a non-Starlink network before drawing conclusions about quality.
-- **Is `max_event_delay_duration: 24h` the right value?** It bounds how long a
-  ghost participant can persist if a client dies at exactly the wrong moment.
-  Shorter is safer and costs more refresh traffic.
+- ~~**Is `max_event_delay_duration: 24h` the right value?**~~ **Answered
+  2026-09-14, §17.7.2.** It does not bound the ghost: Element Call asks for one
+  hour and the server cap only has to be at least that. Lowering it changes
+  nothing until it goes below an hour, at which point it breaks the refresh
+  scheme.
