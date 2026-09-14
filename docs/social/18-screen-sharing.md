@@ -39,6 +39,45 @@ returning nothing is a valid, cheap review gate. Put it in CI (§34).
 
 ---
 
+## 18.2.1 Option A changes who does the capturing — measured 2026-09-14
+
+§17.6 chose Option A, and §18.3 below was written for Option B. **With the
+widget, the app does not own the capture at all** — Element Call would call
+`getDisplayMedia()` inside the WebView, and the MediaProjection plumbing in
+§18.3 never runs.
+
+Measured on the handset, in a live call: **Element Call offers no screen-share
+control on Android.** `hideScreensharing=false` is passed in the widget
+properties, and the in-call overflow shows only Audio / Video / Preferences /
+Feedback. That is upstream behaving correctly — `getDisplayMedia()` is not
+implemented in Android WebView (nor in Chrome for Android), so a share button
+would be a button that throws.
+
+So §18 as written is **not implementable on top of Option A**, and this is a
+real cost of that decision that §17.6.3 did not price. Three ways out, in
+increasing order of work:
+
+1. **Ship without screen sharing on Android**, keeping it for whatever desktop
+   client exists later. §1.5's success criterion names "four participants and
+   one screen share", so this is a criterion change, not a scope trim — it
+   needs saying out loud rather than discovering at acceptance.
+2. **Host-side capture fed to the widget.** The app runs MediaProjection per
+   §18.3 and hands frames to the page. There is no widget-API action for
+   "here is a video track", so this means a custom channel and a patched
+   Element Call — the exact upstream-divergence cost Option A existed to
+   avoid.
+3. **Wait for upstream.** WebRTC screen capture on Android is a standing
+   platform gap, not an Element Call omission. Nothing suggests a date.
+
+**Recommendation: (1), and raise it as a decision.** (2) converts a dependency
+back into a liability, which is §11.4's argument in reverse.
+
+The §2.8 invariant is unaffected either way, and so is every row of §18.2 that
+is about *not* doing something. What changes is the row that says the share
+control exists.
+
+---
+
 ## 18.3 The plumbing
 
 ```

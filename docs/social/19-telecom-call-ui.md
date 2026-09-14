@@ -169,6 +169,44 @@ ongoing `CallStyle` notification is the route back, and it is not dismissible.
 A user who cannot find their way back to an active call will force-stop the app,
 which ends the call in the worst possible way (§17.7).
 
+### 19.5.4 Two ways out of a call that were not there — measured 2026-09-14
+
+§19.5.3 says a backgrounded call must be one tap away. Neither half of that was
+true on the handset, and both failures are the kind that only a real call
+surfaces.
+
+**Back ended the call.** The default `onBackPressed` finished the activity,
+`onDestroy` stopped the service, and the call was over — from the gesture every
+Android user makes reflexively, with no confirmation and no way to undo it.
+Back now calls `moveTaskToBack(true)`. Ending a call is what the red button is
+for, and the widget says when it has been pressed (`io.element.close`,
+§17.6.4.2).
+
+**The ongoing notification did nothing when tapped.** It had no content intent,
+so it was a label rather than a route, and the only way back into a
+backgrounded call was the recents list. §19.5.3 already called this out as the
+thing that makes users force-stop the app, which ends the call in the worst
+possible way (§17.7).
+
+The fix crosses a module boundary: the call surface is in `:social`, the
+service in `:social-rtc`. The activity supplies a `PendingIntent` to itself and
+the service puts it on the notification — a `PendingIntent` travels in an
+`Intent` extra, so `:social-rtc` never has to know the activity exists.
+
+One ordering detail, because it is the same shape as §15.2.1's: `onCreate`
+promotes the service to foreground *before* `onStartCommand` has seen the
+intent, so the first notification is posted without the route. The service
+re-posts it when the `PendingIntent` arrives.
+
+### 19.5.5 Audio routing works, and comes from the widget
+
+Verified in a live call: the widget's own settings sheet offers **Microphone 1
+/ Speakerphone / Headset earpiece**, and switching takes effect. §19.6's
+requirement that routing go through Telecom rather than `AudioManager` directly
+is not what Option A does — WebRTC inside the WebView selects the device, which
+is why `MODIFY_AUDIO_SETTINGS` is load-bearing (§17.6.4.1). Revisit §19.6
+against that reality rather than assuming the Telecom path.
+
 ---
 
 ## 19.6 Audio routing

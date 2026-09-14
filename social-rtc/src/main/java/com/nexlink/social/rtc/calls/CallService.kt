@@ -45,6 +45,16 @@ class CallService : Service() {
 
     @Volatile private var isForeground = false
 
+    /**
+     * §19.5.3 — the route back into a live call.
+     *
+     * Supplied by whoever started the service, because the call surface lives
+     * in `:social` and this service lives in `:social-rtc`; a `PendingIntent`
+     * crosses that boundary without the module dependency that naming the
+     * activity would need.
+     */
+    @Volatile private var returnToCall: android.app.PendingIntent? = null
+
     override fun onCreate() {
         super.onCreate()
         promoteToForeground()          // before any decision that could stop us
@@ -52,6 +62,21 @@ class CallService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         promoteToForeground()          // a sticky redelivery re-enters here
+
+        // §19.5.3 — onCreate promoted before this intent existed, so the first
+        // notification was posted without a way back. Re-post it now there is
+        // one. Doing it only on change keeps a sticky redelivery from
+        // re-notifying for nothing.
+        @Suppress("DEPRECATION")
+        val back = intent?.getParcelableExtra<android.app.PendingIntent>(EXTRA_RETURN_INTENT)
+        if (back != null && back != returnToCall) {
+            returnToCall = back
+            if (isForeground) {
+                (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                    .notify(NOTIFICATION_ID, buildNotification())
+            }
+        }
+
         if (intent?.getStringExtra(EXTRA_ROOM_ID).isNullOrBlank()) {
             // Nothing to run for. Still owed a promotion — see stopCleanly.
             stopCleanly()
@@ -183,6 +208,11 @@ class CallService : Service() {
             // have no lock at all.
             .setContentText("NexLink Social")
             .setOngoing(true)
+            // §19.5.3 — "one tap away". Without this the notification is a
+            // label, not a route: measured, the ongoing notification did
+            // nothing when tapped, and the only way back into a backgrounded
+            // call was the recents list.
+            .also { b -> returnToCall?.let { b.setContentIntent(it) } }
             .build()
     }
 
@@ -190,6 +220,7 @@ class CallService : Service() {
         private const val CHANNEL = "social_call"
         private const val NOTIFICATION_ID = 7301
         const val EXTRA_ROOM_ID = "com.nexlink.social.rtc.CALL_ROOM_ID"
+        const val EXTRA_RETURN_INTENT = "com.nexlink.social.rtc.CALL_RETURN"
 
         private const val TYPE_NONE = 0
 
@@ -201,9 +232,14 @@ class CallService : Service() {
          * call the user has not taken, which is both a battery cost and exactly
          * the behaviour that makes a permission reviewer look harder (§4.2.1).
          */
-        fun start(context: Context, roomId: String) {
+        fun start(
+            context: Context,
+            roomId: String,
+            returnToCall: android.app.PendingIntent? = null
+        ) {
             val i = Intent(context, CallService::class.java)
                 .putExtra(EXTRA_ROOM_ID, roomId)
+                .putExtra(EXTRA_RETURN_INTENT, returnToCall)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(i)
             } else {

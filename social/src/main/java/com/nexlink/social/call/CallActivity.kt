@@ -175,10 +175,37 @@ class CallActivity : AppCompatActivity() {
         }
         setContentView(web)
 
+        // §19.5.3 — Back sends the call to the background; it does not end it.
+        //
+        // Measured: with the default behaviour, Back finished the activity,
+        // `onDestroy` stopped the service, and the call ended — from a gesture
+        // every Android user makes reflexively. Ending a call is what the red
+        // button is for, and the widget tells us when it has been pressed
+        // (`io.element.close`).
+        onBackPressedDispatcher.addCallback(this,
+            object : androidx.activity.OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() { moveTaskToBack(true) }
+            })
+
         permissions.launch(
             arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA)
         )
     }
+
+    /**
+     * §19.5.3 — the notification's way back into this call.
+     *
+     * `singleTask` means this resolves to the *existing* instance rather than
+     * a second call surface.
+     */
+    private fun returnHere(): android.app.PendingIntent =
+        android.app.PendingIntent.getActivity(
+            this, 0,
+            intent(this, roomId.orEmpty())
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or
+                android.app.PendingIntent.FLAG_IMMUTABLE
+        )
 
     private fun has(p: String) =
         ContextCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED
@@ -191,7 +218,7 @@ class CallActivity : AppCompatActivity() {
         // §15.4.1 — the service starts HERE, on answer, with the permission in
         // hand. Never while ringing: that would hold the microphone for a call
         // the user has not taken.
-        CallService.start(this, room)
+        CallService.start(this, room, returnHere())
 
         val session = SessionProvider.manager(this).current() as? RustSocialSession
         if (session == null) { toast("Not signed in"); finish(); return }
