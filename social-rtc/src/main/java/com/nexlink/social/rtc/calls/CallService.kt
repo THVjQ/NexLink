@@ -69,6 +69,7 @@ class CallService : Service() {
         // re-notifying for nothing.
         @Suppress("DEPRECATION")
         val back = intent?.getParcelableExtra<android.app.PendingIntent>(EXTRA_RETURN_INTENT)
+        android.util.Log.d("NexLinkCallSvc", "return intent present=${back != null} fg=$isForeground")
         if (back != null && back != returnToCall) {
             returnToCall = back
             if (isForeground) {

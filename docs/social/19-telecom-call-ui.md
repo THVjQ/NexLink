@@ -198,6 +198,14 @@ promotes the service to foreground *before* `onStartCommand` has seen the
 intent, so the first notification is posted without the route. The service
 re-posts it when the `PendingIntent` arrives.
 
+Both verified on the handset: Back leaves the launcher in front with the
+service still running, and tapping "Call in progress" returns to the **same**
+`CallActivity` with the call still up — `singleTask` plus `FLAG_ACTIVITY_CLEAR_TOP`,
+so it is a return rather than a second call surface.
+
+`dumpsys notification` is the quick check — `contentIntent=null` says the route
+is missing before anyone has to tap anything.
+
 ### 19.5.5 Audio routing works, and comes from the widget
 
 Verified in a live call: the widget's own settings sheet offers **Microphone 1

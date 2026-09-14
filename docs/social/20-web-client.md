@@ -128,7 +128,21 @@ through an outbound-initiated tunnel. Nothing about CGNAT affects it.
 }
 ```
 
-### 20.4.1 The config is copied at container start, not read per request
+### 20.4.1 Element Web ships its own Element Call
+
+Measured 2026-09-14: the widget iframe Element Web 1.12.27 actually loads is
+
+```
+https://nexlink.thvjq.com.au/widgets/element-call/index.html?widgetId=…
+```
+
+— its **own bundled copy**, on this deployment's origin, in preference to the
+configured `element_call.url`. §17.6.2's worry that a missing `url` means
+`call.element.io` does not hold for this build; no third party was serving code
+into the call surface. Set the `url` anyway: it costs nothing and it decides the
+question rather than leaving it to what a future release bundles.
+
+### 20.4.2 The config is copied at container start, not read per request
 
 Applied 2026-09-14. The file is bind-mounted at `/app/config.json`, but nginx
 serves `/config` from `/tmp/element-web-config`, which the image's entrypoint

@@ -414,7 +414,7 @@ Social app, and a second account on the same handset joined it.
 | §17.6.1 step | Result |
 |---|---|
 | 1. Two parties in a call, media both ways | **Pass** — two accounts, each seeing the other's decrypted video, `Subscribed: video camera TR_… of @push204943:…` |
-| 2. A third participant from Element Web | **Not run** — see below |
+| 2. A third participant from Element Web | **Pass** — the gate; see §17.6.4.4 |
 | 3. Screen share from Android | Not run (§18) |
 | 4. E2EE on, keys rotate | **Partly** — `encrypted=true` per participant and `MatrixKeyProvider: Sent new key to livekit … encryptionKeyIndex=0`; rotation on leave not yet observed |
 | 5. Incoming call from a cold start | Not run (§15.6) |
@@ -430,9 +430,7 @@ Supporting evidence, all from the device:
 - On hang-up, both members' `m.call.member` events are emptied to `{}`:
   no ghost participants (§17.7).
 
-**Step 2 remains the gate and remains unrun.** Two clients of the same build
-prove less than a cross-implementation call does; this result moves Option A
-from "unproven" to "works between two instances of itself".
+**Step 2 was the gate, and it passes** — §17.6.4.4.
 
 ### 17.6.4.1 The host bridge: three things that had to be right
 
@@ -517,6 +515,59 @@ Two log lines look alarming and are not:
   decryption, which was confirmed working in the same call.
 - `Failed to resolve address for ip-…-.host.livekit.cloud, errorcode: -105` —
   a STUN host lookup. ICE succeeded by other candidates.
+
+---
+
+---
+
+### 17.6.4.4 Step 2 — the gate — passes
+
+Element Web, signed in as a second account and driven headlessly with
+Chromium's fake camera, joined the same call. **Both directions carry decoded
+video:**
+
+- On the phone: peer195112's tile shows Chromium's green test pattern with its
+  timer running — decoded frames, not a still. `Subscribed: video camera
+  TR_VCj8u5guzKF9Br of @peer195112:…`, `Subscribed: audio microphone TR_AMv…`,
+  and `matrixLivekitMembers$ updated [@peer195112:…|IFZKNPRYRR]`.
+- On the web: call190359's camera fills the frame, the phone filming a desk.
+
+§17.6.1 called step 2 the gate because "Android-to-Android proves very little;
+Android-to-web proves the encryption layers agree". They agree.
+
+Element Web's toolbar also carries a screen-share control that Android's does
+not — the same measurement §18.2.1 records from the other side.
+
+#### A correction to §17.6.2
+
+§17.6.2 recorded that Element Web's missing `element_call.url` meant it loaded
+the widget from `call.element.io`. **That is not what this build does.** The
+iframe URL observed live is
+
+```
+https://nexlink.thvjq.com.au/widgets/element-call/index.html?widgetId=…
+```
+
+Element Web 1.12.27 ships its own copy of Element Call at `/widgets/element-call/`
+and uses it in preference to the configured URL — verified inside the container.
+So no third party was ever serving code into the call surface here; the risk
+§17.6.2 named was real in principle and absent in fact.
+
+`element_call.url` is set anyway (§20.4.1). It costs nothing, and it is the
+setting that decides the question rather than leaving it to what a future
+Element Web release happens to bundle.
+
+#### The harness, for whoever runs this next
+
+Two things cost most of the time and neither is about calling:
+
+- **Element greets a fresh web session with a queue of modals** — "Confirm your
+  digital identity" (whose close button has no accessible name), then "Verify
+  this device", then "Enable desktop notifications" — each covering the room
+  list. Automation has to clear all three.
+- **`rc_login` is one login per twenty seconds** (§17.6.2 records this). Several
+  scripted attempts in a row earn `M_LIMIT_EXCEEDED`, which the browser reports
+  only as *"There was a problem communicating with the homeserver"*.
 
 ---
 
