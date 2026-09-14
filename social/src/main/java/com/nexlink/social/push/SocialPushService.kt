@@ -6,6 +6,8 @@ import com.google.firebase.messaging.RemoteMessage
 import com.nexlink.social.Notifications
 import com.nexlink.social.SessionProvider
 import com.nexlink.social.core.session.RoomId
+import com.nexlink.social.core.rust.RustSocialSession
+import com.nexlink.social.call.IncomingCallNotification
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -99,6 +101,25 @@ class SocialPushService : FirebaseMessagingService() {
                 // change to server state. Synapse retires a pusher that keeps
                 // failing on its own.
                 Log.w(TAG, "push with no stored session — ignoring")
+                return@runBlocking
+            }
+
+            // §15.6 — is this a ring rather than a message?
+            //
+            // It has to be asked here, after decryption, and it cannot be
+            // asked earlier: the ring travels as `m.room.encrypted` like
+            // everything else, so neither the homeserver nor the
+            // `EVENT_ID_ONLY` payload can tell the two apart. See
+            // [RustSocialSession.incomingCall].
+            val call = eventId?.let { id ->
+                withTimeoutOrNull(RESOLVE_BUDGET_MS) {
+                    runCatching {
+                        (session as? RustSocialSession)?.incomingCall(RoomId(roomId), id)
+                    }.getOrNull()
+                }
+            }
+            if (call != null) {
+                IncomingCallNotification.show(applicationContext, call)
                 return@runBlocking
             }
 

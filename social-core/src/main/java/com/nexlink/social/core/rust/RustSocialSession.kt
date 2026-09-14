@@ -16,6 +16,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.matrix.rustcomponents.sdk.AuthData
 import org.matrix.rustcomponents.sdk.VerificationState
+import uniffi.matrix_sdk.NotificationType
+import org.matrix.rustcomponents.sdk.TimelineEventContent
+import org.matrix.rustcomponents.sdk.MessageLikeEventContent
+import org.matrix.rustcomponents.sdk.RtcNotificationType
+import org.matrix.rustcomponents.sdk.RtcCallIntent
 import org.matrix.rustcomponents.sdk.CreateRoomParameters
 import org.matrix.rustcomponents.sdk.RoomPreset
 import org.matrix.rustcomponents.sdk.RoomVisibility
@@ -339,6 +344,51 @@ class RustSocialSession private constructor(
     // ---- §17.6.3 calls -----------------------------------------------------
 
     /**
+     * §15.6 — is this pushed event someone ringing?
+     *
+     * **Why the push cannot just say so.** MatrixRTC call membership is a
+     * *state* event, and state events do not generate pushes. The ring is a
+     * separate message-like event the caller's client sends —
+     * `org.matrix.msc4075.rtc.notification`, carrying
+     * `notification_type: "ring"`, a `lifetime`, and `m.mentions.room: true`
+     * (measured on the wire). In an encrypted room it travels as
+     * `m.room.encrypted` like everything else, so **the homeserver cannot tell
+     * a call from a message** and neither can the push payload, which is
+     * `EVENT_ID_ONLY` by §13.3.1 anyway.
+     *
+     * So the classification happens here, after decryption, which is the only
+     * place it can happen without handing the server the distinction.
+     *
+     * @return the call to ring for, or null — not a ring, expired, or
+     *   undecryptable. Every one of those means "treat it as a message".
+     */
+    suspend fun incomingCall(roomId: RoomId, eventId: String): IncomingCall? = io {
+        val room = runCatching { roomListService.room(roomId.value) }.getOrNull()
+            ?: return@io null
+        val event = runCatching { room.loadOrFetchEvent(eventId) }.getOrNull()
+            ?: return@io null
+
+        val content = (event.content() as? TimelineEventContent.MessageLike)?.content
+        val rtc = content as? MessageLikeEventContent.RtcNotification ?: return@io null
+        if (rtc.notificationType != RtcNotificationType.RING) return@io null
+
+        // §15.6 wants "a ringing timeout, after which the notification becomes
+        // a missed call". The caller already put one on the wire; honour that
+        // rather than inventing a second one that could disagree.
+        val expiresAt = rtc.expirationTs.toLong()
+        if (expiresAt <= System.currentTimeMillis()) return@io null
+
+        IncomingCall(
+            roomId = roomId,
+            roomTitle = runCatching { room.displayName() }.getOrNull().orEmpty(),
+            callerId = event.senderId(),
+            expiresAtMs = expiresAt,
+            video = rtc.callIntent == RtcCallIntent.VIDEO
+        )
+    }
+
+
+    /**
      * Build the Element Call widget for [roomId], and the URL to load it from.
      *
      * @return the bridge and the URL, or null if the room is unknown.
@@ -387,9 +437,16 @@ class RustSocialSession private constructor(
                 // The app owns navigation; the widget must not try to move the
                 // user somewhere else.
                 confineToRoom = true,
+                // §18.2.1 — passed as visible, and Element Call hides it on
+                // Android anyway: getDisplayMedia() is not implemented in
+                // Android WebView. Measured, not assumed.
                 hideScreensharing = false,
                 controlledAudioDevices = false,
-                sendNotificationType = null
+                // §15.6 — the callee's phone has to ring, and nothing else
+                // makes that happen. MatrixRTC call membership is a state
+                // event, and state events do not push; the ring is a separate
+                // event the *caller's* client sends, which is this.
+                sendNotificationType = NotificationType.RING
             )
         )
 

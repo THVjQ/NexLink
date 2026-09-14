@@ -218,6 +218,64 @@ Requirements:
 - Correct behaviour when the device is locked, in Do Not Disturb, and during an
   existing cellular call (§19).
 
+### 15.6.1 Built and measured, 2026-09-14
+
+Works end to end on the handset: a killed process was woken by push, rang, and
+answering put the user in the call.
+
+**The part that is not obvious: nothing in the push says "call".**
+
+MatrixRTC call membership is a *state* event, and state events do not generate
+pushes. The ring is a separate message-like event the **caller's** client
+sends. Captured off the widget bridge:
+
+```json
+{"type":"org.matrix.msc4075.rtc.notification",
+ "content":{"notification_type":"ring",
+            "m.mentions":{"user_ids":[],"room":true},
+            "lifetime":90000,
+            "m.relates_to":{"rel_type":"m.reference","event_id":"$…"}}}
+```
+
+In an encrypted room that travels as `m.room.encrypted` like everything else.
+So **the homeserver cannot tell a call from a message** — which is §2.8 #1
+working as intended — and neither can the `EVENT_ID_ONLY` payload (§13.3.1).
+The classification happens on the device, after decryption, in
+`RustSocialSession.incomingCall`. Anything else would mean telling the server
+which of your events are calls.
+
+The caller's client only sends that event if it is asked to:
+`sendNotificationType = RING` in the widget config. With it null — the value
+this project shipped first — everything else about a call works and **the
+callee's phone never rings**, which is a silent failure of exactly the kind
+§17.6.4.1 collects.
+
+**The ringing timeout is the caller's.** §15.6 asks for one; `lifetime` is
+already on the wire, so `setTimeoutAfter` is set from it rather than inventing
+a second deadline that could disagree about when the caller gave up. Measured:
+90 seconds later the ring is gone from the lock screen without the app running.
+
+#### Testing this needs `am kill`, not `am force-stop`
+
+A force-stopped package receives no FCM at all — Android's stopped-package
+rule. The first attempt used `force-stop` and the push simply never arrived,
+which looks exactly like a broken push chain. `adb shell am kill <pkg>` kills
+the process without the stopped flag, which is what "swiped away" actually
+means.
+
+#### What is verified, and what is not
+
+| | |
+|---|---|
+| Cold process woken by push, ring posted | **Verified** |
+| `CallStyle` heads-up with Answer / Decline, no MXID on it | **Verified** — it names the conversation |
+| Answer joins the call | **Verified** — `CallActivity`, service promoted |
+| Ring expires on the caller's `lifetime` | **Verified** — gone from the lock screen at 90 s |
+| Ring dismissed the moment it is answered | **Written, not separately observed** — the heads-up had already collapsed by the time the answer landed |
+| Full-screen takeover on a **locked** screen | **Not observed** — the test screen was unlocked and in use, where the platform correctly shows a heads-up instead |
+
+The last two are the ones to check next, and the second needs a locked device.
+
 ---
 
 ## 15.7 Boot and process death

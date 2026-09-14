@@ -43,6 +43,16 @@
     -->
     <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
 
+    <!--
+      §15.6 / §19.5.1 — the incoming-call surface.
+
+      Play scrutinises this one, and the justification is the only one it
+      accepts: an incoming call, ringing on a locked or idle screen. It is
+      never used for anything else here; the only `setFullScreenIntent` in the
+      app is [IncomingCallNotification].
+    -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
     <uses-permission android:name="${nexlinkBridgePermission}" />
 
     <application
@@ -156,6 +166,11 @@
 
         <receiver
             android:name=".NotificationActionReceiver"
+            android:exported="false" />
+
+        <!-- §15.6 — declining a ring takes the notification away, nothing more. -->
+        <receiver
+            android:name=".call.IncomingCallNotification$DeclineReceiver"
             android:exported="false" />
 
     </application>

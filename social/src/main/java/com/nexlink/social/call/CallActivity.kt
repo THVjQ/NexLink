@@ -215,6 +215,11 @@ class CallActivity : AppCompatActivity() {
         started = true
         val room = roomId ?: return
 
+        // §15.6 — the ring has been answered; it must stop being a ring. Left
+        // up, it sits there offering Answer and Decline for a call the user is
+        // already in, and Decline would then be a button that does nothing.
+        IncomingCallNotification.dismiss(this)
+
         // §15.4.1 — the service starts HERE, on answer, with the permission in
         // hand. Never while ringing: that would hold the microphone for a call
         // the user has not taken.

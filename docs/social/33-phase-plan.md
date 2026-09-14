@@ -683,9 +683,11 @@ The credential handoff is **done**, and with it the first real calls.
 | Two parties, each decrypting the other | **Done** — two accounts, video both ways |
 | Hang-up closes the surface and withdraws membership | **Done** — `io.element.close`, both `m.call.member` events emptied |
 | Element Web loads **our** widget, not `call.element.io` | **Done** — §20.4.1, §17.6.3's condition met |
-| §17.6.1 step 2 — a third party from Element Web | In progress |
-| §18 screen sharing | Not started |
-| §19.5 native call UI, §15.6 incoming call | Not started |
+| §17.6.1 step 2 — a third party from Element Web | **Done** — the gate, §17.6.4.4 |
+| Back backgrounds the call; the notification returns to it | **Done** — §19.5.4 |
+| §17.6.1 step 3 — screen share from Android | **Cannot be done on Option A** — §18.2.1 |
+| §17.6.1 step 4 — key rotation observed on leave | Partly — encryption confirmed on, rotation not yet observed |
+| §17.6.1 step 5 — incoming call from a cold start | **Done** — §15.6.1; the other gate |
 
 Three bugs, all of which connected a call and then failed silently — see
 §17.6.4.1 for each in full:
