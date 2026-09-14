@@ -170,3 +170,8 @@ decision reversal, and needs treating as one.
    a result of Social existing.
 7. Crash reports, logs and analytics carry no message content, room IDs, user
    IDs or key material.
+8. A call surface built on the widget answers `io.element.close` and is served
+   from the real origin. Both failures are silent (§17.6.4).
+
+Eight of these are checked mechanically by `tools/check-invariants.sh`, which
+is the point: an invariant nobody can run is a comment.

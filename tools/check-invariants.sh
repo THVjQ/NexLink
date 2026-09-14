@@ -154,6 +154,29 @@ else
 fi
 rm -f /tmp/contrast.$$
 
+# ── the call surface answers io.element.close, and is same-origin (§17.6.4) ──
+# Two failures that are invisible in every log a Matrix developer would check.
+#
+#  * Losing `io.element.close` strands the user on a black screen with the
+#    foreground service running: media tears down, the shell does not.
+#  * `loadDataWithBaseURL` gives the host page an origin that is not reliably
+#    the base URL's, and matrix-widget-api compares event.origin against
+#    window.origin before accepting a message. The mismatch is silent — the
+#    widget simply times out. The host page must be served from the real origin
+#    via shouldInterceptRequest.
+call_act="social/src/main/java/com/nexlink/social/call/CallActivity.kt"
+if [ ! -f "$call_act" ]; then
+  bad "the call surface is missing: $call_act (§17.6.3)"
+elif ! grep -q '"io.element.close"' "$call_act"; then
+  bad "the call surface does not handle io.element.close — hanging up will leave"
+  bad "the user on a black screen with the service running (§17.6.4.2)"
+elif grep -v '^[[:space:]]*\(\*\|//\|/\*\)' "$call_act" | grep -q 'loadDataWithBaseURL'; then
+  bad "the call surface uses loadDataWithBaseURL — the widget's origin check"
+  bad "fails silently and every request times out (§17.6.4.1)"
+else
+  pass "call surface answers io.element.close and is served same-origin (§17.6.4)"
+fi
+
 echo
 if [ "$fail" -eq 0 ]; then
   echo "All invariant checks passed."

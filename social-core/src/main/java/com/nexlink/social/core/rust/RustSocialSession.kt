@@ -35,7 +35,16 @@ import org.matrix.rustcomponents.sdk.SqliteStoreBuilder
 import org.matrix.rustcomponents.sdk.SlidingSyncVersionBuilder
 import com.nexlink.social.core.session.MediaRetention
 import com.nexlink.social.core.session.StoreUsage
+import org.matrix.rustcomponents.sdk.ClientProperties
 import org.matrix.rustcomponents.sdk.HttpPusherData
+import org.matrix.rustcomponents.sdk.generateWebviewUrl
+import org.matrix.rustcomponents.sdk.makeWidgetDriver
+import org.matrix.rustcomponents.sdk.newVirtualElementCallWidget
+import uniffi.matrix_sdk.EncryptionSystem
+import uniffi.matrix_sdk.HeaderStyle
+import uniffi.matrix_sdk.Intent
+import uniffi.matrix_sdk.VirtualElementCallWidgetConfig
+import uniffi.matrix_sdk.VirtualElementCallWidgetProperties
 import org.matrix.rustcomponents.sdk.IgnoredUsersListener
 import org.matrix.rustcomponents.sdk.PushFormat
 import org.matrix.rustcomponents.sdk.PusherIdentifiers
@@ -325,6 +334,82 @@ class RustSocialSession private constructor(
 
     override suspend fun setTyping(roomId: RoomId, typing: Boolean): Result<Unit> = ioCatching {
         roomListService.room(roomId.value).typingNotice(typing)
+    }
+
+    // ---- §17.6.3 calls -----------------------------------------------------
+
+    /**
+     * Build the Element Call widget for [roomId], and the URL to load it from.
+     *
+     * @return the bridge and the URL, or null if the room is unknown.
+     *
+     * `elementCallUrl` points at **this deployment**, never `call.element.io` —
+     * that is §17.6.3's condition on choosing Option A, and the one measured
+     * fact that counted against the widget approach.
+     */
+    suspend fun callWidget(
+        roomId: RoomId,
+        elementCallUrl: String,
+        parentUrl: String
+    ): Pair<RustCallWidget, String>? = io {
+        val room = runCatching { roomListService.room(roomId.value) }.getOrNull()
+            ?: return@io null
+        val widgetId = "nexlink-social-call"
+
+        val settings = newVirtualElementCallWidget(
+            VirtualElementCallWidgetProperties(
+                elementCallUrl = elementCallUrl,
+                widgetId = widgetId,
+                parentUrl = parentUrl,
+                fontScale = null,
+                font = null,
+                // §17.5 — per-participant keys. The SFU relays ciphertext it
+                // cannot decrypt, which is what makes §24.1.1's hosted SFU an
+                // acceptable place for a privacy product's media to travel.
+                encryption = EncryptionSystem.PerParticipantKeys,
+                posthogUserId = null,
+                posthogApiHost = null,
+                posthogApiKey = null,
+                rageshakeSubmitUrl = null,
+                sentryDsn = null,
+                sentryEnvironment = null
+            ),
+            VirtualElementCallWidgetConfig(
+                intent = Intent.START_CALL,
+                // The user already chose to call from the conversation, so a
+                // second lobby inside the WebView asks them to confirm
+                // something they have confirmed.
+                skipLobby = true,
+                header = HeaderStyle.NONE,
+                hideHeader = true,
+                preload = false,
+                appPrompt = false,
+                // The app owns navigation; the widget must not try to move the
+                // user somewhere else.
+                confineToRoom = true,
+                hideScreensharing = false,
+                controlledAudioDevices = false,
+                sendNotificationType = null
+            )
+        )
+
+        val url = generateWebviewUrl(
+            settings, room,
+            ClientProperties(
+                clientId = "com.thvjq.nexlink.social",
+                languageTag = "en-AU",
+                theme = "dark"
+            )
+        )
+
+        val state = currentState() as? SessionState.SignedIn ?: return@io null
+        val bridge = RustCallWidget(
+            room = room,
+            driverAndHandle = makeWidgetDriver(settings),
+            ownUserId = state.userId.value,
+            deviceId = state.deviceId.value
+        )
+        bridge to url
     }
 
     // ---- §31.3 safety ------------------------------------------------------

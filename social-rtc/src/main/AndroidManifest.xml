@@ -32,6 +32,29 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
 
+    <!--
+      §17.6.3 — holding RECORD_AUDIO is necessary but NOT sufficient for a
+      WebView call.
+
+      Measured on a Galaxy S21: with the mic granted and the foreground service
+      running, the first real call still came up silent, and the only evidence
+      was two lines from inside Chromium —
+
+          E chromium: audio_manager_android.cc:885 Unable to select
+                      communication device!
+          I chromium: CONSOLE "Uncaught (in promise) NotReadableError:
+                      Could not start audio source"
+
+      WebRTC puts the device into communication mode before opening the input.
+      `AudioManager.setCommunicationDevice()` needs MODIFY_AUDIO_SETTINGS, and
+      without it the call proceeds to LiveKit, encrypts, and publishes
+      m.call.member — everything except audio. The failure is silent at the
+      Matrix layer, which is what makes it worth this note.
+
+      Install-time permission: declaring it is the whole fix, no prompt.
+    -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />

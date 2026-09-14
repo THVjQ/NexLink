@@ -403,6 +403,123 @@ before suspecting the server.
 
 ---
 
+## 17.6.4 Client spike results, 2026-09-14 — Option A works on hardware
+
+§17.6.2 proved the backend and said plainly that the client half was unproven.
+It is proven now. A Galaxy S21 placed a real MatrixRTC call from the NexLink
+Social app, and a second account on the same handset joined it.
+
+### What was verified
+
+| §17.6.1 step | Result |
+|---|---|
+| 1. Two parties in a call, media both ways | **Pass** — two accounts, each seeing the other's decrypted video, `Subscribed: video camera TR_… of @push204943:…` |
+| 2. A third participant from Element Web | **Not run** — see below |
+| 3. Screen share from Android | Not run (§18) |
+| 4. E2EE on, keys rotate | **Partly** — `encrypted=true` per participant and `MatrixKeyProvider: Sent new key to livekit … encryptionKeyIndex=0`; rotation on leave not yet observed |
+| 5. Incoming call from a cold start | Not run (§15.6) |
+
+Supporting evidence, all from the device:
+
+- `connected to Livekit Server edition: 1, version: 1.13.6, region: Australia,
+  nodeId: NM_OSYDNEY1A_…` — §24.1.1's free hosted SFU, from the phone.
+- `livekitRoom.connect SUCCESS wss://nexlink-social-ro8eroxb.livekit.cloud`.
+- `org.matrix.msc3401.call.member` appears in room state with
+  `focus_active.type: livekit` — written **through the app's own Matrix
+  session**, which is the point of the widget driver.
+- On hang-up, both members' `m.call.member` events are emptied to `{}`:
+  no ghost participants (§17.7).
+
+**Step 2 remains the gate and remains unrun.** Two clients of the same build
+prove less than a cross-implementation call does; this result moves Option A
+from "unproven" to "works between two instances of itself".
+
+### 17.6.4.1 The host bridge: three things that had to be right
+
+The widget is Element Call, unmodified, in a WebView. Everything below is the
+host side — the part §17.6's "Against" column warned would be the real work.
+
+**1. A real iframe, not a shimmed `window.parent`.** The first attempt loaded
+the widget as the top-level page, replaced `window.parent` with an object
+forwarding to native, and delivered replies by dispatching a synthetic
+`MessageEvent`. It got further than expected — the console showed
+`[PostmessageTransport] Sending object` and *"Using a matryoshka client"*, so
+the widget really was in widget mode — and then every request timed out:
+
+```
+non-fatal error getting supported client versions: Error: Request timed out
+Could not send DeviceMute action to widget  Error: Request timed out
+```
+
+`matrix-widget-api` validates that a reply came from the frame it posted to.
+A synthetic event cannot satisfy that; `MessageEvent.source` must be a real
+window. The fix was to stop faking it: put the widget in an actual iframe
+inside a host page, and let parent and child talk the ordinary way.
+
+**2. The host page must be served from the real origin.** `loadDataWithBaseURL`
+is the obvious way to inject a generated page, and it is wrong here: the
+resulting document's origin is not reliably the base URL's, and the transport
+compares `event.origin` against `window.origin` before accepting anything. A
+mismatch is silent — no error, the message is simply dropped. The host page is
+therefore served by `shouldInterceptRequest` at one made-up path on the real
+origin, so parent and iframe are genuinely same-origin.
+
+**3. `MODIFY_AUDIO_SETTINGS`.** With `RECORD_AUDIO` granted and the foreground
+service running, the first working call was still silent, and the only evidence
+was two lines from inside Chromium:
+
+```
+E chromium: audio_manager_android.cc:885 Unable to select communication device!
+I chromium: CONSOLE "NotReadableError: Could not start audio source"
+```
+
+WebRTC puts the device into communication mode before opening the input, and
+`AudioManager.setCommunicationDevice()` needs that permission. Without it the
+call connects, encrypts, publishes `m.call.member` and joins the SFU —
+everything except audio. **The failure is invisible at the Matrix layer**, which
+is what makes it worth recording: every log a Matrix developer would think to
+check said the call was fine.
+
+### 17.6.4.2 Actions the host must answer
+
+The widget sends these to the host. Observed live, in order, on a real call:
+
+```
+capabilities · notify_capabilities · content_loaded · supported_api_versions
+get_openid · openid_credentials · org.matrix.msc4515.get_rtc_transports
+send_event · update_state · org.matrix.msc4157.update_delayed_event
+io.element.join · io.element.device_mute · set_always_on_screen
+io.element.close
+```
+
+The Rust `WidgetDriver` handles the Matrix ones. Two are the host's own job and
+neither is optional:
+
+- **`io.element.close`** — the widget's red hang-up button tears down media
+  correctly and then cannot close a window it does not own. Ignoring this left
+  the user on a black screen with the foreground service still running, which
+  is §17.7's crash row seen from the device side. The host finishes the
+  activity.
+- **`set_always_on_screen`** — a call is watched, not touched. Without
+  `FLAG_KEEP_SCREEN_ON` the display sleeps mid-conversation.
+
+`io.element.device_mute` is rejected by the driver as an unknown variant. That
+is correct for now: it exists to sync mute state with a **native** call UI,
+which is §19.5 and is not built. Revisit it there.
+
+### 17.6.4.3 Noise that is not a bug
+
+Two log lines look alarming and are not:
+
+- `MissingKey: key set not found for <self> at index 0`, repeating about once a
+  second and then `Suppressing further decryption errors` — the SFU echoing the
+  publisher's own track back. It stops on its own and does not affect remote
+  decryption, which was confirmed working in the same call.
+- `Failed to resolve address for ip-…-.host.livekit.cloud, errorcode: -105` —
+  a STUN host lookup. ICE succeeded by other candidates.
+
+---
+
 ## 17.7 Call lifecycle
 
 Independent of which option wins.
