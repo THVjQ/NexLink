@@ -1,59 +1,212 @@
-# Content Policy — NexLink Social
+# Content and Community Policy — NexLink Social
 
-**Version 0.1.0-draft** · Not yet published · §4.7, §31
+**Version 0.2.0-draft** · Not yet published · §4.7, §31
 
 Required by Google Play's user-generated content policy, and the basis for any
 moderation action taken.
 
-## The difficulty, stated plainly
+---
 
-This service is end-to-end encrypted. **The operator cannot read your messages
-and cannot scan for anything.** Enforcement is therefore reactive and depends on
-participants reporting — there is no proactive detection and no filter, and
-claiming otherwise would be false.
+## 1. The constraint, stated first
 
-That is a deliberate design choice, not a gap to be closed later. A system that
-could scan your messages for prohibited content could also read them for any
-other reason.
+NexLink Social is end-to-end encrypted. **The Operator cannot read your messages
+and cannot scan for anything.**
 
-## Not permitted
+Enforcement is therefore **reactive**. It depends on participants reporting.
+There is no proactive detection, no automated filter, no hash-matching and no
+machine classification, and there will not be.
 
-- **Material that is illegal** in Australia, including child sexual abuse
-  material, and content that incites violence or terrorism.
-- **Harassment**: repeated unwanted contact, threats, intimidation, or
-  co-ordinated abuse of a person.
-- **Non-consensual intimate imagery.**
-- **Impersonating** another person in a way intended to deceive.
-- **Malware**, phishing, or fraud.
-- **Attacking the service**: attempting to breach its security, guess invite
-  codes, or interfere with its operation.
-- **Evading enforcement**: creating a new account to get around a block or a
-  removal.
+This is a deliberate design choice rather than a gap awaiting a fix. A system
+that could scan your messages for prohibited content could also read them for
+any other reason, and would be a capability that could be demanded of the
+Operator later. Not having it is the point.
 
-## What happens
+Play's policy requires a content policy and a reporting mechanism. It does not
+require a capability that end-to-end encryption precludes, and this document
+does not claim one.
 
-1. **Blocking is yours, and it is immediate.** Block anyone, from any of their
-   messages or from your conversation list. They are not told. It requires
-   nothing from the operator and works at any hour.
-2. **Reports go to the operator.** A report may include the message you are
-   reporting, and **only if you explicitly agree** — that is the one path by
-   which any message content becomes readable to the operator, and it is your
-   decision each time.
-3. **Reports without content still count.** Several independent reports about
-   one account is a signal on its own.
-4. **Actions available:** a warning, suspension, or removal of the account and
-   the invite that created it. Invites form a tree, so an account that
-   repeatedly invites abusive users may itself be actioned.
-5. **Illegal material** is reported to the relevant authority where the operator
-   is legally obliged to do so.
+---
 
-## Appeals
+## 2. Who this applies to
+Everyone with an Account, in every conversation, including one-to-one
+conversations and groups.
 
-Contact the operator. A single person reviews these, so a reply may take days.
+---
 
-## What this policy cannot do
+## 3. Prohibited content
 
-It cannot stop someone sending you something before you block them. It cannot
-detect anything by itself. It is a statement of what is not permitted and what
-happens when it is reported — not a promise of a safe environment, which no
-encrypted service can honestly make.
+### 3.1 Child sexual abuse material
+Absolutely prohibited. Any report is actioned immediately with removal of the
+Account, and reported to the relevant authority where the Operator is legally
+obliged to do so. There is no appeal pathway that delays this.
+
+### 3.2 Non-consensual intimate imagery
+Sharing intimate images or video of a person without their consent is
+prohibited, including images that were originally shared consensually in private.
+
+### 3.3 Terrorism and violent extremism
+Content that promotes, incites, instructs or celebrates terrorism or violent
+extremism, or that is produced by a proscribed organisation.
+
+### 3.4 Incitement to violence
+Threats of violence against a person or group, or content encouraging others to
+commit violence.
+
+### 3.5 Content encouraging self-harm
+Content that encourages or provides instruction for suicide or self-harm.
+Discussing your own experience, seeking help, or supporting someone is **not**
+prohibited and should not be reported as such.
+
+### 3.6 Other unlawful content
+Anything unlawful under Australian law, including material infringing copyright
+where you have no right to share it.
+
+### 3.7 Malware and fraud
+Malicious software, phishing, scams, or content designed to obtain credentials
+or payment by deception.
+
+---
+
+## 4. Prohibited conduct
+
+### 4.1 Harassment
+Repeated unwanted contact, threats, intimidation, or contacting someone who has
+made clear they do not wish to hear from you.
+
+### 4.2 Co-ordinated abuse
+Organising or participating in a group effort to harass a person.
+
+### 4.3 Impersonation
+Presenting yourself as another real person in a way intended to deceive.
+
+### 4.4 Attacking the Service
+Attempting to breach security, guess Invite codes, exhaust resources, or
+interfere with operation.
+
+### 4.5 Evasion
+Creating a new Account to evade a block, suspension or removal. Because
+registration requires an Invite, this also implicates whoever issued it.
+
+### 4.6 Automation and scale
+Using scripts or automated means to create Accounts or send messages at volume.
+
+### 4.7 Commercial exploitation
+Reselling access, or using the Service as infrastructure for a commercial
+product without the Operator's agreement.
+
+---
+
+## 5. What is not prohibited
+
+Stated because over-broad policies chill ordinary conversation:
+
+- Swearing, rudeness, or arguing.
+- Discussing illegal activity as a subject, as opposed to conducting it.
+- Adult content shared consensually between adults in a private conversation.
+- Political, religious or controversial opinion.
+- Discussing your own mental health, including difficult experiences.
+
+**The Operator cannot see any of this and is not looking for it.** These are
+listed so that nobody reports a conversation believing it breaches a rule that
+does not exist.
+
+---
+
+## 6. Enforcement
+
+### 6.1 Blocking — yours, and immediate
+You may block any user at any time. It takes one action from a message, from
+their profile, or from your conversation list.
+
+A block:
+- Stops their messages, invitations and calls reaching you.
+- Is enforced by the server, so it holds across all your Devices and survives
+  reinstalling the app.
+- Does **not** notify the blocked person.
+- Can be undone from the Blocked people screen.
+
+**Blocking requires nothing from the Operator and works at any hour.** It is the
+primary control and should be your first response.
+
+### 6.2 Reporting
+A report goes to the Operator and includes: who you are reporting, your
+description, and the conversation it relates to.
+
+**Message content is included only if you explicitly agree**, by ticking a box
+that starts unticked, at the time of each report. That is the only path by which
+message content becomes readable to the Operator.
+
+**Reports without content are still actionable.** Several independent reports
+about one Account is a signal on its own, and declining to share content does
+not weaken your report as much as you might expect.
+
+### 6.3 What the Operator does with a report
+1. Reads the report.
+2. Reads attached content, if and only if consent was given.
+3. Considers other reports about the same Account.
+4. Decides on an action.
+5. Records the decision.
+
+### 6.4 Actions available
+
+| Action | Reversible | Used when |
+|---|---|---|
+| No action | — | The report does not describe a breach |
+| Warning | Yes | First or minor breach |
+| Suspension | Yes | Repeated or serious breach, pending investigation |
+| Account removal | No | Severe breach, or repeated breach after warning |
+| Invite-tree action | Varies | An Account repeatedly invites users who are removed |
+| Report to authority | No | Legally required, particularly §3.1 |
+
+### 6.5 Timeframes
+One person reviews reports. Expect **days, not hours**, except where §3.1 is
+involved, which is actioned as soon as it is seen.
+
+If you are in immediate danger, contact police. This Service is not an emergency
+channel and the Operator may be asleep.
+
+---
+
+## 7. Invite accountability
+
+Invites form a tree recording who invited whom. This exists so that abuse can be
+traced to its entry point in an invite-only service.
+
+If an Account repeatedly invites users who are removed for abuse, that Account
+may itself be warned, have its invite ability removed, or be removed.
+
+This is disclosed so that issuing an Invite is understood as carrying some
+responsibility for who you bring in.
+
+---
+
+## 8. Appeals
+
+If your Account is actioned, you may appeal by contacting the Operator. State
+what happened and why you believe the decision was wrong.
+
+Appeals are reviewed by the same person who made the decision, because there is
+only one person. That is a genuine limitation of a solo-operated service and is
+stated rather than dressed up as an independent process.
+
+Actions taken under §3.1 are not subject to appeal.
+
+---
+
+## 9. Law enforcement
+
+See the separate Law Enforcement Guidelines. In summary: the Operator cannot
+produce message content because it is not held in readable form, and will
+respond to lawful requests only to the extent legally required.
+
+---
+
+## 10. What this policy cannot do
+
+It cannot stop someone sending you something before you block them.
+
+It cannot detect anything by itself.
+
+It is a statement of what is not permitted and what happens when it is reported.
+It is **not** a promise of a safe environment — no encrypted service can honestly
+make that promise, and one that does is either not encrypted or not honest.

@@ -1,84 +1,137 @@
 # What we can and cannot see — NexLink Social
 
-**Version 0.1.0-draft** · Not yet published · §4.7
+**Version 0.2.0-draft** · Not yet published · §3.7, §4.7
 
 This is the plain-language version. The Privacy Policy is the formal one; where
-they differ, that one governs — but they should not differ, and if you spot a
-place where they do, that is a bug worth reporting.
+they differ that one governs — but they are written to agree, and a discrepancy
+is a bug worth reporting.
+
+---
 
 ## The short version
 
 Your messages are end-to-end encrypted. The server stores them as scrambled data
 and has never had the keys. Nobody operating this service can read what you
 write, and that is a property of the encryption rather than a promise about our
-conduct.
+behaviour.
 
 What we **can** see is the shape of your use: who you talk to, when, and how
-often. That is real information about you and this page does not pretend
+often. That is real information about you, and this page does not pretend
 otherwise.
+
+---
 
 ## We cannot see
 
-- **The content of your messages.** Not now, not later, not if asked.
+- **The content of your messages.** Not now, not later, not if asked, not if
+  ordered by a court. There is nothing to hand over.
 - **The content of your calls.**
-- **Your photos, videos and files.** They are encrypted before upload.
+- **Your photos, videos and files.** Encrypted before they leave your phone.
 - **Your message history.** It lives on your devices.
+- **Who is in your contacts.** We never ask for them.
+- **Where you are**, beyond what your IP address implies.
 
 ## We can see
 
 - **Who you message, and when.** The server routes your messages, so it knows
-  the accounts involved and the timing.
+  which accounts are involved and the timing.
 - **How often you send messages, and roughly how large they are.**
-- **Your IP address**, which approximates your location and your internet
-  provider.
+- **Your IP address**, which approximates your location and names your internet
+  provider. Kept 28 days.
 - **Which devices you use**, and when each last connected.
 - **Which emoji you react with, and to whose message.** Matrix sends reactions
   unencrypted. The message being reacted to stays encrypted; the reaction does
   not. We would rather tell you than let you assume otherwise.
-- **That a message arrived for you, and when.** To notify your phone, we ask
-  Google's push service to wake the app. Google is told that *something*
-  arrived and when — never what it says.
+- **That a message arrived for you, and when** — see Google, below.
+- **Who invited you.**
 
-## Third parties, and exactly what each one learns
+---
 
-We use as few as possible, and none of them can read your messages.
+## The three companies involved, and exactly what each learns
 
-| Who | What they learn | Why |
-|---|---|---|
-| **Cloudflare** | Your IP address, and that you connected | It carries traffic to the server, which has no public address of its own |
-| **Google (FCM)** | That a notification was sent to your device, and when | It is the only way to wake an Android app without draining the battery |
-| **LiveKit** | That someone was in a call, when, and for how long | It relays call audio and video. The audio and video are encrypted; it cannot hear them, and it is not told which conversation the call belongs to |
+We use as few as possible. None of them can read your messages.
+
+### Cloudflare
+Carries traffic between your phone and the server, because the server sits on a
+home internet connection with no public address of its own.
+
+**Learns:** your IP address, when you connect, how much data flows.
+**Cannot:** read anything encrypted, which is everything that matters.
+
+### Google — push notifications
+When a message arrives for you, the server asks Google to wake the app on your
+phone. Without this, messages would only arrive while the app was open, or the
+app would have to hold a connection open and flatten your battery.
+
+**Learns:** that a notification should go to your device, and when.
+**Is sent:** an event identifier and a room identifier. **Not the message, not
+the sender's name, not a single word of text.** Your phone decrypts locally to
+work out what the notification should say.
+
+Most encrypted messengers have exactly this property. Most do not mention it.
+
+### LiveKit — calls
+Relays audio and video during a call.
+
+**Learns:** that someone joined a call, when, and for how long.
+**Cannot:** hear or see the call — the media is encrypted end-to-end.
+**Is not told:** which conversation the call belongs to. The room is identified
+to them only by a one-way hash.
+
+---
 
 ## Who runs this
 
-One person, not a company. There is no support team, no SLA, and no guarantee
-of uptime. If something breaks at 2 a.m. it stays broken until they wake up.
+One person, not a company. There is no support team, no service level agreement
+and no guarantee of uptime. If something breaks at 2 a.m. it stays broken until
+they wake up.
 
-That cuts both ways, and it is the honest trade this service asks you to make:
-there is no advertising business model, nothing is sold, and nobody is
+That cuts both ways, and it is the honest trade this service asks you to make.
+There is no advertising business model, nothing is sold, and nobody is
 monetising your attention — because there is nobody to do it.
+
+---
 
 ## What happens when you leave
 
-You can delete your account from inside the app, or from
-`https://nexlink.thvjq.com.au/delete/` without the app installed. It removes
-your account, your profile, your uploaded files, your encrypted backup and the
-record of the addresses you connected from.
+Delete your account in the app, or at `https://nexlink.thvjq.com.au/delete/`
+without the app installed.
 
-Three things are kept, and the Privacy Policy explains why:
+**Removed:** your account, every session, your profile, your uploaded files,
+your encrypted backup, your email address if you gave one, and the record of the
+addresses you connected from.
 
-- **Your username**, so nobody can register it later and be mistaken for you.
+**Kept, and why:**
+- **Your username** — so nobody can register it later and be mistaken for you.
 - **That you accepted the terms and confirmed your age** — the record that you
   did, not the details.
-- **The invite you joined with**, as a one-way code and timestamps, so abuse can
+- **The invite you joined with** — a one-way code and timestamps, so abuse can
   be traced.
+
+**And one thing worth knowing:** deleted data sits inside encrypted backups for
+up to 14 days before those expire. That is normal, and we would rather say it
+than have you discover the gap between "deleted" and a backup schedule.
+
+---
 
 ## The limits of all this
 
-- **Your phone is the weak point.** Everything above is about the server. If
+- **Your phone is the weak point.** Everything above concerns the server. If
   someone unlocks your phone, they read your messages. Set a screen lock.
 - **The other person can screenshot.** Encryption protects a message in transit
-  and at rest. It cannot stop a recipient keeping it.
-- **We could be compelled to keep metadata.** We cannot be compelled to produce
-  message content, because we do not have it — but a lawful order for the
-  information in the "can see" list is a different matter.
+  and at rest. It cannot stop a recipient keeping it, and nothing can.
+- **Metadata could be compelled.** We cannot be made to produce message content,
+  because we do not have it. A lawful order for the "can see" list above is a
+  different matter, and we would tell you about it unless legally forbidden.
+- **Deleting your account does not delete messages from other people's phones.**
+  We have no reach into someone else's device, and would not want one.
+- **There is no scanning for bad content**, and there cannot be — that is the
+  same encryption working. Safety here depends on blocking and reporting, both
+  of which are in the app.
+
+---
+
+## If something is wrong
+
+If any statement on this page turns out to be inaccurate, that is a bug and we
+want to know. The whole value of this document is that it is checkable.
