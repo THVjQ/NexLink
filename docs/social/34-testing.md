@@ -103,6 +103,8 @@ procedure, run before each release:
 | Recovery key round-trip Android ↔ Element Web | §7.4.3 |
 | Four-way call with a screen share | §33.5 |
 | Cellular call interrupting a Social call | §19.8 |
+| **Back during a call backgrounds it; the notification returns to it** | §19.5.4 |
+| **A call is still up after 15 minutes** | §17.6.4 |
 | Doze delivery | §15.9 |
 | Battery over a real day | §13.7 |
 | **OEM behaviour — Samsung plus one aggressive OEM** | §15.9 |
