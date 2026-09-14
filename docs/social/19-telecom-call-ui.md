@@ -206,7 +206,31 @@ so it is a return rather than a second call surface.
 `dumpsys notification` is the quick check — `contentIntent=null` says the route
 is missing before anyone has to tap anything.
 
-### 19.5.5 Audio routing works, and comes from the widget
+### 19.5.5 The ongoing notification is a `CallStyle` one, with End
+
+§19.5.2 requires End to be *"available at all times"*, and a backgrounded call
+is exactly when that matters: otherwise ending a call means going back into it
+first. The ongoing notification now carries a **Hang up** action and renders
+with the platform's call treatment rather than as a generic row.
+
+The End action routes back into [CallActivity] with a flag rather than at the
+service directly. Stopping the service alone would leave the call surface up on
+a dead call — the same shape as the `io.element.close` bug in §17.6.4.2, media
+gone and shell still running. `singleTask` means it reaches the live instance's
+`onNewIntent`.
+
+Two small things worth knowing about `CallStyle.forOngoingCall`:
+
+- It puts the `Person`'s name in the headline, so leaving the conversation name
+  in the body as well printed it twice — *"Call test / Call test"*. The body is
+  now "Ongoing call".
+- The Hang up action is in the **expanded** view; collapsed shows the headline
+  only. That is the platform's layout, not something to work around.
+
+Verified on the handset: Back, expand, Hang up — service gone, surface
+finished, nothing left in the shade.
+
+### 19.5.6 Audio routing works, and comes from the widget
 
 Verified in a live call: the widget's own settings sheet offers **Microphone 1
 / Speakerphone / Headset earpiece**, and switching takes effect. §19.6's

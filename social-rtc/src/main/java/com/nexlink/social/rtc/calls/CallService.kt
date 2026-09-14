@@ -55,6 +55,12 @@ class CallService : Service() {
      */
     @Volatile private var returnToCall: android.app.PendingIntent? = null
 
+    /** §19.5.2 — "End" must be available at all times, including from here. */
+    @Volatile private var hangUp: android.app.PendingIntent? = null
+
+    /** The conversation's name. Never an MXID — §27.5, this shows on a lock screen. */
+    @Volatile private var title: String = "NexLink Social"
+
     override fun onCreate() {
         super.onCreate()
         promoteToForeground()          // before any decision that could stop us
@@ -69,9 +75,13 @@ class CallService : Service() {
         // re-notifying for nothing.
         @Suppress("DEPRECATION")
         val back = intent?.getParcelableExtra<android.app.PendingIntent>(EXTRA_RETURN_INTENT)
-        android.util.Log.d("NexLinkCallSvc", "return intent present=${back != null} fg=$isForeground")
-        if (back != null && back != returnToCall) {
-            returnToCall = back
+        @Suppress("DEPRECATION")
+        val end = intent?.getParcelableExtra<android.app.PendingIntent>(EXTRA_HANGUP_INTENT)
+        val name = intent?.getStringExtra(EXTRA_TITLE)
+        if ((back != null && back != returnToCall) || (end != null && end != hangUp)) {
+            returnToCall = back ?: returnToCall
+            hangUp = end ?: hangUp
+            if (!name.isNullOrBlank()) title = name
             if (isForeground) {
                 (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
                     .notify(NOTIFICATION_ID, buildNotification())
@@ -201,20 +211,37 @@ class CallService : Service() {
                     .apply { setShowBadge(false) }
             )
         }
-        return Notification.Builder(this, CHANNEL)
+        val b = androidx.core.app.NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_phone_call)
+            .setCategory(androidx.core.app.NotificationCompat.CATEGORY_CALL)
             .setContentTitle("Call in progress")
             // §27.5 — no identifier here. This notification is visible on the
             // lock screen of a phone that §12.4.4 has already established may
-            // have no lock at all.
-            .setContentText("NexLink Social")
+            // have no lock at all. The conversation's *name* is something the
+            // user chose and is safe; an MXID is not.
+            .setContentText(title)
             .setOngoing(true)
             // §19.5.3 — "one tap away". Without this the notification is a
             // label, not a route: measured, the ongoing notification did
             // nothing when tapped, and the only way back into a backgrounded
             // call was the recents list.
-            .also { b -> returnToCall?.let { b.setContentIntent(it) } }
-            .build()
+            .also { it2 -> returnToCall?.let { it2.setContentIntent(it) } }
+
+        // §19.5.2 — "End" is required to be available at all times, and a
+        // backgrounded call is exactly when that matters: otherwise ending it
+        // means going back into it first. CallStyle also gets the platform's
+        // call treatment on the lock screen rather than a generic row.
+        hangUp?.let { end ->
+            // CallStyle puts the person's name in the headline, so leaving the
+            // conversation name in the body as well printed it twice.
+            b.setContentText("Ongoing call")
+            b.setStyle(
+                androidx.core.app.NotificationCompat.CallStyle.forOngoingCall(
+                    androidx.core.app.Person.Builder().setName(title).build(), end
+                )
+            )
+        }
+        return b.build()
     }
 
     companion object {
@@ -222,6 +249,8 @@ class CallService : Service() {
         private const val NOTIFICATION_ID = 7301
         const val EXTRA_ROOM_ID = "com.nexlink.social.rtc.CALL_ROOM_ID"
         const val EXTRA_RETURN_INTENT = "com.nexlink.social.rtc.CALL_RETURN"
+        const val EXTRA_HANGUP_INTENT = "com.nexlink.social.rtc.CALL_HANGUP"
+        const val EXTRA_TITLE = "com.nexlink.social.rtc.CALL_TITLE"
 
         private const val TYPE_NONE = 0
 
@@ -236,11 +265,15 @@ class CallService : Service() {
         fun start(
             context: Context,
             roomId: String,
-            returnToCall: android.app.PendingIntent? = null
+            returnToCall: android.app.PendingIntent? = null,
+            hangUp: android.app.PendingIntent? = null,
+            title: String? = null
         ) {
             val i = Intent(context, CallService::class.java)
                 .putExtra(EXTRA_ROOM_ID, roomId)
                 .putExtra(EXTRA_RETURN_INTENT, returnToCall)
+                .putExtra(EXTRA_HANGUP_INTENT, hangUp)
+                .putExtra(EXTRA_TITLE, title)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(i)
             } else {

@@ -104,7 +104,13 @@ class ConversationActivity : AppCompatActivity() {
             contentDescription = "Start a call"
             minHeight = dp(48)   // §14.10
             setOnClickListener {
-                roomId?.let { startActivity(CallActivity.intent(this@ConversationActivity, it.value)) }
+                roomId?.let {
+                    startActivity(
+                        CallActivity.intent(
+                            this@ConversationActivity, it.value, title?.toString()
+                        )
+                    )
+                }
             }
         }
         people.setOnClickListener { showParticipants() }

@@ -58,6 +58,8 @@ class CallActivity : AppCompatActivity() {
 
     private lateinit var web: WebView
     private var roomId: String? = null
+    /** §27.5 — the conversation's name for the notification. Never an MXID. */
+    private var roomTitle: String? = null
     private var started = false
     private var widget: RustCallWidget? = null
 
@@ -92,6 +94,7 @@ class CallActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         roomId = intent.getStringExtra(EXTRA_ROOM_ID)
+        roomTitle = intent.getStringExtra(EXTRA_ROOM_TITLE)
         if (roomId.isNullOrBlank()) { finish(); return }
 
         web = WebView(this).apply {
@@ -198,10 +201,34 @@ class CallActivity : AppCompatActivity() {
      * `singleTask` means this resolves to the *existing* instance rather than
      * a second call surface.
      */
+    /**
+     * §19.5.2 — "End", from the notification.
+     *
+     * Routed back into this activity rather than straight at the service.
+     * Stopping the service alone would leave the call surface sitting there on
+     * a dead call, which is the same shape as the `io.element.close` bug in
+     * §17.6.4.2 — media gone, shell still up. `singleTask` means this reaches
+     * the running instance's [onNewIntent].
+     */
+    private fun hangUpHere(): android.app.PendingIntent =
+        android.app.PendingIntent.getActivity(
+            this, 3,
+            intent(this, roomId.orEmpty(), roomTitle)
+                .putExtra(EXTRA_HANG_UP, true)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or
+                android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+
+    override fun onNewIntent(newIntent: Intent) {
+        super.onNewIntent(newIntent)
+        if (newIntent.getBooleanExtra(EXTRA_HANG_UP, false)) finish()
+    }
+
     private fun returnHere(): android.app.PendingIntent =
         android.app.PendingIntent.getActivity(
             this, 0,
-            intent(this, roomId.orEmpty())
+            intent(this, roomId.orEmpty(), roomTitle)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             android.app.PendingIntent.FLAG_UPDATE_CURRENT or
                 android.app.PendingIntent.FLAG_IMMUTABLE
@@ -223,7 +250,7 @@ class CallActivity : AppCompatActivity() {
         // §15.4.1 — the service starts HERE, on answer, with the permission in
         // hand. Never while ringing: that would hold the microphone for a call
         // the user has not taken.
-        CallService.start(this, room, returnHere())
+        CallService.start(this, room, returnHere(), hangUpHere(), roomTitle)
 
         val session = SessionProvider.manager(this).current() as? RustSocialSession
         if (session == null) { toast("Not signed in"); finish(); return }
@@ -383,6 +410,8 @@ class CallActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_ROOM_ID = "com.nexlink.social.call.ROOM_ID"
+        private const val EXTRA_HANG_UP = "com.nexlink.social.call.HANG_UP"
+        private const val EXTRA_ROOM_TITLE = "com.nexlink.social.call.ROOM_TITLE"
         private const val ALLOWED_HOST = "nexlink.thvjq.com.au"
         /**
          * §17.6.3 — this deployment's own Element Call, never call.element.io.
@@ -424,7 +453,9 @@ class CallActivity : AppCompatActivity() {
             "im.vector.hangup", "io.element.close", "close"
         )
 
-        fun intent(c: Context, roomId: String) =
-            Intent(c, CallActivity::class.java).putExtra(EXTRA_ROOM_ID, roomId)
+        fun intent(c: Context, roomId: String, title: String? = null) =
+            Intent(c, CallActivity::class.java)
+                .putExtra(EXTRA_ROOM_ID, roomId)
+                .putExtra(EXTRA_ROOM_TITLE, title)
     }
 }
