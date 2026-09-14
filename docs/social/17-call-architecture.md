@@ -338,6 +338,71 @@ the JoinResponse is a hash. See §24.1.2.
 
 ---
 
+## 17.6.3 Decision: Option A, with the widget self-hosted — 2026-09-14
+
+**§17.6 is resolved. Option A: the Element Call widget.**
+
+The reasoning, from §17.6.2's evidence rather than from the provisional lean:
+
+1. The backend that now works is the **standard MatrixRTC contract**, and
+   Element Call is its reference implementation. Everything upstream expects is
+   already in place and answering correctly.
+2. Option B would have to reimplement the call-membership state machine **and
+   match Element Call's E2EE layer** against a moving target. §17.6's own
+   "Against" column names the failure mode: a call that connects and shows black
+   frames.
+3. §11.4's argument transfers intact — the calling stack is the fastest-moving
+   part of this ecosystem, and a solo operator tracking it by hand in Kotlin is
+   a standing commitment with no end date.
+
+**The condition attached: the widget is self-hosted.** Element Web's
+`element_call` config had no `url`, so it defaulted to `call.element.io` — a
+third party serving executable code into the call surface of a privacy product.
+That was the one measured fact counting against Option A, and self-hosting
+removes it. It is a deployment, not a rewrite.
+
+### Deployed
+
+`ghcr.io/element-hq/element-call` as TrueNAS app `nexlink-social-call` on port
+8065, proxied at `https://nexlink.thvjq.com.au/call/`. Its config points at this
+homeserver and at the §24.1.2 JWT service.
+
+**One routing problem, and the tidy solution.** Element Call references its
+assets **absolutely** (`/assets/...`). Rewriting them with `sub_filter` worked
+for the HTML and failed for the 29 sound and translation files the bundle
+constructs at runtime. Element Web does not use `/assets/` — it serves
+`/bundles/`, `/vector-icons/` and `/i18n/` — so `/assets/` is proxied straight
+to the Element Call container and no rewriting is needed. Only `/config.json`,
+which both apps genuinely want, is rewritten.
+
+### A deployment trap worth recording: Cloudflare cached the 404s
+
+While `/assets/` was briefly missing, Cloudflare cached the 404 responses **for
+four hours** (`cache-control: max-age=14400`, its default for errors), and kept
+serving them after the origin was fixed.
+
+It presented as a contradiction: `curl` returned 200 while the browser returned
+404 for the same URL. The difference was the **`Origin` header** — module
+preloads are CORS-mode, and CORS responses get their own cache key, so the
+poisoned entry was only reachable with that header. Reproduced exactly:
+
+```
+curl                         -> 200
+curl -H 'Origin: https://…'  -> 404, cf-cache-status: HIT, age: 168
+curl -H 'Origin: …' '…?bust' -> 200
+```
+
+Verified against the origin chain with the `Origin` header present: **8 of 8
+assets serve correctly**. The deployment is right; the edge was stale.
+
+**The lesson is about sequencing, not nginx.** Deploying a path in a broken
+state, even for a minute, can poison an edge cache for hours behind a cache key
+you are not testing with. Validate the origin before the path is reachable
+publicly, and when a browser and `curl` disagree, compare the request headers
+before suspecting the server.
+
+---
+
 ## 17.7 Call lifecycle
 
 Independent of which option wins.
