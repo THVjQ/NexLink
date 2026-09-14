@@ -62,7 +62,21 @@ class CallService : Service() {
         return START_NOT_STICKY
     }
 
+    /**
+     * Remove the notification explicitly.
+     *
+     * `CallService.stop()` calls `stopService()`, which reaches here without
+     * going through [stopCleanly] — so the `STOP_FOREGROUND_REMOVE` in that
+     * method never ran, and a "Call in progress" notification outlived the call
+     * it described. Measured: after ending a call the service was gone and the
+     * notification was still posted.
+     *
+     * That is worse than untidy. §19.5.3 makes the ongoing notification **the
+     * route back into a live call**, so a stale one is a button that takes the
+     * user to a call which is not happening.
+     */
     override fun onDestroy() {
+        if (isForeground) stopForeground(STOP_FOREGROUND_REMOVE)
         isForeground = false
         super.onDestroy()
     }

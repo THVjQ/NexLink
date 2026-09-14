@@ -32,6 +32,7 @@ import kotlinx.coroutines.withContext
 import com.nexlink.social.ui.R as UiR
 import com.google.android.material.snackbar.Snackbar
 import com.nexlink.social.core.session.UserId
+import com.nexlink.social.call.CallActivity
 
 /**
  * One conversation — §14.2 timeline, §14.3 composer.
@@ -96,6 +97,16 @@ class ConversationActivity : AppCompatActivity() {
             text = "☰"; isAllCaps = false
             contentDescription = "People in this conversation"
         }
+        // §19.5 — start a call. One control, in the composer row, because a
+        // call is something you start from a conversation you are already in.
+        val call = Button(this).apply {
+            text = "📞"; isAllCaps = false
+            contentDescription = "Start a call"
+            minHeight = dp(48)   // §14.10
+            setOnClickListener {
+                roomId?.let { startActivity(CallActivity.intent(this@ConversationActivity, it.value)) }
+            }
+        }
         people.setOnClickListener { showParticipants() }
         val attach = Button(this).apply {
             text = "+"; isAllCaps = false
@@ -110,10 +121,10 @@ class ConversationActivity : AppCompatActivity() {
             composer.addView(LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                addView(people); addView(attach); addView(send)
+                addView(people); addView(call); addView(attach); addView(send)
             })
         } else {
-            composer.addView(people); composer.addView(attach)
+            composer.addView(people); composer.addView(call); composer.addView(attach)
             composer.addView(input); composer.addView(send)
         }
         attach.setOnClickListener {

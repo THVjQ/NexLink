@@ -626,6 +626,52 @@ Telecom integration (§19); screen sharing (§18).
 **The phase is now blocked on client work rather than on infrastructure or
 money**, which is a materially better position than §33.5 assumed.
 
+### 33.5.2 Phase 4 — progress at 2026-09-14
+
+§17.6 is **resolved** (§17.6.3): Option A, the Element Call widget, self-hosted.
+
+| Piece | Status |
+|---|---|
+| Element Call self-hosted | **Done** — app `nexlink-social-call`, served at `/call/` |
+| `CallActivity` — the WebView call surface | **Done** — origin-locked to this deployment |
+| Runtime permissions before the service starts | **Done** — §15.2.1's ordering, verified on the handset |
+| §15 foreground service on **answer** | **Done** — verified: the call notification appears when a call starts |
+| §19 Telecom registration | **Done** — self-managed account accepted by the platform |
+| Call button in a conversation | **Done** |
+| **Credential handoff to the widget** | **NOT DONE — the remaining work** |
+| §17.6.1 spike steps 1–5 | Blocked on the above |
+| §18 screen sharing | Blocked on the above |
+
+#### What is left, precisely
+
+Loading the widget works: it renders, the foreground service runs, permissions
+are granted to the page only for the allowed origin. But Element Call comes up
+in **standalone mode and offers "Join as guest"**, because nothing has given it
+credentials — observed on the handset, with
+`POST /_matrix/client/v3/register → 401` in the WebView console as it tried to
+make itself a guest account.
+
+Credentials reach an embedded Element Call through the **Matrix widget API over
+`postMessage`**: the host client answers a capability negotiation and supplies
+the access token. It is not a URL parameter — the bundle was searched and the
+parameter names are not there. Element X Android implements this as a widget
+driver, and that is the shape of the remaining work.
+
+This is a bounded, well-defined piece rather than an open question, and it is
+the last thing standing between here and the §17.6.1 spike.
+
+#### A bug found on the first real call
+
+Ending a call left the **"Call in progress" notification posted after the
+service was gone.** `CallService.stop()` calls `stopService()`, which reaches
+`onDestroy` without passing through `stopCleanly()`, so that method's
+`STOP_FOREGROUND_REMOVE` never ran.
+
+Worse than untidy: §19.5.3 makes the ongoing notification *the route back into a
+live call*, so a stale one is a button that takes the user to a call which is
+not happening. Fixed in `onDestroy`, and the §15.9 tests pass with no stale
+notification left behind.
+
 **Acceptance:**
 
 - [ ] 1:1 audio and video between two Android devices.
