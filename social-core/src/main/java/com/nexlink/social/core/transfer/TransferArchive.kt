@@ -211,6 +211,53 @@ object TransferArchive {
         return Manifest(files, bytes)
     }
 
+    /**
+     * §7.5.3 — [read], but nothing lands until the whole archive has decrypted.
+     *
+     * §7.5.3: *"a partial store is worse than none, because it looks like a
+     * working account with silently missing keys."* This extracts into
+     * [staging] and promotes into [targets] only once the whole archive has
+     * decrypted, so a failure leaves the device exactly as it was.
+     *
+     * **A note on why, because the obvious reason turned out to be false.**
+     * This was written believing [read] streams entries to disk and only
+     * discovers a bad archive at the GCM tag. On the JVM it does not — SunJCE
+     * buffers the ciphertext and releases nothing until the tag verifies, and
+     * the test that was meant to prove otherwise proved that. Android uses
+     * Conscrypt, not SunJCE, and whether *it* can leave a partial store is
+     * unmeasured.
+     *
+     * The reason that does hold: staging makes the **whole restore** atomic,
+     * not just the decryption. The caller checks §7.5.2's credential bundle
+     * after extraction, and without staging a bundle-less archive would have
+     * overwritten the store before that refusal could happen.
+     *
+     * @return the synthetic entries, keyed by name — §7.5.2's credential bundle
+     *   among them. They are returned rather than written anywhere: they belong
+     *   in the Keystore-backed store, which is the caller's business.
+     */
+    fun restore(
+        input: InputStream,
+        passphrase: CharArray,
+        staging: File,
+        targets: Map<String, File>,
+        onProgress: (String) -> Unit = {}
+    ): Pair<Manifest, Map<String, ByteArray>> {
+        staging.deleteRecursively()
+        val staged = targets.mapValues { (name, _) -> File(staging, name).apply { mkdirs() } }
+        val extras = mutableMapOf<String, ByteArray>()
+        val manifest = try {
+            read(input, passphrase, staged, { n, b -> extras[n] = b }, onProgress)
+        } catch (t: Throwable) {
+            staging.deleteRecursively()
+            throw t
+        }
+        // Verified. Only now does anything move.
+        for ((name, dest) in targets) staged.getValue(name).copyRecursively(dest, overwrite = true)
+        staging.deleteRecursively()
+        return manifest to extras
+    }
+
     private fun derive(passphrase: CharArray, salt: ByteArray, iterations: Int): SecretKeySpec {
         val spec = PBEKeySpec(passphrase, salt, iterations, KEY_BITS)
         try {

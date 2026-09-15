@@ -73,6 +73,16 @@ class SignInActivity : AppCompatActivity() {
         }
         root.addView(go)
 
+        // §7.5.2 — the way back in for someone whose old phone is gone. It
+        // belongs here because here is where that person is: they cannot sign
+        // in on a device they no longer have, and a restore is not a sign-in.
+        root.addView(Button(this).apply {
+            text = "Restore from a backup"
+            isAllCaps = false
+            layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = dp(8) }
+            setOnClickListener { startActivity(ImportActivity.intent(this@SignInActivity)) }
+        })
+
         go.setOnClickListener {
             val u = user.text.toString().trim()
             val p = pass.text.toString()

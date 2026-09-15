@@ -202,6 +202,134 @@ class TransferArchiveTest {
             String(a, Charsets.ISO_8859_1), String(b, Charsets.ISO_8859_1)
         )
     }
+    // ---- §7.5.3 restore: nothing lands until the whole archive decrypts ----
+
+    @Test
+    fun `restore promotes the archive and hands back the synthetic entries`() {
+        val src = store()
+        val out = ByteArrayOutputStream()
+        TransferArchive.write(
+            out, pass.copyOf(), mapOf("files" to src),
+            extras = mapOf(TransferArchive.BUNDLE_ENTRY to """{"v":1}""".toByteArray())
+        )
+
+        val dest = tmp.newFolder("target")
+        val (manifest, extras) = TransferArchive.restore(
+            ByteArrayInputStream(out.toByteArray()), pass.copyOf(),
+            staging = tmp.newFolder("staging-ok"), targets = mapOf("files" to dest)
+        )
+
+        assertEquals(2, manifest.files)
+        assertArrayEquals(
+            File(src, "matrix-sdk-crypto.sqlite3").readBytes(),
+            File(dest, "matrix-sdk-crypto.sqlite3").readBytes()
+        )
+        // §7.5.2's credentials are returned, never written to the filesystem.
+        assertEquals("""{"v":1}""", String(extras.getValue(TransferArchive.BUNDLE_ENTRY)))
+        assertTrue(File(dest, "nested/session.json").exists())
+    }
+
+    /**
+     * The reason [TransferArchive.restore] exists at all.
+     *
+     * §7.5.3: *"a partial store is worse than none, because it looks like a
+     * working account with silently missing keys."* A wrong passphrase fails at
+     * the GCM tag, which is checked **after** the plaintext has streamed — so
+     * the naive path has already written files by the time it throws.
+     */
+    @Test
+    fun `a wrong passphrase leaves the target untouched`() {
+        val src = store()
+        val out = ByteArrayOutputStream()
+        TransferArchive.write(out, pass.copyOf(), mapOf("files" to src))
+
+        val dest = tmp.newFolder("target-untouched")
+        File(dest, "pre-existing.txt").writeText("still here")
+
+        val staging = tmp.newFolder("staging-bad")
+        assertThrows(Exception::class.java) {
+            TransferArchive.restore(
+                ByteArrayInputStream(out.toByteArray()), "wrong".toCharArray(),
+                staging = staging, targets = mapOf("files" to dest)
+            )
+        }
+
+        assertEquals(
+            "the restore must not leave anything behind in the target",
+            listOf("pre-existing.txt"), dest.list()!!.sorted()
+        )
+        assertEquals("still here", File(dest, "pre-existing.txt").readText())
+        assertTrue("staging must be cleaned up on failure", !staging.exists())
+    }
+
+    /**
+     * **This test was written to prove the staging was load-bearing, and it
+     * proved the opposite — so it now records what is actually true.**
+     *
+     * The claim was that `read()` streams entries to disk and only discovers a
+     * bad archive at the GCM tag, leaving a partial store. On the JVM it does
+     * not: SunJCE buffers the whole ciphertext and releases nothing until the
+     * tag verifies, which is the entire point of authenticated encryption. Not
+     * one byte reaches disk, at 8 KB or at 8 MB.
+     *
+     * That does **not** make [TransferArchive.restore]'s staging pointless, and
+     * it does not make it verified either:
+     *
+     * - **Android does not use SunJCE.** Conscrypt is a different
+     *   implementation with its own buffering behaviour, and this test cannot
+     *   see it. Whether a partial store is possible on a real phone is
+     *   unmeasured.
+     * - Staging is what makes the *whole restore* atomic, not just the
+     *   decryption: the credential bundle is checked after extraction, and
+     *   without staging a bundle-less archive would already have overwritten
+     *   the store before the refusal (§7.5.4's defect, from the other side).
+     *
+     * So the staging stays, on the second reason, and the first is written
+     * down as unknown rather than claimed.
+     */
+    @Test
+    fun `on the JVM, read alone writes nothing when the tag fails`() {
+        // 8 MB, so this is about the provider's behaviour rather than a
+        // fixture too small to stream.
+        val src = tmp.newFolder("big-store")
+        repeat(4) { n ->
+            File(src, "chunk$n.sqlite3").writeBytes(ByteArray(2 * 1024 * 1024) { it.toByte() })
+        }
+        val out = ByteArrayOutputStream()
+        TransferArchive.write(out, pass.copyOf(), mapOf("files" to src))
+        val truncated = out.toByteArray().copyOf(out.size() - 64)
+
+        val dest = tmp.newFolder("target-naive")
+        assertThrows(Exception::class.java) {
+            TransferArchive.read(
+                ByteArrayInputStream(truncated), pass.copyOf(), mapOf("files" to dest)
+            )
+        }
+        assertTrue(
+            "if this ever fails, the provider started releasing unauthenticated " +
+            "plaintext — which would make restore()'s staging load-bearing for " +
+            "the reason it was first claimed to be",
+            dest.walkTopDown().none { it.isFile }
+        )
+    }
+
+    /** The same for [TransferArchive.restore], which must hold regardless. */
+    @Test
+    fun `a truncated archive leaves the target untouched`() {
+        val src = store()
+        val out = ByteArrayOutputStream()
+        TransferArchive.write(out, pass.copyOf(), mapOf("files" to src))
+        val truncated = out.toByteArray().copyOf(out.size() - 64)
+
+        val dest = tmp.newFolder("target-truncated")
+        assertThrows(Exception::class.java) {
+            TransferArchive.restore(
+                ByteArrayInputStream(truncated), pass.copyOf(),
+                staging = tmp.newFolder("staging-trunc"), targets = mapOf("files" to dest)
+            )
+        }
+        assertEquals(0, dest.list()!!.size)
+    }
 }
 
 /** §7.5.2 — "the UI must not allow reuse" of the recovery key. */
@@ -273,4 +401,5 @@ class PassphraseTest {
             }
         }
     }
+
 }

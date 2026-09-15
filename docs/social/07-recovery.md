@@ -251,6 +251,51 @@ the copy-and-paste, which is how reuse actually happens. Its cost is that a
 48-character base58 string beginning `Es` cannot be used as a passphrase, which
 costs nobody anything real.
 
+### 7.5.3a The other half, built 2026-09-15
+
+§7.5.3 called the restore *"the half that is not built"*. It is built now, and
+the thing worth recording is what was already there: `TransferArchive.read` and
+`SessionStore.importBundle` were both written, both tested, and **called by
+nothing in the app**. The feature was a file format with no product attached —
+a backup that could not be restored, which is not a backup but a file that makes
+people feel safe.
+
+`ImportActivity` is reachable from the sign-in screen, which is where the person
+who needs it actually is: they cannot sign in on a phone they no longer have,
+and a restore is not a sign-in.
+
+**Two rules it enforces.**
+
+*Only when signed out.* Restoring over a live session replaces the store key and
+the credentials underneath a running client — §7.4.4's failure mode, an account
+that looks signed in and decrypts nothing.
+
+*Nothing lands until the whole archive has decrypted and been checked.*
+Extraction goes to a staging directory; the store is only overwritten once the
+archive has decrypted **and** carried §7.5.2's credential bundle.
+
+#### The justification for the staging was wrong, and the test caught it
+
+It was written believing `read()` streams entries to disk and only discovers a
+bad archive at the GCM tag, leaving a partial store. A test was added to prove
+that. **It proved the opposite:** on the JVM, SunJCE buffers the ciphertext and
+releases nothing until the tag verifies — that is what authenticated encryption
+is for — and not one byte reached disk at 8 KB or at 8 MB.
+
+Android uses Conscrypt rather than SunJCE, so whether a real phone can leave a
+partial store is **unmeasured**, and is now written down as unknown rather than
+assumed either way.
+
+The staging stays on a reason that does hold: it makes the *whole restore*
+atomic rather than just the decryption. The credential check happens after
+extraction, so without staging a bundle-less archive — §7.5.4's defect seen from
+the other side — would have overwritten the store before it could be refused.
+
+The test now asserts the behaviour that is actually true, and says in its own
+failure message what it would mean if that ever changed.
+
+---
+
 ### 7.5.4 The first build of this was useless, and the audit caught it
 
 Written the same day, a few hours later, by listing every entry of the archive
