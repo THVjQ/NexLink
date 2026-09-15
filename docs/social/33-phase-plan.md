@@ -785,7 +785,9 @@ testing track.
 
 - [ ] 20 accounts created through the real flow.
 - [ ] Two weeks with no Sev 1 or Sev 2 incident (§30.2).
-- [ ] Push delivery ratio measured and acceptable (§27.4.1).
+- [ ] Push delivery ratio measured and acceptable (§27.4.1). **The measurement
+      exists now** — `social-push-ratio`, from Sygnal's Prometheus counters
+      (§13.3.5). It needs real users before the number means anything.
 - [ ] Battery impact measured on real phones over real days (§13.7).
 - [ ] Invite quotas (§9.5) exercised — and **tuned against observed behaviour**,
       which is what those numbers were always waiting for.

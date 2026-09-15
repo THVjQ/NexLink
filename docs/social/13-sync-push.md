@@ -174,6 +174,69 @@ without one.
 
 ---
 
+### 13.3.5 Sygnal was logging what §2.8 forbids — fixed 2026-09-15
+
+Found while looking for a source for §27.4.1's delivery ratio, which is the
+only reason anyone read the push gateway's logs closely.
+
+```
+INFO  sygnal.gcmpushkin: Sending (attempt 0) => ['fGznwAKhQwi8…APA91b…']
+                         room:!fMHPMJqykfkwelMDbh:nexlink.thvjq.com.au,
+                         event:$mFyxu3JOMxiUMAaTqTPiRmoixgs42mQI2MjbWpBNd-s
+```
+
+That is §2.8 #7 — *"crash reports, logs and analytics carry no message content,
+room IDs, user IDs or key material"* — broken on the live service, in the one
+component nobody had thought to audit. §27.5's table even names room IDs and
+says *"Synapse logs them by default at DEBUG"*. It was the **push gateway**, at
+INFO, and it had been doing it since deployment.
+
+**There is no safe level below ERROR.** Checked line by line rather than
+assumed:
+
+| level | what it logs |
+|---|---|
+| INFO | the FCM token, room id and event id of every push; `Reg IDs [...] get 404` |
+| WARNING | `Error for pushkey <FCM token>: <reason>` |
+| ERROR | response codes and FCM's response text — no identifiers |
+
+So `sygnal.gcmpushkin` is set to `ERROR`, `sygnal.access` and `twisted` to
+`WARNING`. Verified after a real push: zero matches for a room id, an `APA91`
+token, `Reg ID` or `pushkey` in the logs.
+
+**What replaced the lost visibility.** The INFO lines were the only per-push
+record, and counting them was the obvious way to build §27.4.1's ratio. Sygnal's
+Prometheus counters do it better *because* they cannot carry an identifier —
+`sygnal_notifications_received_total`, `sygnal_gcm_status_codes_total{code}`.
+Enabled on `127.0.0.1:9001` **inside the container**, so nothing is published
+and no host port is opened; `infra/social-metrics/social-push-ratio` scrapes it
+with `docker exec`.
+
+The ratio it reports is *"the homeserver asked and FCM accepted"*, not *"the
+phone woke up"*. The second needs telemetry from the device and §1.3 does not
+allow it, so the tool says so in its own output rather than letting a reader
+assume otherwise.
+
+#### And the app had never been healthy
+
+The same look turned up that `nexlink-social-push` sat in **DEPLOYING**
+permanently. TrueNAS gives a custom app a default probe that shells out to
+`curl`, and the Sygnal image has no `curl` — failing streak 9, never once
+healthy since deployment. Push worked the whole time, which is exactly why it
+went unnoticed: the app state was wrong, not the service.
+
+Replaced with a probe using `python3`, which the image does have, against
+Sygnal's own `/health`. `RUNNING (healthy)` for the first time. An app stuck in
+DEPLOYING is worse than cosmetic — it is a status field that cannot go bad,
+which means it can never warn anyone.
+
+**Two containers still have no healthcheck at all**: `fed-tls` and
+`element-call`. `fed-tls` is the one that matters — if it dies, calling stops
+and messaging does not (§27.3.3's argument for the certificate alert, applied to
+liveness).
+
+---
+
 ## 13.4 Notifications
 
 ### 13.4.1 Requirements

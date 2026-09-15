@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""
+§27.4.1 — the push delivery ratio.
+
+§27.4.1 calls push *"the signal most likely to fail without anyone noticing.
+Messages arrive when the app is open, so the operator's own testing looks fine;
+users experience 'notifications are unreliable' and mostly do not report it,
+they just use the app less."* It is a phase-6 acceptance item (§33.7) and it
+never pages — it is looked at monthly.
+
+**Why the numbers come from Prometheus and not the logs.** Sygnal's INFO lines
+carried the FCM token, the room id and the event id of every push, which is
+§2.8 #7 — *"logs carry no message content, room IDs, user IDs or key
+material"* — broken on the live service. There is no log level below ERROR at
+which that logger is identifier-free, so it is set to ERROR (§13.3.4). These
+counters are aggregate by construction: they cannot name a user, a room or a
+device even in principle, which makes them the right source rather than merely
+an available one.
+
+**What it can and cannot tell you.** This measures *"the homeserver asked, and
+FCM accepted"*. It does not measure *"the phone woke up"* — that would need
+telemetry from the device, which §1.3 does not allow. So a healthy ratio here
+with users still reporting missed notifications points at the device end: Doze,
+OEM battery management (§15.9), or a stale token.
+
+    social-push-ratio          # human-readable
+    social-push-ratio --json   # for a report
+
+Counters reset when Sygnal restarts, so everything is "since it last started".
+That is printed rather than hidden: a ratio over an unknown window is not a
+measurement.
+"""
+import json
+import subprocess
+import sys
+
+CONTAINER = "ix-nexlink-social-push-sygnal-1"
+METRICS_URL = "http://127.0.0.1:9001/metrics"
+
+
+def scrape() -> str:
+    # Bound to loopback *inside* the container on purpose: nothing is published
+    # and no port is opened on the host, so the only way in is this.
+    out = subprocess.run(
+        ["docker", "exec", CONTAINER, "python3", "-c",
+         f"import urllib.request;print(urllib.request.urlopen('{METRICS_URL}',timeout=5).read().decode())"],
+        capture_output=True, text=True, timeout=30)
+    if out.returncode != 0:
+        raise SystemExit(f"could not scrape Sygnal: {out.stderr.strip()[:300]}")
+    return out.stdout
+
+
+def parse(text: str) -> dict:
+    received = 0.0
+    devices = 0.0
+    dropped = 0.0
+    by_code: dict[str, float] = {}
+    started = None
+    for line in text.splitlines():
+        if line.startswith("#") or not line.strip():
+            continue
+        name, _, value = line.rpartition(" ")
+        try:
+            v = float(value)
+        except ValueError:
+            continue
+        if name == "sygnal_notifications_received_total":
+            received = v
+        elif name == "sygnal_notifications_devices_received_total":
+            devices = v
+        elif name == "sygnal_notifications_received_created":
+            started = v
+        elif name.startswith("sygnal_inflight_request_limit_drop_total"):
+            dropped += v
+        elif name.startswith("sygnal_gcm_status_codes_total"):
+            code = name.split('code="', 1)[1].split('"', 1)[0]
+            by_code[code] = by_code.get(code, 0.0) + v
+    accepted = by_code.get("200", 0.0)
+    attempted = sum(by_code.values())
+    return {
+        "notifications_from_homeserver": int(received),
+        "device_pushes": int(devices),
+        "dropped_over_inflight_limit": int(dropped),
+        "fcm_attempted": int(attempted),
+        "fcm_accepted": int(accepted),
+        "fcm_by_status": {k: int(v) for k, v in sorted(by_code.items())},
+        # None rather than 1.0 when nothing has been sent: a ratio over zero
+        # events is not "100% delivered", it is no information.
+        "accepted_ratio": (accepted / attempted) if attempted else None,
+        "counting_since_epoch": started,
+    }
+
+
+def main() -> int:
+    d = parse(scrape())
+    if "--json" in sys.argv:
+        print(json.dumps(d, indent=2))
+        return 0
+
+    import datetime
+    since = ("unknown" if not d["counting_since_epoch"] else
+             datetime.datetime.fromtimestamp(d["counting_since_epoch"])
+             .strftime("%Y-%m-%d %H:%M"))
+    print(f"  push delivery — since Sygnal last started ({since})")
+    print(f"    notifications from the homeserver   {d['notifications_from_homeserver']}")
+    print(f"    pushes attempted to FCM             {d['fcm_attempted']}")
+    print(f"    accepted by FCM                     {d['fcm_accepted']}")
+    if d["dropped_over_inflight_limit"]:
+        print(f"    dropped at Sygnal's inflight limit  {d['dropped_over_inflight_limit']}")
+    for code, n in d["fcm_by_status"].items():
+        if code != "200":
+            print(f"    FCM responded {code}                    {n}")
+    if d["accepted_ratio"] is None:
+        print("    ratio                               no pushes yet — nothing to report")
+    else:
+        print(f"    ratio                               {d['accepted_ratio'] * 100:.1f}%")
+    print()
+    print("  This is 'FCM accepted it', not 'the phone woke up' — the second")
+    print("  would need telemetry from the device, which §1.3 does not allow.")
+    print("  A good ratio here plus users missing notifications means the device")
+    print("  end: Doze, OEM battery management (§15.9), or a stale token.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
