@@ -685,7 +685,23 @@ real defect with a user-visible failure. Two candidate fixes:
    that no server setting shortens it — this would mean diverging from upstream,
    which §17.6's whole argument is against.
 
-(1) is small, local, and does not fight upstream. It is the recommendation.
+**Decided 2026-09-15: (1), and the other half is accepted rather than fixed.**
+(1) is built and verified. It covers the case that actually bites a person —
+*my* phone crashed, so *my* next call does not ring — because that is the one
+where the same device is both the victim and the fix.
+
+The remaining half is a ghost belonging to **someone else**: if their client
+died mid-call, a new caller is treated as joining an existing call and rings
+nobody, for up to an hour. That is **accepted, not fixed**, and the reason is
+that the client cannot tell a ghost from a real participant from room state
+alone — the only thing that knows is the SFU, and the widget owns that
+connection. Guessing would mean sometimes ringing people who are already in a
+call with you.
+
+It is bounded (an hour), self-healing, and rare in the way that matters: it
+needs the *other* party's client to have died. If it turns out to bite real
+users, the fix is to ask upstream to expose live participant state to the host,
+not to guess in the client.
 
 **And for whoever automates this next:** a test that kills the app mid-call
 poisons the next run of itself. `tools/two-device-call-test.sh` now clears both

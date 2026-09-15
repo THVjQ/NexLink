@@ -119,12 +119,19 @@ CLI mints a Synapse registration token and records it in the tree. There is no
 path by which a *user* issues an invite, so there is nothing for a quota to
 limit. The app has an invite *redemption* flow and no invite *issuing* flow.
 
-Phase 6's acceptance list asks for quotas *"exercised and tuned against observed
-behaviour"* (§33.7). That row cannot be satisfied as written. It is a decision
-before phase 6, not an oversight during it: either user-issued invites get built
-— with §9.5's table as the starting values — or the private launch runs entirely
-on operator-issued invites and the row is dropped. For 10–20 people who know it
-is early, operator-issued is arguably the right answer anyway.
+**Decided 2026-09-15: the private launch runs on operator-issued invites, and
+phase 6's quota row is dropped.**
+
+For 10–20 people who know it is early, the operator issuing every invite by hand
+is not a limitation, it is the control: §9.1's cost argument and §9.7's abuse
+argument are both strongest when exactly one person decides who gets in. Quotas
+exist to make *delegated* invitation safe, and nothing is being delegated yet.
+
+So §9.5 stays written, unbuilt, and honest about it. It is the specification for
+the day user-issued invites are built — with that table as the starting values,
+tuned against behaviour observed during the private launch rather than guessed
+at now. Building it before there are users to observe would be tuning numbers
+against an imagination.
 
 **Suspension behaviour:** a suspended account's unredeemed tokens are revoked
 immediately. Already-redeemed accounts are not automatically suspended — that is

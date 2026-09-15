@@ -93,11 +93,26 @@ increasing order of work:
 5. **Wait for upstream.** `getDisplayMedia` on Android is a standing Chromium
    gap, not an Element Call omission. There is no date.
 
-**Recommendation: (1), and raise it as a decision** — §1.5's criterion names
-"four participants and one screen share", and that is still achievable with the
-sharer on a computer. Say so explicitly rather than discovering it at
-acceptance. (3) is the one to revisit if upstream ever exposes the call's
-encryption key to the host.
+**Decided 2026-09-15: (1).** Android does not originate a screen share. The
+operator delegated the call and this is it, with the reasoning stated so it can
+be overturned on evidence rather than on mood:
+
+- (2) is not a harder version of (1), it is unavailable — there is no way to
+  build a `MediaStream` in the page from native frames at video rates.
+- (3) would put **plaintext video through the SFU** for the one medium most
+  likely to be showing somebody's passwords. That is a worse outcome than the
+  missing feature, and it is not close.
+- (4) is a rewrite of the call layer to buy one feature, against §11.4's whole
+  argument.
+- (5) has no date.
+
+**§1.5's success criterion changes accordingly**: "four participants and one
+screen share" now reads *with the share originating from a computer*. Receiving
+a share on a phone is ordinary video and works. This is a narrowing of the
+product and is written here rather than discovered at acceptance.
+
+Revisit only if upstream exposes the call's encryption key to the host, which
+would make (3) safe.
 
 The §2.8 invariant is unaffected either way, and so is every row of §18.2 that
 is about *not* doing something. What changes is the row that says the share
