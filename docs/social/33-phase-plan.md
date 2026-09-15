@@ -539,12 +539,12 @@ Everything above still holds. Added since, all verified on the same handset
 | Offline send failure surface (§13.5) | **Done** — §13.5.2; a failed send used to read "Sending…" forever |
 | Storage and retention (§12.5) | **Done** — §12.5.4; two false claims of its own, both fixed |
 | Accessibility (§14.10) | **Done** — §14.10.1; light theme failed WCAG AA on five colours |
-| Encrypted transfer archive (§7.5.2) | **Half** — writes and is verified by an independent decryptor; cannot load back yet (§7.5.3) |
+| Encrypted transfer archive (§7.5.2) | **Half** — writes and is verified by an independent decryptor; **the load-back side is still not built** (§7.5.3) |
 | Recovery restore (§7.4) | **Done** — `RecoveryRestoreTest` |
-| Push notifications (§13.3) | **Blocked** — needs a Firebase project, which is Luca's to create |
+| Push notifications (§13.3) | **Done** — Firebase created, Sygnal deployed; a cold push woke a killed process and rang it (§15.6.1). This row read "Blocked" until 2026-09-15 |
 | Encryption at rest for the SDK store (§12.4) | **Done** — §12.4.5 measured the store, §12.4.6 closed StrongBox and the screen-lock warning. (This row said "not started" for one commit: copied from the stale §33.4.1 without checking.) |
 | Direct device transfer (§7.5.1) | Not started — feature of its own size |
-| Calls (§15, §17–19) | Phase 4, not started |
+| Calls (§15, §17–19) | **Done** — phase 4, §33.5.3 |
 
 **Mechanical checks now standing at 7** (`tools/check-invariants.sh`), the
 newest being WCAG AA contrast in both themes — added because §14.10's contrast
