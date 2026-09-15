@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# §21.6 — get `signing.key` off Willard.
+#
+# §21.6 is blunt about this one: *"It is generated silently on first start, it
+# is a small text file, and it is the root of the server's cryptographic
+# identity. It must be backed up the day the server first starts, off Willard,
+# and it must never be regenerated to 'fix' something."*
+#
+# It was not. The server started 2026-09-11 and the only copy has been sitting
+# on the same pool as everything else it would be needed to recover from
+# (§23.5: there is no offsite backup at all, and both pools are in one
+# chassis). That makes a fire or a dead PSU the difference between restoring
+# this homeserver and starting a new one with a different identity — which
+# invalidates every device signature ever issued.
+#
+# This script does not decide where the copy goes. It produces something safe
+# to move, and refuses to be clever about the rest:
+#
+#   backup-signing-key encrypt   > signing-key.enc   # asks for a passphrase
+#   backup-signing-key paper                          # the key, to write down
+#   backup-signing-key verify signing-key.enc         # does it decrypt and match?
+#
+# **The passphrase is the operator's and is never stored.** Losing it loses the
+# backup, which is why `paper` exists: the key is 59 bytes, and a key that small
+# and that unrecoverable belongs on something that does not have a power supply.
+set -euo pipefail
+
+KEY=${SOCIAL_SIGNING_KEY:-/mnt/Pool1-MAIN/social/synapse/nexlink.thvjq.com.au.signing.key}
+
+need_key() {
+  [ -r "$KEY" ] || { echo "cannot read $KEY (try sudo)" >&2; exit 2; }
+}
+
+fingerprint() {   # a value that can be compared out loud, without exposing the key
+  sha256sum "$1" | cut -c1-16
+}
+
+case "${1:-}" in
+
+encrypt)
+  need_key
+  # -pbkdf2 with a high iteration count, because the passphrase is the only
+  # thing between this file and the server's identity. Defaults here are not
+  # good enough for a secret that never expires.
+  openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt -in "$KEY"
+  echo "fingerprint (sha256, first 16): $(fingerprint "$KEY")" >&2
+  echo "Keep that fingerprint somewhere separate — it is how you check a" >&2
+  echo "restored copy is the real key without decrypting it first." >&2
+  ;;
+
+paper)
+  need_key
+  echo "=== §21.6 signing key — write this down, then destroy the printout's"
+  echo "=== digital form. It is 59 bytes; this is the whole thing."
+  echo
+  cat "$KEY"
+  echo
+  echo "base64 (for transcription without ambiguity):"
+  base64 -w 64 "$KEY"
+  echo
+  echo "sha256 (first 16): $(fingerprint "$KEY")"
+  echo
+  echo "To restore: put the file back at"
+  echo "  $KEY"
+  echo "owned 991:991, mode 0640, BEFORE Synapse first starts (§29.4)."
+  ;;
+
+verify)
+  enc=${2:-}
+  [ -r "${enc:-/nonexistent}" ] || { echo "usage: backup-signing-key verify <file>" >&2; exit 2; }
+  need_key
+  tmp=$(mktemp); trap 'rm -f "$tmp"' EXIT
+  openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -in "$enc" -out "$tmp"
+  if cmp -s "$tmp" "$KEY"; then
+    echo "OK — decrypts and matches the live key ($(fingerprint "$KEY"))"
+  else
+    echo "MISMATCH — this is not the current signing key" >&2; exit 1
+  fi
+  ;;
+
+*)
+  sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
+  exit 2
+  ;;
+esac

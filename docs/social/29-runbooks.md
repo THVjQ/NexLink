@@ -161,6 +161,49 @@ real rather than aspirational.
 
 ---
 
+## 29.4a Back up the signing key — do this before anything else
+
+**§21.6 said to do this the day the server first started. It was not done, and
+the server started 2026-09-11.** Until it is, the deployment has one copy of
+its own cryptographic identity, on the same pool as everything it would be
+needed to recover from, in a chassis with no offsite backup (§23.5). A fire is
+then the difference between restoring this homeserver and starting a different
+one — which invalidates every device signature ever issued and cannot be
+undone.
+
+The key is 59 bytes. This takes two minutes.
+
+```bash
+ssh willard
+sudo /mnt/Pool1-MAIN/social/keys/backup-signing-key encrypt > ~/signing-key.enc
+#   asks for a passphrase twice; it is never stored anywhere
+sudo /mnt/Pool1-MAIN/social/keys/backup-signing-key verify ~/signing-key.enc
+#   -> OK — decrypts and matches the live key (<fingerprint>)
+```
+
+Then **move `signing-key.enc` off Willard** — any machine that is not this one
+— and record the fingerprint somewhere separate from the file. The fingerprint
+is how a restored copy is checked without decrypting it.
+
+**Also take a paper copy.** A key this small and this unrecoverable belongs on
+something without a power supply, and it is the only form that survives losing
+the passphrase:
+
+```bash
+sudo /mnt/Pool1-MAIN/social/keys/backup-signing-key paper
+```
+
+Write it down, and do not leave the output in a terminal scrollback or a
+password manager's clipboard history.
+
+**Restoring it** is part of §29.4: the file goes back to
+`/mnt/Pool1-MAIN/social/synapse/nexlink.thvjq.com.au.signing.key`, owned
+`991:991`, mode `0640`, **before Synapse first starts**. Synapse generates a new
+one silently if the file is absent, and a new one is the failure this runbook
+exists to prevent.
+
+---
+
 ## 29.5 Media store is filling
 
 Triggered by the 80% alert (§27.3).

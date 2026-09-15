@@ -172,7 +172,11 @@ service and its `invite_record` store (§9.2.2).
 - [ ] A room created by a client is encrypted by default (§22.4).
 - [ ] `.well-known/matrix/client` is served with
       `Access-Control-Allow-Origin: *` (§26.3.1).
-- [ ] `signing.key` is backed up **off Willard** (§21.6).
+- [ ] `signing.key` is backed up **off Willard** (§21.6). **Still not done, and
+      it is the largest single risk in the deployment** — §21.6 said to do it
+      the day the server started, which was 2026-09-11. The tool and the
+      two-minute procedure are now in §29.4a; the passphrase is the operator's,
+      so the last step is his.
 - [ ] A `pg_dump` runs, and a restore into a scratch container passes all five
       checks in §23.6.2. **Timed and recorded.**
 
