@@ -305,78 +305,52 @@ And two harness lessons, because they cost more than the bugs did:
 
 `tools/lib/adb-ui.sh` now has `wait_for_ring` and `answer_ring` doing both.
 
-### 15.6.3 Why a sleeping phone does not ring — and it is architectural
+### 15.6.3 A wrong conclusion, and the correction — 2026-09-15
 
-The locked-screen row did not just fail; it now has an explanation, and the
-explanation is a consequence of the product's central promise rather than a bug
-in the calling code.
+**This section first claimed that calls are pushed at low priority, that the
+cause was architectural — the server cannot read the event, so it cannot
+prioritise a call — and put a three-way decision to the operator about it. That
+was wrong, and the error is worth keeping rather than deleting.**
 
-**What was measured, and what follows from it — kept apart on purpose.**
+The reasoning looked sound. `/notifications` really does report
+`sound_tweak=False` for every ring; `.m.rule.encrypted` really does lack the
+`sound` tweak that `.m.rule.encrypted_room_one_to_one` carries; Sygnal really
+does map Matrix `prio: low` onto FCM `normal`. Each fact was measured. The
+conclusion drawn from them was still false, because one link was assumed rather
+than checked: **that Synapse derives `prio` from the tweaks alone.**
 
-The device-side observation is the weaker half and is reported as such. Across
-several attempts with the callee locked, FCM accepted the pushes
-(`sygnal_gcm_status_codes_total{code="200"}` rose by four) and no ring was ever
-posted. **But the setup for those runs lost the handset** — its log, read
-afterwards, shows `adb: device not found` partway through, so neither the
-`am kill` nor the stay-awake release reached it and its state is unknown.
+It does not. From `synapse/push/httppusher.py`:
 
-The specific alternative is not exotic: if the `am force-stop` *did* land and
-the `am kill` did not, B spent those runs in the **stopped** state, which
-receives no FCM at all — the trap §15.6.1 records in its own testing note. A
-device that is not being delivered to cannot demonstrate anything about Doze.
-
-So the device half is set aside entirely rather than argued over.
-
-The server-side evidence needs no device at all, and it is what the conclusion
-rests on. Asking Synapse what it thought it was sending:
-
+```python
+priority = "low"
+if (
+    event.type == EventTypes.Encrypted
+    or tweaks.get("highlight")
+    or tweaks.get("sound")
+):
+    # HACK send our push as high priority only if it generates a sound, highlight
+    #  or may do so (i.e. is encrypted so has unknown effects).
+    priority = "high"
 ```
-m.room.encrypted  @call190359:…  sound_tweak=False  -> fcm prio=NORMAL
-```
 
-every time. And a **normal-priority FCM message is deferred while the device is
-in Doze**. That is the entire failure.
+**Every `m.room.encrypted` event is already sent at high priority**, precisely
+because the server cannot see inside it and therefore assumes the worst. The
+property that was supposed to cause the problem is the property that prevents
+it. Upstream had already thought about this exact case, and the comment says so.
 
-**The chain, and why each link is load-bearing:**
+So: there is no push-priority defect, there is no trade to make between battery
+and calls ringing, and the decision put to the operator should not have been
+put. The remaining explanation for a silent locked handset is the ordinary one
+already written down in §15.6.1 — **a force-stopped package receives no FCM at
+all** — which is consistent with those runs having lost the device partway
+through `am kill`.
 
-1. §2.8 #1 — the homeserver cannot read the event. That is the product.
-2. So it cannot tell a **call** from a **message**: the ring travels as
-   `m.room.encrypted` like everything else (§13.3.5).
-3. Push priority is decided from the matching push rule. Checked against the
-   live rule set: `.m.rule.encrypted_room_one_to_one` carries a `sound` tweak,
-   **`.m.rule.encrypted` does not**. The test room has three members, so the
-   second one applies.
-4. No sound tweak → Matrix `prio: low` → Sygnal sends FCM `normal`
-   (`gcmpushkin.py`: `"normal" if n.prio == "low" else "high"`, which also
-   **overrides** the `fcm_options.android.priority: high` in our config).
-5. Normal priority in Doze → delivered when the device next wakes. Which, for a
-   call, is the same as not delivered.
-
-Steps 1–4 are measured against this deployment. Step 5 is Android's documented
-behaviour rather than something observed here, and **a clean locked-device run
-is still owed** — with the handset verifiably connected, killed and asleep
-throughout — before the row is called closed either way.
-
-**§15.6 says "High-priority push for calls, always (§13.6.3)". The deployment
-does not achieve that, and cannot without a decision.** Three options, none free:
-
-1. **Give encrypted events a sound tweak in every room.** One push rule, set by
-   the client at sign-in. Every message then becomes a high-priority wake —
-   which is precisely the battery cost §13's design exists to avoid, paid on
-   every message to make the rare call work.
-2. **Accept that group-room calls do not wake a sleeping phone.** One-to-one
-   calls would still ring, because `.m.rule.encrypted_room_one_to_one` already
-   carries the tweak — which means the product would ring reliably for the case
-   it is mostly for, and silently fail for group calls. That asymmetry has to
-   be *stated*, not discovered.
-3. **Let the server see that an event is a call.** Sending the ring unencrypted,
-   or with a readable type, would fix priority at the cost of telling the
-   homeserver who is calling whom and when. That is metadata §1.3 spends the
-   whole design avoiding.
-
-**(2) is the honest default and (1) is the one to consider**, because a
-messenger whose calls do not ring is not a calling product. This belongs to the
-operator, not to the code.
+**The lesson, since it is the second time in one evening.** Four measured facts
+and one unexamined assumption produced a confident, wrong, architectural story
+— and the assumption was the only link nobody had looked at, precisely because
+it was the boring one. The rule that catches this is cheap: when a conclusion is
+about *someone else's* code, read that code before writing the conclusion down.
+It took two minutes to find the answer once anyone looked.
 
 **Still literally unobserved**, and worth separating from the above: the
 full-screen takeover of a locked screen. Even with priority fixed, nobody has
