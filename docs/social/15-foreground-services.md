@@ -352,6 +352,31 @@ it was the boring one. The rule that catches this is cheap: when a conclusion is
 about *someone else's* code, read that code before writing the conclusion down.
 It took two minutes to find the answer once anyone looked.
 
+**The one test that remains, and what it needs.** `tools/locked-ring-test.sh`
+now gets the callee into exactly the right state — *"callee state:
+mScreenState=DOZE isKeyguardShowing=true"*, app launched and then `am kill`ed so
+the package is push-eligible rather than stopped — and verifies each step
+instead of assuming it. The run then failed on the **caller**, which had locked
+itself behind a PIN in the meantime.
+
+That is the whole remaining obstacle, and it is worth stating plainly because
+three evenings of "the ring does not work" turned out to be it in various
+disguises: **both handsets lock themselves, and a locked handset cannot be
+driven at all.** `monkey` will not launch past a keyguard and fails *silently*,
+so the symptom is always "the app did not come up" or "no ring" rather than
+"the phone is locked".
+
+To run it: unlock both phones, leave them plugged in, then
+
+```bash
+adb -s <A> shell svc power stayon true
+adb -s <B> shell svc power stayon true      # keeps the CALLER usable
+A_SERIAL=<A> B_SERIAL=<B> tools/locked-ring-test.sh
+```
+
+The script releases the callee's stay-awake itself and puts it to sleep, so the
+locked state under test is a real one rather than a simulated one.
+
 **Still literally unobserved**, and worth separating from the above: the
 full-screen takeover of a locked screen. Even with priority fixed, nobody has
 yet *seen* the ring paint over a keyguard. The obstacle is mundane — the handset
