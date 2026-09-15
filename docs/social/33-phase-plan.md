@@ -755,7 +755,11 @@ survives its first bad week.
       (§32.3, §25.7) — re-verified 2026-09-15 end to end on a throwaway
       account: media 200 before, 404 after; the web path leaves media until
       the hourly sweeper, which was watched doing it.
-- [ ] Reporting and blocking work end to end (§31.3).
+- [x] Reporting and blocking work end to end (§31.3) — verified against the
+      live homeserver 2026-09-15 (§31.3.2b). Blocking holds for messages *and*
+      invites, server-side. Reporting had a hole where declined-consent reports
+      went nowhere readable; fixed. §31.3.2's consented-content mechanism is
+      still unbuilt and is now a stated decision, not a silent gap.
 - [x] §27.6's drift assertions running daily, from **outside** Willard — a
       systemd user timer on the desktop VM; six assertions, green two days
       running.

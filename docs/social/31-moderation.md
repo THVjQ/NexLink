@@ -128,6 +128,68 @@ for reporting a user outside a room, so a profile-only report throws rather than
 appearing to succeed. A report the user believes was sent and was not is worse
 than an error.
 
+### 31.3.2b Verified end to end 2026-09-15 — and two things were wrong
+
+Blocking and reporting were exercised against the live homeserver with
+throwaway accounts, not against a fake.
+
+**Blocking passes, and the server does the work.** A sent a message, B saw it;
+A then set `m.ignored_user_list`; A sent another and **B's sync did not contain
+it**. §31.3.1's further claim was checked too: an **invite** from a blocked user
+never reaches the blocked-by user's sync either. So the block holds for the
+things §31.3.1 promises, enforced server-side rather than hidden in the client.
+
+**Reporting had a hole exactly where §31.3.2 said it must not.**
+
+| call | homeserver | operator can read it |
+|---|---|---|
+| `reportContent(eventId, reason)` | 200 | **yes** — `/_synapse/admin/v1/event_reports` |
+| `reportRoom(reason)` | 200 | **no** — `/_synapse/admin/v1/room_reports` is 404 `M_UNRECOGNIZED` |
+
+The client split on consent: `reportContent` with it, `reportRoom` without. So
+the reports §31.3.2 insists are *"still actionable"* — sent by the user who
+declined to attach content — were the only ones that went nowhere. Synapse
+1.160 accepts a room report with 200 and offers the operator no way to read it.
+A 200 with nothing behind it is worse than an error, and it failed precisely the
+most careful user.
+
+Fixed: a report against an event now goes as an event report either way, and
+the reporter's consent decision travels in the reason, which is the operator's
+only signal about what they may quote back. Reporting a whole conversation is
+refused rather than accepted quietly.
+
+#### The consent checkbox did not do what it said
+
+§31.3.2 specifies that a consented report attaches plaintext *"encrypted to the
+operator's key"*. **There is no operator key.** And plaintext cannot simply
+ride along in the report's `reason`, because that hands it to the *server* —
+§2.8 #1, the one invariant with no exceptions.
+
+So in an encrypted room the report is a reference to an `m.room.encrypted`
+event, and the operator receives ciphertext. Consent or not, **nothing becomes
+readable**. The checkbox said *"Include this message in the report. The operator
+will be able to read it."* That was untrue, and telling a user in a privacy
+product that their message will be read when it will not is worse than the
+moderation gap it was covering for.
+
+The copy now says what actually happens — it records permission for the
+operator to **ask** — and the note beneath says messages stay encrypted either
+way.
+
+**What §31.3.2 would need to be true as written**, left as a decision rather
+than quietly dropped:
+
+1. An operator keypair whose public half ships in the client.
+2. The client encrypting the selected plaintext to it and attaching the
+   ciphertext to the report.
+3. A disclosure in §9.6.1 and the privacy policy: *there exists a key that can
+   read what you choose to send, held by the operator.*
+
+That is a real capability to create, and §31.3.2's own sentence — *"there is no
+operator key that can read the room, only one that can read what a user chose
+to send"* — is the argument for it. Until it is built, the product's honest
+position is the one now on screen.
+
 ### 31.3.3 Operator-side
 
 | Action | Reversible | §29 |

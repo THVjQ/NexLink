@@ -491,10 +491,18 @@ class ConversationActivity : AppCompatActivity() {
     /**
      * §31.3.2 — the report, with consent that is explicit and starts unticked.
      *
-     * This is the only path by which message content ever becomes readable to
-     * the operator, so the checkbox is the whole point of the screen. It is
-     * **not** pre-ticked, and the label says plainly what agreeing to it means
-     * rather than hiding behind "help us investigate".
+     * **The copy was wrong and is now accurate (2026-09-15).** It said
+     * *"The operator will be able to read it"*, and that is not what happens:
+     * §31.3.2's mechanism for attaching plaintext — encrypting it to an
+     * operator key — does not exist, and putting the text anywhere the report
+     * can carry it would hand it to the **server**, which §2.8 #1 forbids. So
+     * the report travels as a reference to an encrypted event, and the
+     * operator gets ciphertext.
+     *
+     * Telling a user in a privacy product that their message will be read when
+     * it will not is worse than any moderation gap it was covering for. The
+     * checkbox now says what it actually does: it records permission for the
+     * operator to **ask**. See §31.3.2b for what would have to be built.
      *
      * Declining must not feel like declining to report: §31.3.2 notes that
      * reports without content are still actionable, because several independent
@@ -507,13 +515,12 @@ class ConversationActivity : AppCompatActivity() {
             minLines = 2
         }
         val consent = android.widget.CheckBox(this).apply {
-            text = "Include this message in the report. The operator will be " +
-                   "able to read it."
+            text = "Allow the operator to ask me for a copy of this message."
             isChecked = false        // §31.3.2 — unticked, deliberately
         }
         val note = TextView(this).apply {
-            text = "You can report without including the message. Reports still " +
-                   "count without it."
+            text = "Your messages stay encrypted either way — the operator " +
+                   "cannot read them. Reports still count without this."
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setTextColor(ContextCompat.getColor(this@ConversationActivity, UiR.color.social_muted))
         }

@@ -508,13 +508,34 @@ class RustSocialSession private constructor(
     /**
      * §31.3.2 — the report.
      *
-     * With consent the specific event is reported, so the operator sees what
-     * the reporter chose to show and nothing else. Without it, only the room
-     * and the reporter's description travel.
+     * **A report against an event always goes as an event report, consent or
+     * not.** That is not what this first did, and the difference is the whole
+     * point of this comment.
      *
-     * Nothing here gives the operator a way to read a room. §31.3.2: *"there is
-     * no operator key that can read the room, only one that can read what a
-     * user chose to send."*
+     * The original split on consent: `reportContent` with it, `reportRoom`
+     * without. Measured against the live homeserver on 2026-09-15:
+     *
+     * | call | homeserver | operator can read it |
+     * |---|---|---|
+     * | `reportContent(eventId, reason)` | 200 | **yes** — `/_synapse/admin/v1/event_reports` |
+     * | `reportRoom(reason)` | 200 | **no** — `/_synapse/admin/v1/room_reports` is 404 `M_UNRECOGNIZED` |
+     *
+     * So the reports §31.3.2 insists are *"still actionable"* — the ones sent
+     * by a user who declined to attach content — were the only ones that
+     * vanished. A 200 and nowhere to read it is worse than an error, and it
+     * failed exactly the user who was being most careful.
+     *
+     * **Declining consent still discloses nothing.** In an encrypted room the
+     * reported event travels as `m.room.encrypted`, so an event report hands
+     * the operator ciphertext they cannot read — the same disclosure as a room
+     * report, which is none. Consent has to mean something else.
+     *
+     * **And today it does not.** §31.3.2 specifies that a consented report
+     * attaches plaintext *"encrypted to the operator's key"*. There is no
+     * operator key, and putting plaintext in `reason` would hand it to the
+     * **server**, which §2.8 #1 forbids outright. So the checkbox currently
+     * changes nothing about what the operator can see. That is a gap in the
+     * product, recorded in §31.3.2b rather than papered over here.
      */
     override suspend fun reportUser(
         userId: UserId,
@@ -524,16 +545,21 @@ class RustSocialSession private constructor(
         eventId: EventId?
     ): Result<Unit> = ioCatching {
         val room = roomId?.let { runCatching { roomListService.room(it.value) }.getOrNull() }
+        // The reporter's stated position travels in the reason, because it is
+        // the operator's only signal about what they may quote back.
+        val note = if (includeContent) reason
+                   else "$reason\n\n[the reporter did not consent to content being included]"
         when {
-            // Consented: report the specific event, so the operator sees what
-            // the reporter chose to show and nothing beyond it.
-            includeContent && room != null && eventId != null ->
-                room.reportContent(eventId.value, reason)
+            // An event report, whether or not consent was given: it is the only
+            // shape of report this homeserver lets the operator read.
+            room != null && eventId != null -> room.reportContent(eventId.value, note)
 
-            // §31.3.2 — "Reports without content are still actionable."
-            // Several independent reports against one account is a signal on
-            // its own, so a report with no consent still has to go somewhere.
-            room != null -> room.reportRoom(reason)
+            // No event — a whole-conversation report. This is the one that goes
+            // nowhere readable, so it is refused rather than accepted quietly.
+            room != null -> error(
+                "reporting a whole conversation is not supported: the homeserver " +
+                "accepts it and gives the operator no way to read it (§31.3.2b). " +
+                "Report a specific message instead.")
 
             // No room context at all — a profile-level report. There is no
             // Matrix API for this, so it is refused loudly rather than
