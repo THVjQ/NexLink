@@ -80,7 +80,10 @@ class ChromeLayoutTest {
         bubble.addView(TextView(a).apply {
             text = "a ".repeat(400)
         })
+        // VERTICAL, like the real timeline column. A horizontal parent hands
+        // its children WRAP by default and hides the bug this test exists for.
         val row = LinearLayout(a).apply {
+            orientation = LinearLayout.VERTICAL
             gravity = Gravity.END
             addView(bubble)
         }
@@ -102,7 +105,11 @@ class ChromeLayoutTest {
         val chrome = Chrome(a)
         val bubble = chrome.bubble(mine = false, maxWidthPx = 500)
         bubble.addView(TextView(a).apply { text = "ok" })
-        val row = LinearLayout(a).apply { addView(bubble) }
+        // A child added with no params must not drag the bubble to the cap.
+        val row = LinearLayout(a).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(bubble)
+        }
 
         row.measure(exactly(1000), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
 

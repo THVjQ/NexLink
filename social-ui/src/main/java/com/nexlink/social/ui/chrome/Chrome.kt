@@ -123,12 +123,37 @@ class Chrome(private val a: Activity) {
         }
     }
 
+    /**
+     * Tell the system which way round to draw the clock and the gesture bar.
+     *
+     * The title bar is painted `social_surface`, and the status bar sits on top
+     * of it — so in the light theme the platform was drawing white icons on
+     * white and the clock, the battery and the signal bars simply **vanished**.
+     * Caught on the handset; invisible in the dark theme, which is what the
+     * phone this is developed on runs.
+     *
+     * Done here rather than in the theme XML because it then applies to every
+     * screen that has a bar, including the conversation, which builds its own
+     * layout around one rather than using [page].
+     */
+    private fun syncSystemBars() {
+        val night = (a.resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val window = a.window ?: return
+        androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !night
+            isAppearanceLightNavigationBars = !night
+        }
+    }
+
     fun titleBar(
         title: CharSequence,
         subtitle: CharSequence? = null,
         onBack: (() -> Unit)? = null,
         actions: List<Action> = emptyList(),
     ): Bar {
+        syncSystemBars()
         val bar = LinearLayout(a).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -480,6 +505,15 @@ class Chrome(private val a: Activity) {
      */
     fun bubble(mine: Boolean, maxWidthPx: Int = Int.MAX_VALUE): LinearLayout = Bounded(a).apply {
         limit = maxWidthPx
+        // WRAP, explicitly. **A vertical LinearLayout hands its children
+        // MATCH_PARENT width by default** — `generateDefaultLayoutParams` for
+        // VERTICAL returns (MATCH_PARENT, WRAP_CONTENT), not (WRAP, WRAP) as
+        // the horizontal case does. A bubble added without params therefore
+        // filled its row and every message came out exactly at the width cap,
+        // short ones included, which erases the ragged edge the whole
+        // left/right reading depends on. Found on the handset; the JVM test
+        // missed it because its stand-in parent was horizontal.
+        layoutParams = LinearLayout.LayoutParams(WRAP, WRAP)
         orientation = LinearLayout.VERTICAL
         val big = dp(18).toFloat()
         val small = dp(5).toFloat()
@@ -552,6 +586,13 @@ class Chrome(private val a: Activity) {
      */
     private class Bounded(ctx: android.content.Context) : LinearLayout(ctx) {
         var limit: Int = Int.MAX_VALUE
+
+        // Same trap one level down: a child added to this bubble would default
+        // to MATCH_PARENT and drag the bubble back out to the cap, which is
+        // the circular version of the bug above and much harder to see.
+        override fun generateDefaultLayoutParams(): LayoutParams =
+            LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+
         override fun onMeasure(widthSpec: Int, heightSpec: Int) {
             val mode = MeasureSpec.getMode(widthSpec)
             val size = MeasureSpec.getSize(widthSpec)

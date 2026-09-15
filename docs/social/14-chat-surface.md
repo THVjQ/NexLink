@@ -427,10 +427,42 @@ rules out the emulator), and **both assertions were confirmed to fail against
 the broken code before being kept**. That is the same rule the false-alarm
 certificate check taught: an assertion that has never failed is not yet a test.
 
-**Not verified on hardware.** The handsets were unavailable when this was
-built. What remains to check on a phone: that the drawn icons look right at real
-density, that the timeline scrolls to the bottom correctly with bubbles of
-mixed heights, the stacked composer at font scale 1.8, and a re-run of
+**Verified on hardware the next morning (SM-G990E, Android 16), and it found
+two more — neither of which the JVM test or a reading of the source would have
+caught:**
+
+1. **Every bubble came out at exactly the width cap**, short ones included, so
+   the ragged edge that carries the left/right reading was gone. Cause:
+   `LinearLayout.generateDefaultLayoutParams()` returns **`MATCH_PARENT` width
+   when the orientation is VERTICAL**, and `WRAP_CONTENT` when it is
+   HORIZONTAL. A bubble added to the timeline column with no explicit params
+   therefore filled it; the `Bounded` cap then held it at 76%, which made the
+   symptom look like the cap working rather than a default misfiring. The same
+   default applies one level down, to anything added *inside* a bubble, which is
+   the circular form of the same bug.
+
+   **`ChromeLayoutTest` had a test for exactly this and it passed**, because its
+   stand-in parent was a default (horizontal) `LinearLayout`, where the defaults
+   are harmless. A test whose fixture does not have the shape of the real
+   hierarchy tests the fixture. It is now vertical, and was confirmed to fail
+   against the unfixed code.
+
+2. **In the light theme the status bar icons were invisible** — white on the
+   white title bar, so the clock, battery and signal simply vanished, and the
+   gesture bar with them. Nothing was setting `isAppearanceLightStatusBars`.
+   Fixed in `Chrome.titleBar`, so it applies to every screen with a bar rather
+   than to whichever ones remember. Invisible in the dark theme, which is what
+   the development handset runs — the same blind spot that put five colours
+   below AA in §14.10.1.
+
+**Checked and correct on the device:** the drawn icons at 2.625x, both themes,
+the inbox card and rows, the overflow menu, day markers, message grouping, the
+squared speaker-side corner, right-aligned in-bubble timestamps, the composer
+above a raised keyboard, and the floating button clear of the gesture bar.
+
+**Still not seen on hardware:** an *incoming* bubble and its sender name (the
+second handset was not connected, and the test room has no messages from anyone
+else), the stacked composer at font scale 1.8, and a re-run of
 `tools/a11y-audit.py` on every screen. The two-device harnesses were updated for
 the moved controls (`HOME_RE`/`SIGNED_OUT_RE`, `open_home_menu`) but have not
 been run since.

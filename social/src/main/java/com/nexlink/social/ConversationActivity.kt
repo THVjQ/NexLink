@@ -620,6 +620,7 @@ class ConversationActivity : AppCompatActivity() {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(6), dp(2), dp(6), 0)
+        layoutParams = LinearLayout.LayoutParams(WRAP, WRAP)
 
         val queued = item.state == MessageState.QUEUED_OFFLINE
         val label = when (item.sendFailure) {
@@ -793,6 +794,9 @@ class ConversationActivity : AppCompatActivity() {
     private fun reactionStrip(item: TimelineItem): View = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         setPadding(dp(6), dp(3), dp(6), 0)
+        // WRAP, so the row's END gravity has something to align. See the note
+        // on Chrome.bubble: a vertical parent defaults its children to MATCH.
+        layoutParams = LinearLayout.LayoutParams(WRAP, WRAP)
         item.reactions.forEach { (emoji, senders) ->
             addView(TextView(this@ConversationActivity).apply {
                 // §14.4.3 — the emoji is rendered as-is. Never index into it,
