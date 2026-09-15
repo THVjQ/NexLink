@@ -103,8 +103,16 @@ sign_in() {
   # `sleep 8` then `present` caught the blank screen in between — which reads as
   # "signed out", sends the run looking for a form that is not there, and fails
   # a device that was signed in the whole time.
+  # **"NexLink Social" is on the welcome screen too**, so its presence does not
+  # mean signed in — the third caption collision in this file. The signed-out
+  # screen is the one that says so: "Not signed in".
   sleep 5
-  wait_for "$s" 'text="NexLink Social"' 40 && return 0
+  local i
+  for i in $(seq 1 40); do
+    if present "$s" 'text="Not signed in"'; then break; fi
+    present "$s" 'text="NexLink Social"' && return 0
+    sleep 1
+  done
   # Genuinely signed out: the welcome screen or the form is on display.
   if ! present "$s" 'text="I have an invite code"|text="Username"'; then
     echo "$s: neither the home screen nor the sign-in screen appeared" >&2

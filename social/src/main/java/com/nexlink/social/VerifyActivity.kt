@@ -74,8 +74,32 @@ class VerifyActivity : AppCompatActivity() {
     private fun attach() {
         lifecycleScope.launch {
             val s = session() ?: run { status = "Not signed in"; render(); return@launch }
-            val v = runCatching { s.startVerification() }
-                .getOrElse { status = "Couldn't start: ${it.message}"; render(); return@launch }
+            status = "Getting ready…"; render()
+            val v = runCatching { s.startVerification() }.getOrElse {
+                // **Never put the exception's message on screen.** The SDK's
+                // errors are Rust ones and `message` carries a sixty-frame
+                // backtrace — measured, and it was rendered into this very
+                // screen as a wall of `ffi_matrix_sdk_ffi_rust_future_poll_u64`
+                // and mangled symbol names. It tells the user nothing, and
+                // §27.5's rule about what may be shown was never meant to be
+                // satisfied only in logs.
+                android.util.Log.w("NexLinkVerify", "verification unavailable", it)
+                // §7.4.4 — the common cause is not a network problem: this
+                // account has no cross-signing identity, because recovery was
+                // never set up. Saying "try again" to that sends the user round
+                // a loop that cannot end.
+                status = if (!s.hasCrossSigningIdentity()) {
+                    "Set up recovery on your other device first. Verifying needs it, " +
+                    "and without it there is nothing for this device to be checked against."
+                } else {
+                    "Couldn't start verifying. Give it a moment and try again."
+                }
+                render(); return@launch
+            }
+            // Clear the "Getting ready…" set above. Leaving it sits a stale
+            // status over every later state — measured: both handsets showed
+            // "Getting ready…" while the controller was live underneath.
+            status = ""
             flow = v
             launch { v.steps.collectLatest { step = it; render() } }
             launch { v.incoming.collectLatest { incoming = it; render() } }

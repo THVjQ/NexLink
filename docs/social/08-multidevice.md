@@ -130,6 +130,63 @@ rather than an oversight:
 Whichever is chosen, the acceptance row should name it. A checklist item for a
 feature nobody built is how a phase gets declared done on a technicality.
 
+### 8.4.4 Two handsets, 2026-09-15 — two defects, and one thing still not working
+
+The first attempt at a real second device (SM-S928B, signed in to the same
+account as the SM-G990E) failed immediately, and how it failed was worse than
+that it failed.
+
+**Defect 1: a sixty-frame Rust backtrace, rendered into the screen.** Tapping
+*Verify this device* produced
+
+```
+Couldn't start: msg=Failed retrieving user identity, details=Failed retrieving
+user identity
+
+Stack backtrace:
+   0: <unknown>
+   …
+   8: ffi_matrix_sdk_ffi_rust_future_poll_u64
+   …
+  62: _ZL15__pthread_startPv…
+```
+
+verbatim, in the UI. The SDK's errors are Rust errors and their `message`
+carries the trace; `status = "Couldn't start: ${it.message}"` put it on screen.
+It tells a user nothing and it is not what §27.5's rule about what may be shown
+was written for. The exception now goes to the log and the screen gets a
+sentence.
+
+**Defect 2 — and the message was true.** `Failed retrieving user identity`
+meant exactly what it said: the account had **no cross-signing identity**.
+Confirmed against the server — `master_keys` and `self_signing_keys` both
+absent — because recovery had never been set up on it (§7.4.4 is what creates
+them). So the app offered *Verify this device* on an account where verification
+was impossible, and the first replacement copy — *"give it a moment and try
+again"* — was no better, because it invites a retry that can never succeed.
+
+It now checks and says the actual thing: *"Set up recovery on your other device
+first. Verifying needs it, and without it there is nothing for this device to be
+checked against."*
+
+There is also a genuine race underneath, so the controller is retried for ~15
+seconds: a device that has just signed in has no local identity until the first
+sync, and that window is precisely when a user taps Verify.
+
+**What is still not working.** With recovery set up and cross-signing present
+on the server, verification starts on both handsets and then **both sit at the
+request stage without meeting**. The requesting device's to-device event
+reaches the other — the SDK logs `Received a to-device event` — but no incoming
+request surfaces in the UI and no emoji appear. That is as far as it got.
+
+§33.3.3 recorded SAS passing between **two SDK clients in one instrumentation
+process**. That test still passes and the code under it is unchanged, so this
+is most likely the surface rather than the protocol: `VerifyActivity` renders
+`incoming`, and whether that flow is fed on the *receiving* side when the screen
+is opened after the request arrives is the thing to look at next. Phase 3's
+second-device row stays open, with this as the specific next step rather than a
+vague "verify by QR" (§8.4.2).
+
 ### 8.4.3 Recovery key
 
 A new device can also gain trust by proving possession of the recovery key,

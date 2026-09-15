@@ -992,11 +992,58 @@ class RustSocialSession private constructor(
      * slot, so constructing a second one would silently unhook the first and
      * incoming requests would stop arriving at whoever was listening.
      */
-    suspend fun startVerification(): RustVerification =
-        verification ?: io { RustVerification(client.getSessionVerificationController()) }
-            .also { verification = it }
+    /**
+     * §8.4 — the verification controller.
+     *
+     * **Retried, because a device that has just signed in does not have one
+     * yet.** Measured on a real second handset: signing in and immediately
+     * tapping *Verify this device* fails with
+     * `Failed retrieving user identity`. The identity arrives with the first
+     * sync, and the window is a few seconds wide — which is exactly the window
+     * a user is in, because the reason they signed in is to verify.
+     *
+     * So this waits for it rather than reporting a failure the user can do
+     * nothing about but try again. If it never arrives, the last error is
+     * thrown and the caller says something short (§8.4.4).
+     */
+    suspend fun startVerification(): RustVerification {
+        verification?.let { return it }
+        var last: Throwable? = null
+        repeat(VERIFICATION_ATTEMPTS) { attempt ->
+            val r = runCatching { io { RustVerification(client.getSessionVerificationController()) } }
+            r.getOrNull()?.let { verification = it; return it }
+            last = r.exceptionOrNull()
+            if (attempt < VERIFICATION_ATTEMPTS - 1) kotlinx.coroutines.delay(VERIFICATION_RETRY_MS)
+        }
+        throw last ?: IllegalStateException("verification is not available yet")
+    }
+
+    /**
+     * §8.4 / §7.4.4 — is there a cross-signing identity to verify *against*?
+     *
+     * **Verification is impossible without one, and the error does not say so.**
+     * Measured on a second handset: an account that had never set up recovery
+     * offered *Verify this device*, then failed with
+     * `Failed retrieving user identity`. That message is literally true —
+     * there was no identity, because §7.4.4's bootstrap had never run — and
+     * completely unhelpful, because the user cannot tell it apart from a
+     * network problem and will retry forever.
+     *
+     * Checked against the server rather than assumed from local state: a
+     * device that has just signed in has no local copy of an identity that
+     * may well exist.
+     */
+    suspend fun hasCrossSigningIdentity(): Boolean = io {
+        runCatching {
+            client.encryption().userIdentity(client.userId(), true) != null
+        }.getOrDefault(false)
+    }
 
     @Volatile private var verification: RustVerification? = null
+
+    /** ~15 seconds in total: long enough for a first sync, short enough to wait through. */
+    private val VERIFICATION_ATTEMPTS = 10
+    private val VERIFICATION_RETRY_MS = 1_500L
 
     /** Recovery and key backup (§7.4), which the bindings do serve well. */
     fun recovery(): RustRecovery = RustRecovery(client)
