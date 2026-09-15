@@ -13,4 +13,21 @@
     <color name="social_danger">#FF6369</color>
     <color name="social_cannot_see">#4CD07D</color>
     <color name="social_can_see">#FFB347</color>
+    <!-- See the light palette for what each of these is for. Only the three
+         that have to move for contrast do move: the fill darkens (white on the
+         dark theme's brighter accent is 4.09:1, under AA), the bubble sits on
+         surface2, and the metadata grey lightens. -->
+    <color name="social_accent_fill">#0B5ED7</color>
+    <color name="social_on_accent_fill">#FFFFFF</color>
+    <color name="social_on_accent_fill_meta">#E8F1FD</color>
+    <color name="social_bubble_theirs">#2c2c2e</color>
+    <color name="social_bubble_meta">#A0A0A8</color>
+    <color name="social_banner_bg">#2C2022</color>
+
+    <color name="social_on_avatar">#FFFFFF</color>
+    <color name="social_avatar1">#2C6BB0</color>
+    <color name="social_avatar2">#7A4FA3</color>
+    <color name="social_avatar3">#1F7A5C</color>
+    <color name="social_avatar4">#A8452F</color>
+    <color name="social_avatar5">#5C6B8A</color>
 </resources>

@@ -331,7 +331,11 @@ window insets, so titles sat under the status bar and the last row of a
 scrolling screen sat under the gesture bar — where it is both unreadable and
 **untappable**, because the gesture bar takes the touch. Fixed for all of them
 with `Insets.kt`; recorded here because the symptom presents as an
-accessibility failure even though the cause is layout.
+accessibility failure even though the cause is layout. **Superseded 2026-09-15:**
+`Chrome.page` builds the bar and the scrolling column together and applies the
+insets itself, so a screen cannot be built without them; `Insets.kt` had no
+callers left and was deleted. A shared helper every screen must remember to
+call is how the next screen ends up not calling it.
 
 **One trap in `a11y-audit.py`, hit on first use:** uiautomator reports bounds
 *clipped to the viewport*, so a perfectly good 48dp control at the edge of a
@@ -353,3 +357,80 @@ depends on the image. Both recorded rather than claimed.
 - Should edit history be visible to everyone, or only indicate that an edit
   occurred? **Leaning visible** — hidden edit history in a messenger is a trust
   problem.
+
+---
+
+## 14.12 Rebuilt 2026-09-15 — the screens did not read as one product
+
+Everything in §14 was implemented and nothing in it was wrong, and the app was
+still unpleasant to use. That gap is worth recording, because none of it would
+have been caught by re-reading this document: each screen satisfied the section
+that specified it, and no section owns the question of whether the screens look
+like the same application.
+
+**What was actually on the phone.** The inbox opened with the app's name, the
+user's Matrix ID, up to two red paragraphs of warning, and then **eight
+full-width buttons** — Sign out, Search, Export my messages, Your devices,
+Verify this device, Blocked people, Storage, New conversation — before the first
+conversation. On a 6-inch screen the messages began below the fold. The
+conversation screen had **no title bar at all**: no room name, no back control,
+no indication of who was in it. Messages were flat left-aligned paragraphs with
+the sender's name above every one, so a one-to-one chat looked like a mailing
+list and your own words looked exactly like theirs. Nine other screens each
+printed their own 26sp heading and each invented their own margins.
+
+**What changed.**
+
+| before | after |
+|---|---|
+| eight full-width buttons above the conversations | search + overflow in a title bar, new conversation on a floating button |
+| two red paragraph-and-button warnings | two compact tinted cards with the action inside them |
+| name + preview, no avatar, no anchor | avatar, name, time, preview, unread pill |
+| no title bar in a conversation | room name, who is in it, call button, back arrow |
+| identical flat paragraphs | bubbles: fill, alignment **and** a squared corner on the speaker's side |
+| sender's name above every message | only at the top of a run, and only for incoming |
+| reply draft as a line in the timeline | its own strip above the composer, with an X |
+| five controls in the composer row | three — call and people moved to the title bar |
+| ☰ 📞 + as emoji controls | drawn icons (`Icon.kt`), tinted by the theme |
+| eleven screens, eleven layouts | one `Chrome` |
+
+**Three decisions that were not obvious:**
+
+*Emoji are not icons.* The old controls were characters, so the handset's font
+decided whether a button was a flat glyph, a colour cartoon, or a tofu box —
+and none of them could be tinted, so in the dark theme a black-line emoji simply
+disappeared. They are now drawn paths on a 24x24 grid. The giveaway that this
+was always wrong: every one of them needed a `contentDescription` to be usable
+at all, because a screen reader announces an emoji as punctuation.
+
+*`social_accent` cannot be a fill.* White text on the dark theme's accent
+measures **4.09:1**, under AA. Every filled control — send, the unread badge,
+your own bubble — uses `social_accent_fill`, which is a shade darker in the dark
+theme for exactly that reason. Six new colour roles were added and all fourteen
+new pairs are in `tools/check-contrast.py`; the palette passes AA in both themes.
+
+*Sign out now asks.* It was the first of the eight buttons, one slip from
+Search, and without a recovery key it destroys the history on the device. It is
+now last in the overflow and the dialog says which of the two situations the
+user is in.
+
+**Two bugs found by building it, both invisible in the source:**
+
+- A floating button given `WRAP_CONTENT` measures to its padding, because a
+  drawn `Drawable` has no intrinsic size — a 36dp blue disc with nothing on it.
+- A bubble with a `MATCH_PARENT` child inside a wrap-content parent silently
+  grows to the full available width, destroying the ragged edge the whole
+  left/right reading depends on.
+
+Both are now asserted in `ChromeLayoutTest` (Robolectric, on the JVM — §34.10
+rules out the emulator), and **both assertions were confirmed to fail against
+the broken code before being kept**. That is the same rule the false-alarm
+certificate check taught: an assertion that has never failed is not yet a test.
+
+**Not verified on hardware.** The handsets were unavailable when this was
+built. What remains to check on a phone: that the drawn icons look right at real
+density, that the timeline scrolls to the bottom correctly with bubbles of
+mixed heights, the stacked composer at font scale 1.8, and a re-run of
+`tools/a11y-audit.py` on every screen. The two-device harnesses were updated for
+the moved controls (`HOME_RE`/`SIGNED_OUT_RE`, `open_home_menu`) but have not
+been run since.

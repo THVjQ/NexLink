@@ -12,10 +12,10 @@ import android.view.ViewGroup.LayoutParams.WRAP_CONTENT as WRAP
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import com.nexlink.social.ui.chrome.Chrome
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.nexlink.social.core.SessionStore
@@ -85,12 +85,14 @@ class ImportActivity : AppCompatActivity() {
         }
 
         val dp = { v: Int -> (v * resources.displayMetrics.density).toInt() }
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(28), dp(20), dp(20))
-        }
-        setContentView(ScrollView(this).apply { addView(root) })
-        root.padForSystemBars(dp(20), dp(24), dp(24))
+        // §14 — the same title bar as every other screen, from :social-ui's
+        // Chrome. It also takes the system-bar insets that padForSystemBars
+        // used to take here, so a screen's last row still clears the gesture
+        // bar (§14.10) — that is the one thing this replacement must not lose.
+        val page = Chrome(this).page("Restore from a backup", onBack = { finish() },
+            horizontalPaddingDp = 20)
+        val root = page.content
+        setContentView(page.root)
 
         fun label(t: String, size: Float, bold: Boolean = false, c: Int = UiR.color.social_text) =
             TextView(this).apply {
@@ -100,7 +102,6 @@ class ImportActivity : AppCompatActivity() {
                 setTextColor(ContextCompat.getColor(this@ImportActivity, c))
             }
 
-        root.addView(label("Restore from a backup", 26f, bold = true))
         root.addView(label(
             "Choose the .nlsx file you saved from your old phone, then enter the " +
             "passphrase you set when you made it. Without that passphrase the file " +

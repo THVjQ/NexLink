@@ -10,9 +10,9 @@ import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import com.nexlink.social.ui.chrome.Chrome
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
@@ -33,13 +33,14 @@ class SignInActivity : AppCompatActivity() {
         val dp = { v: Int -> (v * resources.displayMetrics.density).toInt() }
         fun col(id: Int) = ContextCompat.getColor(this, id)
 
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(28), dp(20), dp(20))
-        }
-        setContentView(ScrollView(this).apply { addView(root) })
-        // §14.10 — see Insets.kt.
-        root.padForSystemBars(dp(20), dp(24), dp(24))
+        // §14 — the same title bar as every other screen, from :social-ui's
+        // Chrome. It also takes the system-bar insets that padForSystemBars
+        // used to take here, so a screen's last row still clears the gesture
+        // bar (§14.10) — that is the one thing this replacement must not lose.
+        val page = Chrome(this).page("Sign in", onBack = { finish() },
+            horizontalPaddingDp = 20)
+        val root = page.content
+        setContentView(page.root)
 
         fun label(t: String, size: Float, bold: Boolean = false, c: Int = UiR.color.social_text) =
             TextView(this).apply {
@@ -49,7 +50,6 @@ class SignInActivity : AppCompatActivity() {
                 setTextColor(col(c))
             }
 
-        root.addView(label("Sign in", 26f, bold = true))
         root.addView(label(HOMESERVER.removePrefix("https://"), 14f, c = UiR.color.social_muted))
         root.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(MATCH, dp(16)) })
 

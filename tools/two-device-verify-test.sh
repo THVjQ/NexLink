@@ -68,7 +68,10 @@ adb -s "$B" shell input keyevent KEYCODE_BACK; sleep 2
 
 echo
 echo "— SAS verification, both devices foreground —"
-tap "$B" 'text="Verify this device"' 8 || { bad "B has no way to start verification"; exit 1; }
+# Since the 2026-09-15 UI rebuild this lives in the inbox's overflow menu, not
+# on a button down the home screen.
+open_home_menu "$B" "Verify this device" \
+  || { bad "B has no way to start verification"; exit 1; }
 sleep 3
 tap "$B" 'text="Verify"|text="Start"|text="Verify this device"' 5 >/dev/null 2>&1
 

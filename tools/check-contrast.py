@@ -40,6 +40,27 @@ PAIRS = [
     ("social_danger",     "social_bg",      4.5, "'Not sent' on a failed message"),
     ("social_cannot_see", "social_bg",      4.5, "§9.6.1 'we cannot see' column"),
     ("social_can_see",    "social_bg",      4.5, "§9.6.1 'we can see' column"),
+
+    # The messaging surface (§14.1-14.3), added with the 2026-09-15 rebuild.
+    #
+    # These are the pairs the inbox and the timeline actually paint. They are
+    # listed one per rendered combination rather than one per colour, because
+    # the failure this catches is not "a colour is too light" — it is "a colour
+    # that was fine on the background got reused on a card".
+    ("social_text",              "social_surface",        4.5, "conversation title in the inbox"),
+    ("social_text2",            "social_surface",        4.5, "the message preview under it"),
+    ("social_muted",            "social_surface",        4.5, "app-bar subtitle, timestamps in the inbox"),
+    ("social_on_accent_fill",   "social_accent_fill",    4.5, "Send, the unread badge, your own bubble"),
+    ("social_on_accent_fill_meta", "social_accent_fill", 4.5, "the time inside your own bubble"),
+    ("social_text",             "social_bubble_theirs",  4.5, "an incoming message"),
+    ("social_bubble_meta",      "social_bubble_theirs",  4.5, "the time under an incoming message"),
+    ("social_text",             "social_banner_bg",      4.5, "the warning card's copy"),
+    ("social_danger",           "social_banner_bg",      4.5, "the warning card's headline"),
+    ("social_on_avatar",        "social_avatar1",        4.5, "the initial in an avatar"),
+    ("social_on_avatar",        "social_avatar2",        4.5, "the initial in an avatar"),
+    ("social_on_avatar",        "social_avatar3",        4.5, "the initial in an avatar"),
+    ("social_on_avatar",        "social_avatar4",        4.5, "the initial in an avatar"),
+    ("social_on_avatar",        "social_avatar5",        4.5, "the initial in an avatar"),
 ]
 
 # Reported, but not failed.

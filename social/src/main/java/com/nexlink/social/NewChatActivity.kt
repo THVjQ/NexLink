@@ -10,16 +10,14 @@ import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import com.nexlink.social.core.session.UserSummary
-import kotlinx.coroutines.launch
 import com.nexlink.social.ui.R as UiR
+import com.nexlink.social.ui.chrome.Chrome
+import kotlinx.coroutines.launch
 
 /**
  * Start a conversation — §6.6, §14.8.
@@ -57,22 +55,17 @@ class NewChatActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(24), dp(20), dp(20))
-        }
-        setContentView(ScrollView(this).apply { addView(root) })
-        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(dp(20), bars.top + dp(24), dp(20), bars.bottom + dp(20))
-            insets
-        }
+        // §14 — the shared title bar, which also takes the system-bar insets
+        // this screen used to handle with its own listener.
+        val page = Chrome(this).page("New conversation", onBack = { finish() },
+            horizontalPaddingDp = 20)
+        root = page.content
+        setContentView(page.root)
         render()
     }
 
     private fun render() {
         root.removeAllViews()
-        root.addView(text("New conversation", 26f, UiR.color.social_text, bold = true))
         root.addView(text(
             "Enter the username someone gave you. There's no directory to browse " +
             "and no way to look people up by phone number — that's deliberate.",

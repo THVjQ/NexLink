@@ -10,10 +10,10 @@ import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import com.nexlink.social.ui.chrome.Chrome
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.nexlink.social.core.rust.RustSocialSession
@@ -47,13 +47,14 @@ class DevicesActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(24), dp(20), dp(24))
-        }
-        setContentView(ScrollView(this).apply { addView(root) })
-        // §14.10 — see Insets.kt.
-        root.padForSystemBars(dp(20), dp(24), dp(24))
+        // §14 — the same title bar as every other screen, from :social-ui's
+        // Chrome. It also takes the system-bar insets that padForSystemBars
+        // used to take here, so a screen's last row still clears the gesture
+        // bar (§14.10) — that is the one thing this replacement must not lose.
+        val page = Chrome(this).page("Your devices", onBack = { finish() },
+            horizontalPaddingDp = 20)
+        root = page.content
+        setContentView(page.root)
         render()
         refresh()
     }
@@ -77,7 +78,6 @@ class DevicesActivity : AppCompatActivity() {
 
     private fun render() {
         root.removeAllViews()
-        root.addView(text("Your devices", 26f, UiR.color.social_text, bold = true))
         root.addView(text(
             "Every place you're signed in. If you see something here you don't " +
             "recognise, remove it and change your password.",

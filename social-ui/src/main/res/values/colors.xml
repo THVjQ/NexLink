@@ -48,4 +48,43 @@
          are deliberately the same saturation. Green-vs-red would editorialise. -->
     <color name="social_cannot_see">#1C7A43</color>
     <color name="social_can_see">#A45600</color>
+    <!--
+      MESSAGING CHROME (added 2026-09-15 with the §14 surface rebuild).
+
+      Everything below is a *role*, not a shade: `social_accent_fill` is "the
+      colour a filled control is painted", used by the send button, the unread
+      badge and your own message bubble alike. Naming them by role is what stops
+      the next change from picking a slightly different blue for each one, which
+      is how the first version ended up looking assembled rather than designed.
+
+      Every pair these form with text is in tools/check-contrast.py's PAIRS and
+      passes WCAG AA in BOTH themes (§14.10). `social_accent` itself is NOT used
+      as a fill: white on it measures 4.09:1 in the dark theme, which is why
+      `social_accent_fill` exists and is a shade darker there.
+    -->
+    <color name="social_accent_fill">#0166DA</color>
+    <color name="social_on_accent_fill">#FFFFFF</color>
+    <!-- Timestamps inside your own bubble: legible, but quieter than the text. -->
+    <color name="social_on_accent_fill_meta">#E8F1FD</color>
+    <color name="social_bubble_theirs">#FFFFFF</color>
+    <color name="social_bubble_meta">#6A6A6E</color>
+    <!-- The inline warning card (no backup, no screen lock). Tinted rather than
+         red-filled: these are standing conditions the user may live with for a
+         while, and a full red block reads as an error that just happened. -->
+    <color name="social_banner_bg">#FFF4E5</color>
+
+    <!--
+      Avatar tints. Five, picked by hashing the display name, so the same person
+      keeps the same colour across the inbox and the timeline — that consistency
+      is most of what makes an initial read as an identity rather than a letter.
+      All five carry white at >= 4.5:1, so they are the same value in both
+      themes: a dark-theme variant would have to be lighter, which is exactly
+      the direction that breaks the text on them.
+    -->
+    <color name="social_on_avatar">#FFFFFF</color>
+    <color name="social_avatar1">#2C6BB0</color>
+    <color name="social_avatar2">#7A4FA3</color>
+    <color name="social_avatar3">#1F7A5C</color>
+    <color name="social_avatar4">#A8452F</color>
+    <color name="social_avatar5">#5C6B8A</color>
 </resources>

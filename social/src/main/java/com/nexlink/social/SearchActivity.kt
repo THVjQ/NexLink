@@ -9,9 +9,9 @@ import android.util.TypedValue
 import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import com.nexlink.social.ui.chrome.Chrome
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.nexlink.social.core.session.MessageSearchHit
@@ -42,19 +42,19 @@ class SearchActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(24), dp(20), dp(20))
-        }
-        setContentView(ScrollView(this).apply { addView(root) })
-        // §14.10 — see Insets.kt.
-        root.padForSystemBars(dp(20), dp(24), dp(24))
+        // §14 — the same title bar as every other screen, from :social-ui's
+        // Chrome. It also takes the system-bar insets that padForSystemBars
+        // used to take here, so a screen's last row still clears the gesture
+        // bar (§14.10) — that is the one thing this replacement must not lose.
+        val page = Chrome(this).page("Search", onBack = { finish() },
+            horizontalPaddingDp = 20)
+        root = page.content
+        setContentView(page.root)
         render()
     }
 
     private fun render() {
         root.removeAllViews()
-        root.addView(text("Search", 26f, UiR.color.social_text, bold = true))
         root.addView(text(
             "Searches messages on this phone. Anything sent before you added " +
             "this device isn't here — nobody can search your messages on the " +

@@ -8,190 +8,196 @@ import android.text.InputType
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
-import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.snackbar.Snackbar
+import com.nexlink.social.call.CallActivity
 import com.nexlink.social.core.session.MessageBody
-import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
-import com.nexlink.social.core.session.SendFailure
 import com.nexlink.social.core.session.MessageState
 import com.nexlink.social.core.session.RoomId
+import com.nexlink.social.core.session.SendFailure
 import com.nexlink.social.core.session.Timeline
 import com.nexlink.social.core.session.TimelineContent
 import com.nexlink.social.core.session.TimelineItem
-import kotlinx.coroutines.flow.collectLatest
+import com.nexlink.social.core.session.UserId
+import com.nexlink.social.ui.chrome.Chrome
+import com.nexlink.social.ui.chrome.Icon
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.nexlink.social.ui.R as UiR
-import com.google.android.material.snackbar.Snackbar
-import com.nexlink.social.core.session.UserId
-import com.nexlink.social.call.CallActivity
 
 /**
  * One conversation — §14.2 timeline, §14.3 composer.
  *
- * Deliberately plain: a scrolling list and a text field. §14's richer surface
- * (attachments, replies, edits, reactions) builds on this, and the shape that
- * matters first is that an encrypted message can be sent and read at all.
+ * **Rebuilt 2026-09-15.** The screen worked and did not look like a
+ * conversation: every message was a flat left-aligned paragraph with the
+ * sender's name above it, yours and theirs identical, no title bar at all, and
+ * a composer row of five controls — ☰ 📞 + [input] Send — that ran out of width
+ * the moment the system font grew.
+ *
+ * What changed, and why each one:
+ *
+ *  - **Bubbles, with a squared corner on the speaker's side.** Left and right
+ *    alone is not enough: alignment is the weakest of the cues and the first to
+ *    fail on a narrow screen. Fill, alignment and corner all say the same thing,
+ *    so any one of them can be missed.
+ *  - **A title bar** carrying the room name, who is in it, and the call button.
+ *    The call moved out of the composer because a call is not something you
+ *    compose, and because it freed the width the composer needed.
+ *  - **The sender's name only at the top of a run**, and only on incoming
+ *    messages. Repeating "Alice" above eleven consecutive lines from Alice is
+ *    noise that makes a one-to-one chat look like a mailing list.
+ *  - **Day markers**, so a timeline scrolled back through a week is readable.
+ *  - **The reply banner moved out of the message list** into its own strip
+ *    above the composer, where a reply draft belongs and where the "cancel"
+ *    control can be an X rather than a sentence telling you to long-press again.
+ *
+ * Everything below the view layer is unchanged: the same timeline flow, the same
+ * send path, the same §13.5.2 failure handling.
  */
 class ConversationActivity : AppCompatActivity() {
 
+    private lateinit var chrome: Chrome
+    private lateinit var bar: Chrome.Bar
     private lateinit var list: LinearLayout
+    private lateinit var scroll: ScrollView
+    private lateinit var replyBar: LinearLayout
+    private lateinit var replyLabel: TextView
     private var timeline: Timeline? = null
     private var roomId: RoomId? = null
+    private var roomTitle: String = ""
+    private var memberSubtitle: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val rid = RoomId(intent.getStringExtra(EXTRA_ROOM) ?: run { finish(); return })
         roomId = rid
-        title = intent.getStringExtra(EXTRA_TITLE) ?: rid.value
+        roomTitle = intent.getStringExtra(EXTRA_TITLE) ?: rid.value
+        title = roomTitle
+        chrome = Chrome(this)
 
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        bar = chrome.titleBar(
+            title = roomTitle,
+            onBack = { finish() },
+            actions = listOf(
+                // §19.5 — start a call. The content description is load-bearing:
+                // tools/two-device-call-test.sh finds this control by it, and
+                // it is what a screen reader announces, since the icon is drawn
+                // rather than labelled.
+                Chrome.Action(Icon.Kind.VIDEO_CALL, "Start a call") {
+                    roomId?.let {
+                        startActivity(CallActivity.intent(this, it.value, roomTitle))
+                    }
+                },
+                Chrome.Action(Icon.Kind.MORE, "More") { anchor ->
+                    chrome.menu(anchor, listOf(
+                        "People in this conversation" to { showParticipants() },
+                        "Add someone" to { promptInvite(rid) },
+                    ))
+                },
+            ),
+        )
+
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(colour(UiR.color.social_bg))
+        }
         list = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(16), dp(16), dp(8))
+            setPadding(0, dp(4), 0, dp(10))
         }
-        val scroll = ScrollView(this).apply {
+        scroll = ScrollView(this).apply {
             addView(list)
+            clipToPadding = false
             layoutParams = LinearLayout.LayoutParams(MATCH, 0, 1f)
         }
+        root.addView(bar.view, LinearLayout.LayoutParams(MATCH, WRAP))
         root.addView(scroll)
 
-        // §14.10 — "Text scales with system font size without clipping".
-        //
-        // Measured at font scale 1.8 on a 1080px screen: the three buttons keep
-        // their minimum widths, the weight-1 input gets whatever is left, and
-        // the hint "Message" wrapped to "Mes / sage" in a field too narrow to
-        // type in. The input had a weight already; a weight cannot help when the
-        // siblings' minimums already exceed the row.
-        //
-        // Above 1.3 the row is given up on and the composer stacks: input on its
-        // own full-width line, buttons beneath. Capping the buttons' text size
-        // would have been the smaller change and is precisely the wrong one —
-        // it fixes the layout by undoing the accessibility setting that
-        // exposed it.
-        val stacked = resources.configuration.fontScale > 1.3f
-        val composer = LinearLayout(this).apply {
-            orientation = if (stacked) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
-            setPadding(dp(12), dp(8), dp(12), dp(12))
-            gravity = if (stacked) Gravity.START else Gravity.CENTER_VERTICAL
+        // §14.6 — the reply draft. Its own strip, above the composer, with the
+        // accent rule down the side that every messenger uses to mean "this is
+        // quoted". Hidden until there is one.
+        replyLabel = TextView(this).apply {
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextColor(colour(UiR.color.social_text2))
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            layoutParams = LinearLayout.LayoutParams(0, WRAP, 1f)
         }
-        val input = EditText(this).apply {
-            hint = "Message"
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-            layoutParams =
-                if (stacked) LinearLayout.LayoutParams(MATCH, WRAP)
-                else LinearLayout.LayoutParams(0, WRAP, 1f)
-        }
-        // §14.10 — "☰" and "+" are glyphs, not words. A screen reader reads them
-        // as punctuation or skips them, so the button is unidentifiable without
-        // sight. The visible label stays; the description is what is announced.
-        val people = Button(this).apply {
-            text = "☰"; isAllCaps = false
-            contentDescription = "People in this conversation"
-        }
-        // §19.5 — start a call. One control, in the composer row, because a
-        // call is something you start from a conversation you are already in.
-        val call = Button(this).apply {
-            text = "📞"; isAllCaps = false
-            contentDescription = "Start a call"
-            minHeight = dp(48)   // §14.10
-            setOnClickListener {
-                roomId?.let {
-                    startActivity(
-                        CallActivity.intent(
-                            this@ConversationActivity, it.value, title?.toString()
-                        )
-                    )
+        replyBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundColor(colour(UiR.color.social_surface))
+            setPadding(dp(14), dp(8), dp(4), dp(8))
+            visibility = View.GONE
+            addView(View(this@ConversationActivity).apply {
+                setBackgroundColor(colour(UiR.color.social_accent))
+                layoutParams = LinearLayout.LayoutParams(dp(3), dp(30)).also {
+                    it.marginEnd = dp(10)
                 }
-            }
-        }
-        people.setOnClickListener { showParticipants() }
-        val attach = Button(this).apply {
-            text = "+"; isAllCaps = false
-            contentDescription = "Attach a photo or file"
-        }
-        val send = Button(this).apply { text = "Send"; isAllCaps = false }
-        if (stacked) {
-            // Input first: at this font size it is the only thing that needs to
-            // be full width, and putting it on top keeps it next to the message
-            // it is replying to rather than below a row of buttons.
-            composer.addView(input)
-            composer.addView(LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                addView(people); addView(call); addView(attach); addView(send)
             })
-        } else {
-            composer.addView(people); composer.addView(call); composer.addView(attach)
-            composer.addView(input); composer.addView(send)
+            addView(replyLabel)
+            addView(chrome.iconButton(Icon.Kind.CLOSE, "Cancel reply",
+                colour(UiR.color.social_muted)) {
+                replyingTo = null
+                render(lastItems)
+            })
         }
-        attach.setOnClickListener {
-            androidx.appcompat.app.AlertDialog.Builder(this)
-                .setItems(arrayOf("Photo", "File")) { _, i ->
-                    if (i == 0) pickImage.launch("image/*") else pickFile.launch("*/*")
-                }
-                .setNegativeButton("Cancel", null)
-                .show()
-        }
+        root.addView(replyBar, LinearLayout.LayoutParams(MATCH, WRAP))
 
-        // §14.7 — announce typing while there is text, and stop when it is sent
-        // or cleared. Debounced to one notice per few seconds.
-        input.addTextChangedListener(object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
-            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
-            override fun afterTextChanged(s: android.text.Editable?) {
-                val rid = roomId ?: return
-                val typing = !s.isNullOrBlank()
-                val now = System.currentTimeMillis()
-                if (typing && now - lastTypingNotice < 4000) return
-                lastTypingNotice = now
-                lifecycleScope.launch {
-                    SessionProvider.manager(this@ConversationActivity).current()
-                        ?.setTyping(rid, typing)
-                }
-            }
+        val composer = buildComposer(rid)
+        root.addView(View(this).apply {
+            setBackgroundColor(colour(UiR.color.social_divider))
+            layoutParams = LinearLayout.LayoutParams(MATCH, maxOf(1, dp(1) / 2))
         })
-        root.addView(composer)
+        root.addView(composer, LinearLayout.LayoutParams(MATCH, WRAP))
         setContentView(root)
 
         // Without this the composer sits underneath the gesture navigation bar,
         // and a tap on Send is consumed as a back gesture — the activity closes
         // and the message is never sent. Found on a real device; invisible on
         // anything with three-button navigation. §14.10.
-        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+        //
+        // The bar takes the status inset and the composer takes the gesture and
+        // keyboard inset, rather than the whole screen taking both: that is what
+        // lets the timeline scroll behind the bar instead of stopping short of it.
+        val composerPadBottom = composer.paddingBottom
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
             val bars = insets.getInsets(
                 androidx.core.view.WindowInsetsCompat.Type.systemBars() or
                     androidx.core.view.WindowInsetsCompat.Type.ime()
             )
-            v.setPadding(0, bars.top, 0, bars.bottom)
+            bar.view.setPadding(dp(4) + bars.left, bars.top, dp(4) + bars.right, 0)
+            composer.setPadding(
+                composer.paddingLeft, composer.paddingTop,
+                composer.paddingRight, composerPadBottom + bars.bottom,
+            )
             insets
         }
 
-        send.setOnClickListener {
-            val body = input.text.toString().trim()
-            if (body.isEmpty()) return@setOnClickListener
-            input.setText("")
-            val reply = replyingTo?.eventId
-            replyingTo = null
-            lastTypingNotice = 0L
-            lifecycleScope.launch {
-                SessionProvider.manager(this@ConversationActivity).current()?.setTyping(rid, false)
-            }
-            lifecycleScope.launch {
-                val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
-                // §13.5.1 — a failed send is surfaced, never swallowed. The
-                // offline queue makes "failed" rarer, not impossible.
-                s.send(rid, MessageBody.Text(body, replyTo = reply)).onFailure { e ->
-                    render(lastItems, error = "Couldn't send: ${e.message}")
+        // §14.8 — who is in here, under the name. In a one-to-one it is the
+        // other person's address, which is the single most useful thing to be
+        // able to check without leaving the screen; in a group it is a count.
+        lifecycleScope.launch {
+            val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
+            s.members(rid).onSuccess { members ->
+                val joined = members.filter { it.membership == "joined" }
+                val others = joined.filter { !it.isSelf }
+                memberSubtitle = when {
+                    others.size == 1 -> others.first().id.value
+                    joined.size > 1 -> "${joined.size} people"
+                    else -> null
                 }
+                render(lastItems)
             }
         }
 
@@ -216,6 +222,135 @@ class ConversationActivity : AppCompatActivity() {
                 // read. Marking on arrival rather than on scroll keeps the
                 // unread count honest for the common case.
                 if (isResumed && items.isNotEmpty()) s.markRead(rid)
+            }
+        }
+    }
+
+    private lateinit var input: EditText
+
+    /**
+     * §14.3 — attach, type, send.
+     *
+     * Three controls, down from five: "people" moved into the title bar's
+     * overflow and the call button became a title-bar action. That is what makes
+     * the large-font case survivable — the row that used to overflow at font
+     * scale 1.3 now has two fixed-width buttons instead of four.
+     *
+     * §14.10's stacked fallback is kept anyway. Measured at scale 1.8 the old
+     * row put the hint "Message" in a field too narrow to type in; capping the
+     * buttons' text size would have been the smaller change and is precisely the
+     * wrong one, because it fixes the layout by undoing the accessibility
+     * setting that exposed it.
+     */
+    private fun buildComposer(rid: RoomId): LinearLayout {
+        val stacked = resources.configuration.fontScale > 1.3f
+        val composer = LinearLayout(this).apply {
+            orientation = if (stacked) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+            gravity = if (stacked) Gravity.END else Gravity.BOTTOM
+            setBackgroundColor(colour(UiR.color.social_surface))
+            setPadding(dp(6), dp(7), dp(8), dp(8))
+        }
+        input = EditText(this).apply {
+            hint = "Message"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            // A composer that grows without limit pushes the conversation off
+            // the screen; one that never grows hides what you are writing.
+            maxLines = 5
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setTextColor(colour(UiR.color.social_text))
+            setHintTextColor(colour(UiR.color.social_muted))
+            background = chrome.rounded(colour(UiR.color.social_surface2), 20f)
+            setPadding(dp(16), dp(11), dp(16), dp(11))
+            minHeight = dp(44)
+            layoutParams =
+                if (stacked) LinearLayout.LayoutParams(MATCH, WRAP)
+                else LinearLayout.LayoutParams(0, WRAP, 1f)
+        }
+        val attach = chrome.iconButton(
+            Icon.Kind.ATTACH, "Attach a photo or file", colour(UiR.color.social_muted)
+        ) { showAttachMenu() }
+        val send = chrome.iconButton(
+            Icon.Kind.SEND, "Send", colour(UiR.color.social_on_accent_fill)
+        ) { sendTyped(rid) }.apply {
+            background = chrome.ripple(
+                android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(colour(UiR.color.social_accent_fill))
+                },
+                circular = true,
+            )
+            layoutParams = LinearLayout.LayoutParams(dp(44), dp(44)).also {
+                it.marginStart = dp(6)
+                it.bottomMargin = dp(1)
+            }
+            val p = dp(11)
+            setPadding(p, p, p, p)
+        }
+
+        if (stacked) {
+            composer.addView(input)
+            composer.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                setPadding(0, dp(6), 0, 0)
+                addView(attach); addView(send)
+            })
+        } else {
+            composer.addView(attach)
+            composer.addView(input)
+            composer.addView(send)
+        }
+
+        // §14.7 — announce typing while there is text, and stop when it is sent
+        // or cleared. Debounced to one notice per few seconds.
+        input.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+            override fun afterTextChanged(s: android.text.Editable?) {
+                val r = roomId ?: return
+                val typing = !s.isNullOrBlank()
+                val now = System.currentTimeMillis()
+                if (typing && now - lastTypingNotice < 4000) return
+                lastTypingNotice = now
+                lifecycleScope.launch {
+                    SessionProvider.manager(this@ConversationActivity).current()
+                        ?.setTyping(r, typing)
+                }
+            }
+        })
+        return composer
+    }
+
+    private fun showAttachMenu() {
+        AlertDialog.Builder(this)
+            .setItems(arrayOf("Photo", "File")) { _, i ->
+                if (i == 0) pickImage.launch("image/*") else pickFile.launch("*/*")
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun sendTyped(rid: RoomId) {
+        val body = input.text.toString().trim()
+        if (body.isEmpty()) return
+        input.setText("")
+        val reply = replyingTo?.eventId
+        replyingTo = null
+        lastTypingNotice = 0L
+        // Redraw now rather than waiting for the echo: otherwise the reply strip
+        // sits there quoting a message you have already replied to, for as long
+        // as the round trip takes.
+        render(lastItems)
+        lifecycleScope.launch {
+            SessionProvider.manager(this@ConversationActivity).current()?.setTyping(rid, false)
+        }
+        lifecycleScope.launch {
+            val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
+            // §13.5.1 — a failed send is surfaced, never swallowed. The offline
+            // queue makes "failed" rarer, not impossible.
+            s.send(rid, MessageBody.Text(body, replyTo = reply)).onFailure { e ->
+                render(lastItems, error = "Couldn't send: ${e.message}")
             }
         }
     }
@@ -296,76 +431,170 @@ class ConversationActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    // ── the timeline ────────────────────────────────────────────────────────
+
     private fun render(items: List<TimelineItem>, error: String? = null) {
+        // §14.7 — "typing…" belongs under the name, which is where every
+        // messenger puts it and where it does not shove the last message up the
+        // screen each time someone touches a key.
+        bar.subtitle(
+            when {
+                typingNow.isEmpty() -> memberSubtitle
+                typingNow.size == 1 ->
+                    "${shortName(typingNow.first())} is typing…"
+                else -> typingNow.joinToString(", ") { shortName(it) } + " are typing…"
+            }
+        )
+        replyingTo.let { r ->
+            replyBar.visibility = if (r == null) View.GONE else View.VISIBLE
+            if (r != null) replyLabel.text = buildString {
+                append("Replying to ${r.senderDisplayName}\n")
+                append((r.content as? TimelineContent.Text)?.body?.take(80) ?: "message")
+            }
+        }
+
         list.removeAllViews()
         if (items.isEmpty() && error == null) {
-            list.addView(text("No messages yet.", 14f, UiR.color.social_muted))
+            list.addView(chrome.emptyState(
+                "No messages yet",
+                "Everything sent here is end-to-end encrypted. " +
+                    "Not even the server can read it."
+            ))
         }
-        items.forEach { list.addView(bubble(it)) }
-        replyingTo?.let { r ->
-            list.addView(text(
-                "Replying to ${r.senderDisplayName}: " +
-                    ((r.content as? TimelineContent.Text)?.body?.take(60) ?: "message") +
-                    "  — long-press again to cancel",
-                13f, UiR.color.social_accent))
+        var previous: TimelineItem? = null
+        items.forEach { item ->
+            val newDay = previous == null || !sameDay(previous!!.timestamp, item.timestamp)
+            if (newDay) list.addView(chrome.dayMarker(dayLabel(item.timestamp)))
+            val grouped = !newDay && previous != null &&
+                previous!!.sender == item.sender &&
+                item.timestamp - previous!!.timestamp < 5 * 60_000
+            list.addView(messageRow(item, grouped))
+            previous = item
         }
-        if (typingNow.isNotEmpty()) {
-            val who = typingNow.joinToString(", ") { it.substringAfter('@').substringBefore(':') }
-            list.addView(text(
-                if (typingNow.size == 1) "$who is typing…" else "$who are typing…",
-                14f, UiR.color.social_muted))
-        }
-        if (sending) list.addView(text("Sending image…", 14f, UiR.color.social_muted))
-        error?.let { list.addView(text(it, 14f, UiR.color.social_danger)) }
+        if (sending) list.addView(centred("Sending attachment…", UiR.color.social_muted))
+        error?.let { list.addView(centred(it, UiR.color.social_danger)) }
     }
 
-    private fun bubble(item: TimelineItem): View = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(0, dp(6), 0, dp(6))
+    /**
+     * One message, aligned to its speaker.
+     *
+     * Vertical rather than horizontal so the reactions and the failure row sit
+     * under the bubble and inherit the same edge — a reaction chip that drifts
+     * to the other side of the screen from its message is a small thing that
+     * makes a timeline look wrong without anyone being able to say why.
+     */
+    private fun messageRow(item: TimelineItem, grouped: Boolean): View {
+        val mine = item.sender.value == myUserId()
+        val column = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = if (mine) Gravity.END else Gravity.START
+            setPadding(dp(12), dp(if (grouped) 2 else 8), dp(12), 0)
+            // MATCH_PARENT, or the gravity does nothing: a wrap-content row is
+            // only as wide as the bubble, so "align to the end" has no space to
+            // align within and every message sits on the left.
+            layoutParams = LinearLayout.LayoutParams(MATCH, WRAP)
+        }
+        if (!mine && !grouped) {
+            column.addView(text(item.senderDisplayName, 12.5f, UiR.color.social_muted).apply {
+                setPadding(dp(14), 0, 0, dp(3))
+                setTypeface(typeface, Typeface.BOLD)
+            })
+        }
+
+        val bubble = chrome.bubble(mine, chrome.bubbleMaxWidth())
         // §14.4.2 — long-press is the entry point. A visible button per message
         // would crowd the timeline; a long-press is what people already try.
-        isLongClickable = true
-        setOnLongClickListener { showMessageMenu(item); true }
-        addView(text(item.senderDisplayName, 12f, UiR.color.social_muted))
+        bubble.isLongClickable = true
+        bubble.setOnLongClickListener { showMessageMenu(item); true }
+        val bodyColour = if (mine) UiR.color.social_on_accent_fill else UiR.color.social_text
+        val metaColour =
+            if (mine) UiR.color.social_on_accent_fill_meta else UiR.color.social_bubble_meta
+
         when (val c = item.content) {
-            is TimelineContent.Text -> addView(text(c.body, 16f, UiR.color.social_text))
+            is TimelineContent.Text -> bubble.addView(text(c.body, 16f, bodyColour))
             is TimelineContent.Image -> {
-                addView(imageView(c))
+                bubble.addView(imageView(c))
                 c.caption?.takeIf { it.isNotBlank() }
-                    ?.let { addView(text(it, 15f, UiR.color.social_text2)) }
+                    ?.let { bubble.addView(text(it, 15f, bodyColour).apply {
+                        setPadding(0, dp(6), 0, 0)
+                    }) }
             }
             is TimelineContent.File ->
-                addView(text(
+                bubble.addView(text(
                     "📎 ${c.displayName}" + (c.sizeBytes?.let { " · " + humanSize(it) } ?: ""),
-                    16f, UiR.color.social_text))
+                    16f, bodyColour))
             is TimelineContent.Video ->
-                addView(text("🎬 Video" + (c.durationMs?.let { " · ${it / 1000}s" } ?: ""),
-                    16f, UiR.color.social_text))
+                bubble.addView(text("🎬 Video" + (c.durationMs?.let { " · ${it / 1000}s" } ?: ""),
+                    16f, bodyColour))
             is TimelineContent.Audio ->
-                addView(text("🎵 Audio" + (c.durationMs?.let { " · ${it / 1000}s" } ?: ""),
-                    16f, UiR.color.social_text))
+                bubble.addView(text("🎵 Audio" + (c.durationMs?.let { " · ${it / 1000}s" } ?: ""),
+                    16f, bodyColour))
             is TimelineContent.Redacted ->
-                addView(text("Message deleted", 15f, UiR.color.social_muted))
+                bubble.addView(text("Message deleted", 15f, metaColour).apply {
+                    setTypeface(typeface, Typeface.ITALIC)
+                })
             // §14.2.3 — say what happened and why it is usually expected. An
             // empty bubble here is the failure mode that makes users think the
             // app is broken when it is working as designed (§8.5).
             is TimelineContent.Undecryptable ->
-                addView(text(
+                bubble.addView(text(
                     "Can't decrypt this message. It was probably sent before " +
                     "this device was added to your account.",
-                    15f, UiR.color.social_muted))
-            else -> addView(text("[${c::class.simpleName}]", 15f, UiR.color.social_muted))
+                    15f, metaColour).apply { setTypeface(typeface, Typeface.ITALIC) })
+            else -> bubble.addView(text("[${c::class.simpleName}]", 15f, metaColour))
         }
-        if (item.isEdited) addView(text("edited", 12f, UiR.color.social_muted))
+
+        // The meta line: time, "edited", and — for your own messages only — how
+        // far the send has got. Right-aligned inside the bubble, which is where
+        // the eye already is after reading the text.
+        val meta = buildString {
+            append(chrome.clockTime(item.timestamp))
+            if (item.isEdited) append(" · edited")
+            if (mine && item.state == MessageState.SENDING) append(" · sending")
+        }
+        // Right-aligned by the bubble's own gravity, NOT by giving this line
+        // MATCH_PARENT: a match-parent child inside a wrap-content LinearLayout
+        // measures to the whole available width, which would silently make
+        // every bubble the maximum width and undo the ragged edge the layout
+        // depends on.
+        bubble.gravity = Gravity.END
+        bubble.addView(text(meta, 11f, metaColour).apply {
+            setPadding(dp(4), dp(3), 0, 0)
+        })
+        column.addView(bubble)
+
+        if (item.reactions.isNotEmpty()) column.addView(reactionStrip(item))
         when (item.state) {
-            MessageState.SENDING -> addView(text("Sending…", 12f, UiR.color.social_muted))
-            MessageState.QUEUED_OFFLINE, MessageState.FAILED -> addView(sendFailureRow(item))
+            MessageState.QUEUED_OFFLINE, MessageState.FAILED ->
+                column.addView(sendFailureRow(item))
             else -> Unit
         }
-        if (item.reactions.isNotEmpty()) {
-            addView(reactionStrip(item))
-        }
+        return column
     }
+
+    private fun sameDay(a: Long, b: Long): Boolean {
+        val ca = java.util.Calendar.getInstance().apply { timeInMillis = a }
+        val cb = java.util.Calendar.getInstance().apply { timeInMillis = b }
+        return ca.get(java.util.Calendar.YEAR) == cb.get(java.util.Calendar.YEAR) &&
+            ca.get(java.util.Calendar.DAY_OF_YEAR) == cb.get(java.util.Calendar.DAY_OF_YEAR)
+    }
+
+    private fun dayLabel(ts: Long): String {
+        val now = System.currentTimeMillis()
+        if (sameDay(ts, now)) return "Today"
+        if (sameDay(ts, now - 24 * 60 * 60 * 1000L)) return "Yesterday"
+        return android.text.format.DateFormat.getMediumDateFormat(this)
+            .format(java.util.Date(ts))
+    }
+
+    private fun shortName(mxid: String) = mxid.substringAfter('@').substringBefore(':')
+
+    private fun centred(t: CharSequence, colourId: Int): View =
+        text(t, 13f, colourId).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(24), dp(10), dp(24), dp(6))
+            layoutParams = LinearLayout.LayoutParams(MATCH, WRAP)
+        }
 
     /**
      * §13.5.2 — the status line under a message that has not been sent.
@@ -389,7 +618,8 @@ class ConversationActivity : AppCompatActivity() {
      */
     private fun sendFailureRow(item: TimelineItem): View = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
-        setPadding(0, dp(4), 0, 0)
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(6), dp(2), dp(6), 0)
 
         val queued = item.state == MessageState.QUEUED_OFFLINE
         val label = when (item.sendFailure) {
@@ -407,14 +637,15 @@ class ConversationActivity : AppCompatActivity() {
             addView(TextView(this@ConversationActivity).apply {
                 text = caption
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTypeface(typeface, Typeface.BOLD)
                 setTextColor(ContextCompat.getColor(
                     this@ConversationActivity, UiR.color.social_accent))
-                setPadding(dp(10), 0, 0, 0)
+                setPadding(dp(10), 0, dp(4), 0)
                 // §14.10 — 12sp text is far under the 48dp minimum target, so
                 // the touch area is grown past the glyph rather than left at
                 // whatever the text happens to measure.
                 minHeight = dp(44)
-                gravity = android.view.Gravity.CENTER_VERTICAL
+                gravity = Gravity.CENTER_VERTICAL
                 contentDescription = "$caption message"
                 setOnClickListener { onTap() }
             })
@@ -463,7 +694,7 @@ class ConversationActivity : AppCompatActivity() {
     }
 
     /** The activity's content view — `root` is a local in onCreate, not a field. */
-    private fun contentView(): android.view.View = findViewById(android.R.id.content)
+    private fun contentView(): View = findViewById(android.R.id.content)
 
     /**
      * §31.3.1 — block, in one tap and with no confirmation maze.
@@ -561,29 +792,36 @@ class ConversationActivity : AppCompatActivity() {
      */
     private fun reactionStrip(item: TimelineItem): View = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
-        setPadding(0, dp(4), 0, 0)
+        setPadding(dp(6), dp(3), dp(6), 0)
         item.reactions.forEach { (emoji, senders) ->
             addView(TextView(this@ConversationActivity).apply {
                 // §14.4.3 — the emoji is rendered as-is. Never index into it,
                 // never truncate it: a ZWJ sequence is one grapheme made of
                 // several code points and splitting it produces broken boxes.
                 text = "$emoji ${senders.size}"
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                setTextColor(ContextCompat.getColor(this@ConversationActivity, UiR.color.social_text2))
-                setPadding(dp(8), dp(4), dp(8), dp(4))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setTextColor(ContextCompat.getColor(
+                    this@ConversationActivity, UiR.color.social_text2))
+                setPadding(dp(10), dp(4), dp(10), dp(4))
+                background = chrome.rounded(
+                    ContextCompat.getColor(
+                        this@ConversationActivity, UiR.color.social_surface3), 14f)
                 // §14.10 — measured at 44 x 27 dp before this, which is exactly
                 // the failure that section predicts by name: "reaction chips,
                 // which are the most commonly undersized element in messaging
-                // apps". Padding alone does not get there at 14sp; the minimum
+                // apps". Padding alone does not get there at 13sp; the minimum
                 // has to be stated.
                 minWidth = dp(48)
                 minHeight = dp(48)
-                gravity = android.view.Gravity.CENTER
+                gravity = Gravity.CENTER
                 // §14.10 — "reactions announce as 'heart reaction, three
                 // people'". Without this a screen reader reads the raw label,
                 // "❤️ 1", which says neither what it is nor what tapping does.
                 contentDescription = reactionDescription(emoji, senders.size, item)
                 setOnClickListener { react(item, emoji) }
+                layoutParams = LinearLayout.LayoutParams(WRAP, WRAP).also {
+                    it.marginEnd = dp(5)
+                }
             })
         }
     }
@@ -627,13 +865,13 @@ class ConversationActivity : AppCompatActivity() {
             // someone may be using while distressed.
             if (!mine) { add("Block ${item.senderDisplayName}"); add("Report message") }
         }
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setItems(actions.toTypedArray()) { _, i ->
                 when (actions[i]) {
                     "React" -> showReactionPicker(item)
                     "Block ${item.senderDisplayName}" -> block(item.sender, item.senderDisplayName)
                     "Report message" -> showReportDialog(item)
-                    "Reply" -> { replyingTo = item; render(lastItems) }
+                    "Reply" -> { replyingTo = item; render(lastItems); input.requestFocus() }
                     "Edit" -> showEdit(item)
                     "Delete" -> confirmDelete(item)
                 }
@@ -650,17 +888,18 @@ class ConversationActivity : AppCompatActivity() {
 
     private fun showEdit(item: TimelineItem) {
         val current = (item.content as? TimelineContent.Text)?.body ?: return
-        val input = EditText(this).apply { setText(current); setSelection(current.length) }
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        val field = EditText(this).apply { setText(current); setSelection(current.length) }
+        AlertDialog.Builder(this)
             .setTitle("Edit message")
-            .setView(input)
+            .setView(field)
             .setPositiveButton("Save") { _, _ ->
                 val rid = roomId ?: return@setPositiveButton
-                val text = input.text.toString().trim()
-                if (text.isEmpty() || text == current) return@setPositiveButton
+                val body = field.text.toString().trim()
+                if (body.isEmpty() || body == current) return@setPositiveButton
                 lifecycleScope.launch {
-                    val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
-                    s.edit(rid, item.eventId, text).onFailure {
+                    val s = SessionProvider.manager(this@ConversationActivity).current()
+                        ?: return@launch
+                    s.edit(rid, item.eventId, body).onFailure {
                         render(lastItems, error = "Couldn't edit: ${it.message}")
                     }
                 }
@@ -670,7 +909,7 @@ class ConversationActivity : AppCompatActivity() {
     }
 
     private fun confirmDelete(item: TimelineItem) {
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setTitle("Delete this message?")
             // §14.6 — state the limit. "Deleted for everyone" is an overclaim:
             // it asks clients to remove it and the server to drop the content.
@@ -683,7 +922,8 @@ class ConversationActivity : AppCompatActivity() {
             .setPositiveButton("Delete") { _, _ ->
                 val rid = roomId ?: return@setPositiveButton
                 lifecycleScope.launch {
-                    val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
+                    val s = SessionProvider.manager(this@ConversationActivity).current()
+                        ?: return@launch
                     s.delete(rid, item.eventId, null).onFailure {
                         render(lastItems, error = "Couldn't delete: ${it.message}")
                     }
@@ -696,7 +936,7 @@ class ConversationActivity : AppCompatActivity() {
     /** §14.4.2 — a short list plus the keyboard, per §1.2 ("any emoji"). */
     private fun showReactionPicker(item: TimelineItem) {
         val quick = listOf("👍", "❤️", "😂", "😮", "😢", "🙏")
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setTitle("React")
             .setItems(quick.toTypedArray()) { _, i -> react(item, quick[i]) }
             .setNeutralButton("Other…") { _, _ -> showCustomEmoji(item) }
@@ -709,12 +949,12 @@ class ConversationActivity : AppCompatActivity() {
      * cannot be a fixed list. This takes whatever the keyboard gives.
      */
     private fun showCustomEmoji(item: TimelineItem) {
-        val input = EditText(this).apply { hint = "Any emoji" }
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        val field = EditText(this).apply { hint = "Any emoji" }
+        AlertDialog.Builder(this)
             .setTitle("React")
-            .setView(input)
+            .setView(field)
             .setPositiveButton("React") { _, _ ->
-                val e = input.text.toString().trim()
+                val e = field.text.toString().trim()
                 if (e.isNotEmpty()) react(item, e)
             }
             .setNegativeButton("Cancel", null)
@@ -726,7 +966,7 @@ class ConversationActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
             s.react(rid, item.eventId, emoji).onFailure {
-                render(listOf(), error = "Couldn't react: ${it.message}")
+                render(lastItems, error = "Couldn't react: ${it.message}")
             }
         }
     }
@@ -748,6 +988,13 @@ class ConversationActivity : AppCompatActivity() {
             maxHeight = dp(320)
             scaleType = android.widget.ImageView.ScaleType.FIT_START
             contentDescription = c.caption ?: "Image"
+            // Square photo corners inside a rounded bubble look like a mistake.
+            clipToOutline = true
+            outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(v: View, outline: android.graphics.Outline) {
+                    outline.setRoundRect(0, 0, v.width, v.height, dp(12).toFloat())
+                }
+            }
         }
         mediaCache[c.mediaId]?.let { iv.setImageBitmap(it); return iv }
 
@@ -783,8 +1030,8 @@ class ConversationActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
             s.members(rid)
-                .onSuccess { list ->
-                    val lines = list
+                .onSuccess { members ->
+                    val lines = members
                         .filter { it.membership == "joined" || it.membership == "invited" }
                         .sortedBy { it.membership }
                         .map {
@@ -796,7 +1043,7 @@ class ConversationActivity : AppCompatActivity() {
                             }
                             "$who$tag\n${it.id.value}"
                         }
-                    androidx.appcompat.app.AlertDialog.Builder(this@ConversationActivity)
+                    AlertDialog.Builder(this@ConversationActivity)
                         .setTitle("In this conversation")
                         .setItems(lines.toTypedArray(), null)
                         .setNeutralButton("Add someone") { _, _ -> promptInvite(rid) }
@@ -807,22 +1054,23 @@ class ConversationActivity : AppCompatActivity() {
         }
     }
 
-    private fun promptInvite(rid: com.nexlink.social.core.session.RoomId) {
-        val input = EditText(this).apply { hint = "username" }
-        androidx.appcompat.app.AlertDialog.Builder(this)
+    private fun promptInvite(rid: RoomId) {
+        val field = EditText(this).apply { hint = "username" }
+        AlertDialog.Builder(this)
             .setTitle("Add to this conversation")
             // §14.8 — adding someone does not give them the past. Say so, rather
             // than letting people assume either way.
             .setMessage("They'll be invited. They won't be able to read messages sent before they join.")
-            .setView(input)
+            .setView(field)
             .setPositiveButton("Invite") { _, _ ->
-                val name = input.text.toString().trim()
+                val name = field.text.toString().trim()
                 if (name.isEmpty()) return@setPositiveButton
                 lifecycleScope.launch {
-                    val s = SessionProvider.manager(this@ConversationActivity).current() ?: return@launch
+                    val s = SessionProvider.manager(this@ConversationActivity).current()
+                        ?: return@launch
                     val mxid = if (name.startsWith("@")) name
                                else "@$name:${SignInActivity.HOMESERVER.substringAfter("://")}"
-                    s.inviteToRoom(rid, com.nexlink.social.core.session.UserId(mxid))
+                    s.inviteToRoom(rid, UserId(mxid))
                         .onFailure { render(lastItems, error = "Couldn't invite: ${it.message}") }
                 }
             }
@@ -839,11 +1087,13 @@ class ConversationActivity : AppCompatActivity() {
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
-    private fun text(v: CharSequence, size: Float, colour: Int) = TextView(this).apply {
+    private fun colour(id: Int) = ContextCompat.getColor(this, id)
+
+    private fun text(v: CharSequence, size: Float, colourId: Int) = TextView(this).apply {
         text = v
         setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
-        setTextColor(ContextCompat.getColor(this@ConversationActivity, colour))
-        if (size >= 16f) setTypeface(typeface, Typeface.NORMAL)
+        setTextColor(colour(colourId))
+        setLineSpacing(dp(2).toFloat(), 1f)
     }
 
     companion object {

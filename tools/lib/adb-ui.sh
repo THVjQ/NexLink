@@ -64,6 +64,11 @@ texts() { dump "$1" | tr '<' '\n' | grep -oE 'text="[^"]+"' | sed 's/text="//; s
 # platform, so on a German handset they read "Annehmen" / "Ablehnen" /
 # "Auflegen". Every answer attempt in the first two-device run missed for that
 # reason and looked like a ring that never arrived. Match both.
+# How to tell the two session states apart from a hierarchy dump. See `sign_in`
+# for why these are a control and a button rather than a heading.
+HOME_RE='content-desc="New conversation"'
+SIGNED_OUT_RE='text="I have an invite code"|text="Username"'
+
 ANSWER_RE='text="Answer"|text="Annehmen"'
 DECLINE_RE='text="Decline"|text="Ablehnen"'
 HANGUP_RE='text="Hang up"|text="Auflegen"'
@@ -134,17 +139,24 @@ sign_in() {
   # "signed out", sends the run looking for a form that is not there, and fails
   # a device that was signed in the whole time.
   # **"NexLink Social" is on the welcome screen too**, so its presence does not
-  # mean signed in — the third caption collision in this file. The signed-out
-  # screen is the one that says so: "Not signed in".
+  # mean signed in — the third caption collision in this file.
+  #
+  # It used to be decided by the caption "Not signed in", which the 2026-09-15
+  # UI rebuild removed along with the rest of the old welcome screen. The
+  # replacement is not a caption at all: `HOME_RE` is the *floating new-message
+  # button*, which exists only when there is a session — it is hidden when
+  # signed out, and a hidden view is absent from a uiautomator dump entirely.
+  # A control that only exists in one state is a better identity than any text,
+  # which is the lesson the three collisions above keep teaching.
   sleep 5
   local i
   for i in $(seq 1 40); do
-    if present "$s" 'text="Not signed in"'; then break; fi
-    present "$s" 'text="NexLink Social"' && return 0
+    if present "$s" "$SIGNED_OUT_RE"; then break; fi
+    present "$s" "$HOME_RE" && return 0
     sleep 1
   done
   # Genuinely signed out: the welcome screen or the form is on display.
-  if ! present "$s" 'text="I have an invite code"|text="Username"'; then
+  if ! present "$s" "$SIGNED_OUT_RE"; then
     echo "$s: neither the home screen nor the sign-in screen appeared" >&2
     return 1
   fi
@@ -166,7 +178,21 @@ sign_in() {
   sleep 4
   dismiss_save_password "$s"
   # §17.6.2's rc_login is one attempt per twenty seconds; give it room.
-  wait_for "$s" 'text="NexLink Social"' 90
+  wait_for "$s" "$HOME_RE" 90
+}
+
+# The inbox's overflow menu — where the 2026-09-15 rebuild put the six settings
+# that used to be full-width buttons down the home screen. A test that wants one
+# of them has to open the menu first; before the rebuild it could tap the button
+# directly, which is why every caller of this is a line that used to be a `tap`.
+#
+# The menu button is found by its content description, not by a glyph: the icons
+# are drawn rather than typed (Icon.kt), so there is no text to match.
+open_home_menu() {
+  local s=$1 item=$2
+  tap "$s" 'content-desc="More"' 8 || return 1
+  sleep 2
+  tap "$s" "text=\"$item\"" 6
 }
 
 # Decline any "save this password?" prompt, in the languages these handsets use.
