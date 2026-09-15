@@ -27,11 +27,15 @@ accurate, and users may rely on them as descriptions of behaviour.
 
 ## Before publication
 
-**Placeholders to fill:**
-- `[MINIMUM AGE — TO CONFIRM]` in the Terms of Service §3.1, and referenced in
-  the Privacy Policy §9 and the acceptance gate.
-- The Operator's contact address, currently "the contact address given in the
-  app", in every document.
+**Placeholders — both filled 2026-09-15:**
+- Minimum age is **16**, in the Terms of Service §3.1. `AgeCheck.MINIMUM_AGE`
+  already enforced 16, so the gate and the agreement now say the same thing.
+  **They must be changed together or not at all** — one is what the gate
+  enforces, the other is what the user agreed to.
+- The Operator's contact address is **google.alumni829@passmail.net**, in the
+  Privacy Policy, the Security Disclosure Policy and the Law Enforcement
+  Guidelines. It previously read "the address given in the app", which pointed
+  at something that did not exist.
 
 **Decisions to make:**
 - Whether to publish the Law Enforcement Guidelines publicly. Publishing is the
