@@ -22,10 +22,20 @@ dump() {
 # tap <serial> <grep -E pattern> [tries]
 # The pattern is matched against the whole node, so it takes text= or
 # content-desc= indifferently.
+#
+# **A clickable match wins over a non-clickable one**, and that is not a nicety.
+# The sign-in screen has a *heading* reading "Sign in" above a *button* reading
+# "Sign in"; taking the first match tapped the heading, nothing happened, and
+# the run sat waiting for a home screen that was never going to arrive. Same
+# shape as the welcome-screen confusion in `sign_in` — a caption is not an
+# identity.
 tap() {
-  local s=$1 pat=$2 tries=${3:-10} b n x1 y1 x2 y2
+  local s=$1 pat=$2 tries=${3:-10} nodes b n x1 y1 x2 y2
   for _ in $(seq 1 "$tries"); do
-    b=$(dump "$s" | tr '<' '\n' | grep -E "$pat" \
+    nodes=$(dump "$s" | tr '<' '\n' | grep -E "$pat")
+    b=$(echo "$nodes" | grep 'clickable="true"' \
+        | grep -oE 'bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' | head -1)
+    [ -n "$b" ] || b=$(echo "$nodes" \
         | grep -oE 'bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' | head -1)
     if [ -n "$b" ]; then
       n=$(echo "$b" | grep -oE '[0-9]+')
@@ -75,17 +85,62 @@ install_both() {
 }
 
 # sign_in <serial> <pkg> <user> <pass> — no-op if already signed in.
+#
+# **"Sign in" names two different things** and conflating them cost a run: the
+# welcome screen has a *Sign in button* next to "I have an invite code", and the
+# form behind it has a *Sign in submit button*. Matching on the text alone found
+# the first, then looked for a Username field that was one screen away and spun
+# in `tap`'s retry loop until the whole test timed out with no output.
+#
+# So signed-in-ness is decided by the home screen's own heading, and the form is
+# identified by its Username field rather than by a button caption.
 sign_in() {
   local s=$1 pkg=$2 u=$3 p=$4
   adb -s "$s" shell am force-stop "$pkg"
   adb -s "$s" shell monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
-  sleep 8
-  present "$s" 'text="Sign in"' || return 0
+  # **Wait for the home screen rather than glancing at it.** A relaunch restores
+  # the session and starts a sync before it can draw anything, and a fixed
+  # `sleep 8` then `present` caught the blank screen in between — which reads as
+  # "signed out", sends the run looking for a form that is not there, and fails
+  # a device that was signed in the whole time.
+  sleep 5
+  wait_for "$s" 'text="NexLink Social"' 40 && return 0
+  # Genuinely signed out: the welcome screen or the form is on display.
+  if ! present "$s" 'text="I have an invite code"|text="Username"'; then
+    echo "$s: neither the home screen nor the sign-in screen appeared" >&2
+    return 1
+  fi
   [ -n "$u" ] && [ -n "$p" ] || { echo "$s is signed out and no credentials were given" >&2; return 1; }
+
+  # From the welcome screen, step into the form. If we are already on the form,
+  # the Username field is there and this is skipped.
+  present "$s" 'text="Username"' || { tap "$s" 'text="Sign in"' 5 || return 1; sleep 4; }
+  present "$s" 'text="Username"' || { echo "$s: never reached the sign-in form" >&2; return 1; }
+
   tap "$s" 'text="Username"' && adb -s "$s" shell input text "$u"
   tap "$s" 'text="Password"' && adb -s "$s" shell input text "$p"
   adb -s "$s" shell input keyevent KEYCODE_BACK     # dismiss the keyboard
   tap "$s" 'text="Sign in"'
+  # A password manager will offer to save what was just typed, and its dialog
+  # sits over the app — on a German-locale handset the buttons are "Speichern"
+  # and "Nein danke", which matched nothing and left the run polling a home
+  # screen it could not see. Real devices have software on them.
+  sleep 4
+  dismiss_save_password "$s"
   # §17.6.2's rc_login is one attempt per twenty seconds; give it room.
   wait_for "$s" 'text="NexLink Social"' 90
+}
+
+# Decline any "save this password?" prompt, in the languages these handsets use.
+dismiss_save_password() {
+  local s=$1 re
+  for re in 'text="Nein danke"' 'text="Never"' 'text="Not now"' 'text="No thanks"' \
+            'text="Nie"' 'text="Niemals"' 'text="Neu"'; do
+    if present "$s" "$re"; then
+      tap "$s" "$re" 3 >/dev/null 2>&1
+      sleep 2
+      return 0
+    fi
+  done
+  return 0
 }

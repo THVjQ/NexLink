@@ -404,6 +404,29 @@ class RustSocialSession private constructor(
     ): Pair<RustCallWidget, String>? = io {
         val room = runCatching { roomListService.room(roomId.value) }.getOrNull()
             ?: return@io null
+
+        // §17.7.3 — **withdraw this device's own stale call membership first.**
+        //
+        // If the app died during a previous call, room state still says this
+        // device is joined, and the delayed leave does not fire for an hour
+        // (§17.7.2). Element Call reads that as *already in this call*, so the
+        // next call is a **rejoin** — and a rejoin sends no ring. The callee's
+        // phone stays silent, the caller sits in an empty call, and nothing
+        // anywhere reports an error. Measured on two handsets: clearing this
+        // one state event was the difference between no ring and a ring.
+        //
+        // Safe to do unconditionally here: this runs only when the user is
+        // starting or answering a call, and in both cases the widget writes a
+        // fresh membership immediately afterwards. The state key names *this*
+        // device, so no other session of this user is touched.
+        runCatching {
+            room.sendStateEventRaw(
+                "org.matrix.msc3401.call.member",
+                "_${client.userId()}_${client.deviceId()}_m.call",
+                "{}"
+            )
+        }
+
         val widgetId = "nexlink-social-call"
 
         val settings = newVirtualElementCallWidget(

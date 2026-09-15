@@ -648,6 +648,52 @@ is not there for up to an hour, and the SFU room is held open for as long
 the fix is a client-side one — notice a membership whose device has gone quiet
 and stop rendering it — not a server setting.
 
+### 17.7.3 A stale membership silently suppresses the **ring** — measured 2026-09-15
+
+§17.7.2 recorded that a crashed client leaves a ghost participant for an hour
+and treated that as a display problem: the other side sees someone who is not
+there. **It is worse than that, and the two-device run found out the hard way.**
+
+The symptom was a test failure that looked like broken push: A placed a call, B
+never rang, and B did not join. Push was then proved healthy in isolation — B's
+pusher was current, a message addressed to B woke the app and posted a
+notification. So the push chain was fine.
+
+The cause was on the **caller's** side. A's `m.call.member` was still `joined`
+from an earlier run that had been killed mid-call. Element Call read that as
+*already in this call*, so placing a "new" call was a **rejoin** — and a rejoin
+does not send `org.matrix.msc4075.rtc.notification`. No ring event, no push,
+nothing for the callee to answer. Confirmed by clearing the stale membership
+server-side and repeating with nothing else changed:
+`sygnal_notifications_received_total` moved 14 → 16 and the ring appeared on B.
+
+**The product consequence, stated plainly:** if your client dies during a call —
+crash, force-stop, battery — then for up to an hour afterwards **your next call
+to that room will not ring the person you are calling.** You will be in a call
+on your own, they will see nothing, and nothing anywhere reports an error. It is
+the §17.7.2 hour, but the cost is not a phantom tile; it is a call that never
+arrives.
+
+This moves the ghost-participant question from "cosmetic, decide later" to a
+real defect with a user-visible failure. Two candidate fixes:
+
+1. **Clear our own stale membership on call start.** The client knows its own
+   device id; if room state says that device is already joined and the app has
+   only just started, the membership is stale by definition. Withdraw it before
+   joining so the join is a join.
+2. **Shorten the delay.** Element Call asks for an hour and §17.7.2 established
+   that no server setting shortens it — this would mean diverging from upstream,
+   which §17.6's whole argument is against.
+
+(1) is small, local, and does not fight upstream. It is the recommendation.
+
+**And for whoever automates this next:** a test that kills the app mid-call
+poisons the next run of itself. `tools/two-device-call-test.sh` now clears both
+participants' memberships before it starts, which is not tidiness — without it
+the second run of the suite fails in a way that looks like a push outage.
+
+---
+
 ---
 
 ## 17.8 Group calls and capacity

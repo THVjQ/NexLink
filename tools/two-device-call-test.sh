@@ -50,6 +50,44 @@ hangup() {
 # ---- setup -----------------------------------------------------------------
 
 install_both "$APK" "$PKG"
+
+# §17.7.3 — **a run that was killed mid-call poisons the next one.** A stale
+# `m.call.member` makes Element Call treat the next call as a rejoin, and a
+# rejoin sends no ring: the callee never hears about it and the failure looks
+# exactly like a push outage. Clear both participants first.
+#
+# Needs HS_USER/HS_PASS pairs for the two accounts; skipped with a warning if
+# they are not given, because a skipped cleanup is better than a test that
+# refuses to run.
+clear_call_memberships() {
+  local hs=${HS_URL:-https://nexlink.thvjq.com.au} u p tok key
+  for pair in "${CALLER_USER:-}:${CALLER_PASS:-}" "$CALLEE_USER:$CALLEE_PASS"; do
+    u=${pair%%:*}; p=${pair#*:}
+    [ -n "$u" ] && [ -n "$p" ] || continue
+    tok=$(curl -s -X POST "$hs/_matrix/client/v3/login" -H 'Content-Type: application/json' \
+      -d "{\"type\":\"m.login.password\",\"identifier\":{\"type\":\"m.id.user\",\"user\":\"$u\"},\"password\":\"$p\"}" \
+      | python3 -c 'import json,sys; print(json.load(sys.stdin).get("access_token",""))' 2>/dev/null)
+    [ -n "$tok" ] || { echo "  (could not sign in as $u to clear memberships — rc_login?)"; continue; }
+    local rid=${ROOM_ID:-}
+    [ -n "$rid" ] || return 0
+    curl -s "$hs/_matrix/client/v3/rooms/$rid/state" -H "Authorization: Bearer $tok" \
+      | python3 -c '
+import json,sys,urllib.parse
+try: st=json.load(sys.stdin)
+except Exception: sys.exit(0)
+if not isinstance(st,list): sys.exit(0)
+for e in st:
+    if "call.member" in e.get("type","") and e.get("content"):
+        print(urllib.parse.quote(e["state_key"], safe=""))
+' | while read -r key; do
+      curl -s -X PUT "$hs/_matrix/client/v3/rooms/$rid/state/org.matrix.msc3401.call.member/$key" \
+        -H "Authorization: Bearer $tok" -H 'Content-Type: application/json' -d '{}' >/dev/null
+      echo "  cleared a stale call membership"
+    done
+    sleep 21   # §17.6.2 — rc_login is one login per twenty seconds
+  done
+}
+clear_call_memberships
 sign_in "$B" "$PKG" "$CALLEE_USER" "$CALLEE_PASS" || { echo "B could not sign in"; exit 2; }
 
 echo "— 1:1 between two handsets —"

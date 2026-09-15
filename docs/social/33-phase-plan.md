@@ -708,7 +708,10 @@ Invariant 8 (§2.8) now guards 1 and 2 mechanically.
 
 **Acceptance:**
 
-- [ ] 1:1 audio and video between two Android devices.
+- [x] 1:1 audio and video between two Android devices — 2026-09-15, an SM-G990E
+      and an SM-S928B. Both reached `CallActivity` with the service running,
+      the callee subscribed to the caller's video, `encrypted=true`. Getting
+      there found §17.7.3, which was the real prize.
 - [ ] **Four participants, mixed Android and Element Web, with one screen
       share, on a mid-range phone over domestic broadband.** This is §1.5's
       success criterion verbatim and it is the gate for the phase.
