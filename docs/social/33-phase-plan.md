@@ -589,7 +589,9 @@ sent, nothing logged. The second is invisible on three-button navigation.
       Done 2026-09-15 on two handsets (§8.4.4): same seven emoji both ends,
       both device keys self-signed on the server, six messages readable and
       none undecryptable on the new device. (§8.5).
-- [ ] Recovery key round-trips between Android and Element Web (§5.9, §7.4.3).
+- [x] Recovery key round-trips between Android and Element Web (§5.9, §7.4.3) —
+      2026-09-15, §7.4.3a. The phone's key unlocked Element Web, and all three
+      sessions are cross-signed on the server.
 - [x] Messages sent offline queue and deliver on reconnect (§13.5.1).
 - [x] Social conversations appear in NexLink's unified inbox via the existing
       notification listener, **with no code added to `:app`** (§16.2).

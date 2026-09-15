@@ -197,6 +197,39 @@ The passphrase must be **distinct from the recovery key** and the UI must not
 allow reuse, because an exported file plus a reused recovery key in the same
 cloud drive is a single point of total compromise.
 
+### 7.4.3a The round-trip, verified 2026-09-15
+
+§7.4.3 and §5.9 ask that a recovery key work in both clients. The Android half
+happened by construction — phone A generated
+
+```
+EsTJ WJ5Q BjEi uV51 X3Sw jzjv YioF 1fui 6ZgQ mbYv jFq5 WSFW
+```
+
+during recovery setup (a test account's key, recorded here because §7.5.3's
+reuse rule depends on the real shape: 48 base58 characters, twelve groups of
+four, prefix `Es`).
+
+The other half was driven in a real browser. Element Web's verification gate
+offers **Use recovery key** alongside *Use another device*; entering the phone's
+key there returned **"Device verified"**.
+
+**And the server agrees**, which is the part worth insisting on — a client
+saying "verified" is a UI state, and this is not:
+
+```
+EBDDTIEOPN   cross-signed=True     (phone A, where the key was made)
+BDVERFEUYM   cross-signed=True     (phone B, verified by SAS — §8.4.4)
+YCQIZSUMDG   cross-signed=True     (Element Web, verified by the recovery key)
+```
+
+Three sessions, three routes into the same cross-signing identity: the one that
+created it, one verified device-to-device, and one verified by the key alone
+with no second device present. That is §8.4's three paths demonstrated rather
+than assumed, and it closes phase 3.
+
+---
+
 ### 7.5.3 Built 2026-09-12 — the archive, and the half that is not built
 
 **Built and verified: the archive format and the export side.**
