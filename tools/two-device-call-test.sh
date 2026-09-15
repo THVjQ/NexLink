@@ -43,7 +43,7 @@ hangup() {
   adb -s "$s" shell cmd statusbar expand-notifications; sleep 2
   tap "$s" 'text="Ongoing call"' 3 >/dev/null 2>&1
   sleep 1
-  tap "$s" 'text="Hang up"' 5 >/dev/null 2>&1
+  tap "$s" "$HANGUP_RE" 5 >/dev/null 2>&1
   adb -s "$s" shell input keyevent KEYCODE_BACK
 }
 
@@ -102,8 +102,8 @@ tap "$A" "text=\"$ROOM_NAME\"" || { bad "A could not open '$ROOM_NAME'"; exit 1;
 sleep 4
 tap "$A" 'content-desc="Start a call"' || { bad "A has no call control"; exit 1; }
 
-if wait_for "$B" 'text="Answer"' 45; then ok "B rings while awake"; else bad "B never rang"; fi
-tap "$B" 'text="Answer"'
+if wait_for_ring "$B"; then ok "B rings while awake"; else bad "B never rang"; fi
+answer_ring "$B"
 sleep 15
 
 in_call "$A" && ok "A is in the call" || bad "A is not in the call"
@@ -142,14 +142,14 @@ sleep 8
 tap "$A" "text=\"$ROOM_NAME\""; sleep 4
 tap "$A" 'content-desc="Start a call"'
 
-if wait_for "$B" 'text="Answer"' 45; then
+if wait_for_ring "$B"; then
   ok "the ring reaches B from cold with the screen off"
   if adb -s "$B" shell dumpsys window 2>/dev/null | grep -q "mDreamingLockscreen=true"; then
     note "B is still showing the lock screen — check the screenshot for a full-screen ring"
   fi
   adb -s "$B" exec-out screencap -p > /tmp/locked-ring.png 2>/dev/null \
     && note "screenshot: /tmp/locked-ring.png"
-  tap "$B" 'text="Answer"'; sleep 12
+  answer_ring "$B"; sleep 12
   in_call "$B" && ok "answering from the lock screen joins the call" \
     || bad "answering from the lock screen did not join"
 else

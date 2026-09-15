@@ -59,6 +59,36 @@ wait_for() {
 
 texts() { dump "$1" | tr '<' '\n' | grep -oE 'text="[^"]+"' | sed 's/text="//; s/"$//'; }
 
+# **System-rendered labels are in the DEVICE's language, not the app's.**
+# CallStyle's Answer/Decline and the ongoing-call actions come from the
+# platform, so on a German handset they read "Annehmen" / "Ablehnen" /
+# "Auflegen". Every answer attempt in the first two-device run missed for that
+# reason and looked like a ring that never arrived. Match both.
+ANSWER_RE='text="Answer"|text="Annehmen"'
+DECLINE_RE='text="Decline"|text="Ablehnen"'
+HANGUP_RE='text="Hang up"|text="Auflegen"'
+
+# The heads-up collapses in a few seconds and a uiautomator dump takes longer
+# than that, so polling the hierarchy for a ring loses the race. The
+# notification *record* lives for the ring's whole lifetime: poll that (it is
+# fast), then open the shade and act there.
+wait_for_ring() {
+  local s=$1 n=${2:-15} i
+  for i in $(seq 1 "$n"); do
+    adb -s "$s" shell dumpsys notification --noredact 2>/dev/null \
+      | grep -q 'channel=social_incoming_call' && return 0
+    sleep 4
+  done
+  return 1
+}
+
+answer_ring() {
+  local s=$1
+  adb -s "$s" shell cmd statusbar expand-notifications >/dev/null 2>&1
+  sleep 2
+  tap "$s" "$ANSWER_RE" 4
+}
+
 two_devices() {
   mapfile -t SERIALS < <(adb devices | awk '$2=="device"{print $1}')
   if [ "${#SERIALS[@]}" -lt 2 ]; then

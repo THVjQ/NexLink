@@ -363,20 +363,35 @@ class RustSocialSession private constructor(
      *   undecryptable. Every one of those means "treat it as a message".
      */
     suspend fun incomingCall(roomId: RoomId, eventId: String): IncomingCall? = io {
+        // §27.5 — the reason, never the event. "why this push was not a ring" is
+        // the question that took an evening to answer on real hardware, and a
+        // classifier that fails silently is one you cannot debug from a bug
+        // report. None of these strings can identify a room, a user or a
+        // message.
+        fun why(reason: String): IncomingCall? {
+            android.util.Log.d("NexLinkRing", "not a ring: $reason")
+            return null
+        }
+
         val room = runCatching { roomListService.room(roomId.value) }.getOrNull()
-            ?: return@io null
-        val event = runCatching { room.loadOrFetchEvent(eventId) }.getOrNull()
-            ?: return@io null
+            ?: return@io why("room not in the room list")
+        val event = runCatching { room.loadOrFetchEvent(eventId) }
+            .onFailure { return@io why("event could not be loaded or decrypted") }
+            .getOrNull() ?: return@io why("event not found")
 
         val content = (event.content() as? TimelineEventContent.MessageLike)?.content
-        val rtc = content as? MessageLikeEventContent.RtcNotification ?: return@io null
-        if (rtc.notificationType != RtcNotificationType.RING) return@io null
+            ?: return@io why("not a message-like event (state, or undecryptable)")
+        val rtc = content as? MessageLikeEventContent.RtcNotification
+            ?: return@io why("message-like, but not an rtc notification")
+        if (rtc.notificationType != RtcNotificationType.RING)
+            return@io why("an rtc notification, but not of type RING")
 
         // §15.6 wants "a ringing timeout, after which the notification becomes
         // a missed call". The caller already put one on the wire; honour that
         // rather than inventing a second one that could disagree.
         val expiresAt = rtc.expirationTs.toLong()
-        if (expiresAt <= System.currentTimeMillis()) return@io null
+        if (expiresAt <= System.currentTimeMillis())
+            return@io why("the ring had already expired when it arrived")
 
         IncomingCall(
             roomId = roomId,

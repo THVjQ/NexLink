@@ -271,10 +271,46 @@ means.
 | `CallStyle` heads-up with Answer / Decline, no MXID on it | **Verified** — it names the conversation |
 | Answer joins the call | **Verified** — `CallActivity`, service promoted |
 | Ring expires on the caller's `lifetime` | **Verified** — gone from the lock screen at 90 s |
-| Ring dismissed the moment it is answered | **Written, not separately observed** — the heads-up had already collapsed by the time the answer landed |
-| Full-screen takeover on a **locked** screen | **Not observed** — the test screen was unlocked and in use, where the platform correctly shows a heads-up instead |
+| Ring dismissed the moment it is answered | **Verified** 2026-09-15, two handsets |
+| Answering from the notification joins the call | **Verified** — both sides then subscribed to the other's video with `encrypted=true` |
+| Full-screen takeover on a **locked** screen | **Still not observed** — see below |
 
-The last two are the ones to check next, and the second needs a locked device.
+### 15.6.2 Two handsets, and three things that made the ring look broken
+
+The cross-device run took a long evening, and none of the three causes was in
+the ring code. All three are worth knowing before anyone repeats it.
+
+**1. The caller's stale membership (§17.7.3).** A ghost makes the next call a
+*rejoin*, and a rejoin sends no ring. Fixed in the client.
+
+**2. A ghost belonging to the *other* party does it too.** If anyone at all is
+already "in" the call — including a device that no longer exists — Element Call
+treats a new participant as joining, and joining rings nobody. The client fix
+only withdraws **its own** membership, so this half is still open: two accounts
+whose apps both crashed mid-call will not ring each other until the delayed
+leaves fire.
+
+**3. A stale FCM token, which had killed push outright.** §13.3.6.
+
+And two harness lessons, because they cost more than the bugs did:
+
+- **The Answer button is in the device's language.** `CallStyle`'s actions are
+  rendered by the platform, so on a German handset they read *Annehmen* and
+  *Ablehnen*. Every automated answer missed, and the symptom was identical to a
+  ring that never arrived.
+- **A heads-up collapses faster than `uiautomator dump` returns.** Polling the
+  view hierarchy for the ring loses the race every time. The notification
+  *record* lives for the ring's full lifetime, so poll `dumpsys notification`
+  and then open the shade.
+
+`tools/lib/adb-ui.sh` now has `wait_for_ring` and `answer_ring` doing both.
+
+**What the locked-screen row still needs.** The handset re-locks itself with a
+pattern, and `monkey` cannot launch an app past the keyguard — so every attempt
+to put the app into a push-eligible state while locked silently did nothing.
+Doing this properly needs either a device with no lock set, or someone to
+unlock it and hold it awake (`adb shell svc power stayon true`) while the call
+is placed from the other phone.
 
 ---
 
