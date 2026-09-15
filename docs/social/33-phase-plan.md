@@ -584,9 +584,11 @@ sent, nothing logged. The second is invisible on three-button navigation.
 - [ ] Edit and delete, propagated.
 - [ ] Push wakes the app and the notification resolves to a **decrypted** sender
       and preview (§13.3.2), with **no persistent foreground service** (§15.3).
-- [ ] Sign in on a second device; ~~verify by QR~~ **verify by SAS — QR is not
-      built and is a decision, §8.4.2**; **history restores from key
-      backup** (§8.5).
+- [x] Sign in on a second device; ~~verify by QR~~ **verify by SAS — QR is not
+      built and is a decision, §8.4.2**; **history restores from key backup**.
+      Done 2026-09-15 on two handsets (§8.4.4): same seven emoji both ends,
+      both device keys self-signed on the server, six messages readable and
+      none undecryptable on the new device. (§8.5).
 - [ ] Recovery key round-trips between Android and Element Web (§5.9, §7.4.3).
 - [ ] Messages sent offline queue and deliver on reconnect (§13.5.1).
 - [ ] Social conversations appear in NexLink's unified inbox via the existing

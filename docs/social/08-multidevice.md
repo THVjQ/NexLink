@@ -173,19 +173,33 @@ There is also a genuine race underneath, so the controller is retried for ~15
 seconds: a device that has just signed in has no local identity until the first
 sync, and that window is precisely when a user taps Verify.
 
-**What is still not working.** With recovery set up and cross-signing present
-on the server, verification starts on both handsets and then **both sit at the
-request stage without meeting**. The requesting device's to-device event
-reaches the other — the SDK logs `Received a to-device event` — but no incoming
-request surfaces in the UI and no emoji appear. That is as far as it got.
+**And then it passed — on two real handsets.**
 
-§33.3.3 recorded SAS passing between **two SDK clients in one instrumentation
-process**. That test still passes and the code under it is unchanged, so this
-is most likely the surface rather than the protocol: `VerifyActivity` renders
-`incoming`, and whether that flow is fed on the *receiving* side when the screen
-is opened after the request arrives is the thing to look at next. Phase 3's
-second-device row stays open, with this as the specific next step rather than a
-vague "verify by QR" (§8.4.2).
+The earlier stall was **operator error, not a defect**: both devices had been
+put into the *requesting* state, so there were two requests and nobody to accept
+either. The flow needs one device waiting on the Verify screen and the other to
+press Start. Done that way:
+
+- the waiting device showed the incoming request — *"It's me — continue"* /
+  *"Refuse"*, which is §8.3.2's rule that a request is surfaced, never
+  auto-accepted;
+- **both screens showed the same seven emoji** — Penguin, Heart, Santa, Globe,
+  Rocket, Trumpet, Pig;
+- confirming on both completed it, and **the server agrees**: a `keys/query`
+  shows both device keys carrying a self-signing signature. That is the check
+  §33.3.3 used, and it is the one that cannot be faked by a UI state;
+- the newly verified device then opened the room and **read the entire history**
+  — six messages, zero undecryptable.
+
+That closes phase 3's second-device row, by SAS rather than QR (§8.4.2).
+
+**One defect left behind by it: a status line that outlived its moment.** Both
+screens sat on *"Confirming…"* over a verification that had already finished —
+the Done button was right there underneath. The same shape as *"Getting ready…"*
+earlier the same evening. The status is now cleared whenever the step advances,
+which kills the class rather than the instance: a status line is a note about
+what is happening *now*, and leaving it set means it sits over whatever comes
+next. Both instances looked exactly like a stall and neither was one.
 
 ### 8.4.3 Recovery key
 

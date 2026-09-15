@@ -101,7 +101,14 @@ class VerifyActivity : AppCompatActivity() {
             // "Getting ready…" while the controller was live underneath.
             status = ""
             flow = v
-            launch { v.steps.collectLatest { step = it; render() } }
+            // **Clear the status whenever the step advances.** A status line is a
+            // note about what is happening *now*; leaving it set means it
+            // outlives its moment and sits over the next screen. Measured
+            // twice in one evening: "Getting ready…" over a live controller,
+            // and "Confirming…" over a completed verification that had already
+            // cross-signed both devices on the server. Both looked like a
+            // stall and neither was one.
+            launch { v.steps.collectLatest { step = it; status = ""; render() } }
             launch { v.incoming.collectLatest { incoming = it; render() } }
         }
     }
@@ -198,8 +205,13 @@ class VerifyActivity : AppCompatActivity() {
         root.addView(button("They match") {
             lifecycleScope.launch {
                 status = "Confirming…"; render()
-                runCatching { flow?.confirmMatch() }
-                    .onFailure { status = "Couldn't confirm: ${it.message}"; render() }
+                runCatching { flow?.confirmMatch() }.onFailure {
+                    // Never the exception's own message — see the note in
+                    // [attach]; the SDK's carries a Rust backtrace.
+                    android.util.Log.w("NexLinkVerify", "confirm failed", it)
+                    status = "Couldn't confirm that. Try again, or start over on both devices."
+                    render()
+                }
             }
         })
         root.addView(button("They don't match") {
