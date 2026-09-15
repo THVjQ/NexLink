@@ -317,6 +317,27 @@ Until that is run, the drift checks fire only while someone is logged in.
 
 ---
 
+### 27.6.2 A seventh assertion, and two containers that had never been checked — 2026-09-15
+
+**Calling's auth service is now asserted.** MatrixRTC auth runs Matrix user →
+OpenID token → `lk-jwt` → LiveKit. If `lk-jwt` stops answering, **calling breaks
+and messaging does not**, so nothing a user does reports it — §27.3.3's argument
+for the certificate alert, one layer up. `/livekit/jwt/healthz` needs no
+credentials, which is why it is the check: a probe that needed an account would
+mean keeping a password on the desktop VM for a daily job, and that trade is
+worse than the coverage is worth.
+
+**Two containers had no healthcheck at all** — `fed-tls` and `element-call`,
+both nginx, both in the calling path. Given one each, against what they actually
+serve: a federation `version` call through the TLS terminator, and the widget's
+own index. `element-call`'s image has no `curl`, so its probe uses `busybox
+wget`, which it does have — the same lesson as §13.3.5's `curl`-that-isn't.
+
+All five apps are now `RUNNING` with every container `healthy`, which was not
+true of any of them an hour ago, and the whole chain was re-verified by minting
+a real LiveKit token afterwards.
+
+
 ## 27.7 Dashboards
 
 One page, checked weekly, not watched:

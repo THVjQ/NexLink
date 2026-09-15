@@ -90,6 +90,24 @@ else
   fails+=("the public deletion page is not reachable — §4.2.1 requires it")
 fi
 
+# ── 7. Calling's auth service must stay reachable (§21.3, §24.1.2) ─────────
+#
+# MatrixRTC auth goes Matrix user -> OpenID token -> lk-jwt -> LiveKit. If
+# lk-jwt stops answering, **calling breaks and messaging does not**, so nothing
+# a user does will report it — the same silence §27.3.3 gives as the reason for
+# the certificate alert, one layer up.
+#
+# `/healthz` needs no credentials, which is why it is the check: a probe that
+# needed an account would mean keeping an account's password on this machine
+# for a daily job, and that is a worse trade than the coverage is worth.
+code=$(curl -sSL -A "$UA" -o /dev/null -w '%{http_code}' --max-time 20 "$HS/livekit/jwt/healthz" 2>/dev/null)
+if [ "$code" = "200" ]; then
+  note OK "calling auth service (lk-jwt) reachable"
+else
+  note FAIL "lk-jwt /healthz returns $code"
+  fails+=("calling's auth service is not answering — calls will fail while messaging looks fine")
+fi
+
 echo
 if [ ${#fails[@]} -eq 0 ]; then
   echo "  no drift."
