@@ -313,13 +313,19 @@ in the calling code.
 
 **What was measured, and what follows from it — kept apart on purpose.**
 
-The device-side observation is the weaker half and is reported as such: across
-several attempts with the callee locked and dozing, FCM accepted the pushes
-(`sygnal_gcm_status_codes_total{code="200"}` rose by four) and the phone did not
-ring. **One of those runs is confounded** — its setup log, read afterwards,
-shows `adb: device not found` partway through, so the `am kill` and the
-stay-awake release never reached the handset and it was not in the state
-intended. That run proves nothing and is not relied on here.
+The device-side observation is the weaker half and is reported as such. Across
+several attempts with the callee locked, FCM accepted the pushes
+(`sygnal_gcm_status_codes_total{code="200"}` rose by four) and no ring was ever
+posted. **But the setup for those runs lost the handset** — its log, read
+afterwards, shows `adb: device not found` partway through, so neither the
+`am kill` nor the stay-awake release reached it and its state is unknown.
+
+The specific alternative is not exotic: if the `am force-stop` *did* land and
+the `am kill` did not, B spent those runs in the **stopped** state, which
+receives no FCM at all — the trap §15.6.1 records in its own testing note. A
+device that is not being delivered to cannot demonstrate anything about Doze.
+
+So the device half is set aside entirely rather than argued over.
 
 The server-side evidence needs no device at all, and it is what the conclusion
 rests on. Asking Synapse what it thought it was sending:
