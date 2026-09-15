@@ -59,15 +59,15 @@ a failure. Chapters carry confidence markers so that this is expected.
 
 **Acceptance:**
 
-- [ ] `./gradlew :app:assembleRelease` succeeds and **does not configure** the
+- [x] `./gradlew :app:assembleRelease` succeeds and **does not configure** the
       social modules (§10.8).
-- [ ] Adding `implementation project(':social-core')` to `:app` **fails the
+- [x] Adding `implementation project(':social-core')` to `:app` **fails the
       build** with the §10.4 message. Test this by doing it and reverting.
-- [ ] `:app`'s release AAB size is unchanged, to the byte where possible.
-- [ ] `:social` installs beside NexLink; both signed with the same keystore.
-- [ ] All five acceptance-gate screens render; the three checkboxes gate the
+- [x] `:app`'s release AAB size is unchanged, to the byte where possible.
+- [x] `:social` installs beside NexLink; both signed with the same keystore.
+- [x] All five acceptance-gate screens render; the three checkboxes gate the
       primary action; date of birth is entered and **not stored**.
-- [ ] The invite field accepts `x7k2 9qmf 3btd` and normalises it to
+- [x] The invite field accepts `x7k2 9qmf 3btd` and normalises it to
       `X7K2-9QMF-3BTD`.
 
 **Why this is first:** it is the only phase with no external dependency, it
@@ -162,22 +162,22 @@ service and its `invite_record` store (§9.2.2).
 
 **Acceptance — the security posture, asserted rather than believed:**
 
-- [ ] `curl https://nexlink.thvjq.com.au/_matrix/client/versions` returns 200.
-- [ ] Registration **without** a token fails.
-- [ ] Registration **with** a token succeeds, and the token is then spent.
-- [ ] `https://nexlink.thvjq.com.au/_matrix/federation/v1/version` does **not**
+- [x] `curl https://nexlink.thvjq.com.au/_matrix/client/versions` returns 200.
+- [x] Registration **without** a token fails.
+- [x] Registration **with** a token succeeds, and the token is then spent.
+- [x] `https://nexlink.thvjq.com.au/_matrix/federation/v1/version` does **not**
       answer (§21.3).
-- [ ] `https://nexlink.thvjq.com.au/_synapse/admin/...` returns non-200 publicly
+- [x] `https://nexlink.thvjq.com.au/_synapse/admin/...` returns non-200 publicly
       (§26.5.2).
-- [ ] A room created by a client is encrypted by default (§22.4).
-- [ ] `.well-known/matrix/client` is served with
+- [x] A room created by a client is encrypted by default (§22.4).
+- [x] `.well-known/matrix/client` is served with
       `Access-Control-Allow-Origin: *` (§26.3.1).
 - [ ] `signing.key` is backed up **off Willard** (§21.6). **Still not done, and
       it is the largest single risk in the deployment** — §21.6 said to do it
       the day the server started, which was 2026-09-11. The tool and the
       two-minute procedure are now in §29.4a; the passphrase is the operator's,
       so the last step is his.
-- [ ] A `pg_dump` runs, and a restore into a scratch container passes all five
+- [x] A `pg_dump` runs, and a restore into a scratch container passes all five
       checks in §23.6.2. **Timed and recorded.**
 
 **Resolves:** §22.9's reserve-then-redeem question — whether the acceptance gate
@@ -311,10 +311,10 @@ bindings *work*, not how often they ship.
 
 **Acceptance:**
 
-- [ ] Both candidates attempted, or one eliminated with a written reason.
-- [ ] Every §11.7.1 measure recorded, including the subjective ones.
-- [ ] A decision, written into §11 with the marker raised from `SPECULATIVE`.
-- [ ] `:social-core`'s `SocialSession` implemented against the winner **with no
+- [x] Both candidates attempted, or one eliminated with a written reason.
+- [x] Every §11.7.1 measure recorded, including the subjective ones.
+- [x] A decision, written into §11 with the marker raised from `SPECULATIVE`.
+- [x] `:social-core`'s `SocialSession` implemented against the winner **with no
       SDK type crossing the module boundary** (§11.6).
 
 **Do not exceed the timebox.** If five days do not settle it, that is itself
@@ -579,10 +579,10 @@ sent, nothing logged. The second is invisible on three-button navigation.
 
 **Acceptance:**
 
-- [ ] Register via invite, complete the gate, land in the app.
-- [ ] Send and receive text, images, files, reactions with a ZWJ emoji (§14.4.3).
-- [ ] Edit and delete, propagated.
-- [ ] Push wakes the app and the notification resolves to a **decrypted** sender
+- [x] Register via invite, complete the gate, land in the app.
+- [x] Send and receive text, images, files, reactions with a ZWJ emoji (§14.4.3).
+- [x] Edit and delete, propagated.
+- [x] Push wakes the app and the notification resolves to a **decrypted** sender
       and preview (§13.3.2), with **no persistent foreground service** (§15.3).
 - [x] Sign in on a second device; ~~verify by QR~~ **verify by SAS — QR is not
       built and is a decision, §8.4.2**; **history restores from key backup**.
@@ -590,11 +590,11 @@ sent, nothing logged. The second is invisible on three-button navigation.
       both device keys self-signed on the server, six messages readable and
       none undecryptable on the new device. (§8.5).
 - [ ] Recovery key round-trips between Android and Element Web (§5.9, §7.4.3).
-- [ ] Messages sent offline queue and deliver on reconnect (§13.5.1).
-- [ ] Social conversations appear in NexLink's unified inbox via the existing
+- [x] Messages sent offline queue and deliver on reconnect (§13.5.1).
+- [x] Social conversations appear in NexLink's unified inbox via the existing
       notification listener, **with no code added to `:app`** (§16.2).
-- [ ] `:app`'s AAB size still unchanged.
-- [ ] Local store is encrypted at rest and survives a device reboot (§12.4).
+- [x] `:app`'s AAB size still unchanged.
+- [x] Local store is encrypted at rest and survives a device reboot (§12.4).
 
 **The unified-inbox row is the one to demonstrate to the product owner.** §1.4.4
 claims a companion app reaches the inbox on day one with no integration code.
