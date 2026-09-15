@@ -49,28 +49,55 @@ widget, the app does not own the capture at all** — Element Call would call
 Measured on the handset, in a live call: **Element Call offers no screen-share
 control on Android.** `hideScreensharing=false` is passed in the widget
 properties, and the in-call overflow shows only Audio / Video / Preferences /
-Feedback. That is upstream behaving correctly — `getDisplayMedia()` is not
-implemented in Android WebView (nor in Chrome for Android), so a share button
-would be a button that throws.
+Feedback.
+
+That is upstream behaving correctly, and the reason was then probed directly
+inside our own WebView rather than assumed:
+
+```json
+{"gdm":"undefined","gum":"function",
+ "ua":"… Android 16; SM-G990E …; wv) … Chrome/152.0.7977.87 Mobile Safari/537.36"}
+```
+
+`navigator.mediaDevices.getUserMedia` is a function; **`getDisplayMedia` does
+not exist**, on a current WebView (Chromium 152) on Android 16. A share button
+would be a button that throws. Chrome for Android is the same engine and the
+same answer.
 
 So §18 as written is **not implementable on top of Option A**, and this is a
 real cost of that decision that §17.6.3 did not price. Three ways out, in
 increasing order of work:
 
-1. **Ship without screen sharing on Android**, keeping it for whatever desktop
-   client exists later. §1.5's success criterion names "four participants and
-   one screen share", so this is a criterion change, not a scope trim — it
-   needs saying out loud rather than discovering at acceptance.
+1. **Ship without Android *originating* a share.** Note what this does and
+   does not cost: **receiving** a share is ordinary video, so a phone sees a
+   laptop's screen perfectly well, and Element Web's toolbar does carry the
+   share control (observed in the same session, §17.6.4.4). So "share your
+   screen" works in this product today — from a computer. Only "share *this
+   phone's* screen" is gone.
 2. **Host-side capture fed to the widget.** The app runs MediaProjection per
-   §18.3 and hands frames to the page. There is no widget-API action for
-   "here is a video track", so this means a custom channel and a patched
-   Element Call — the exact upstream-divergence cost Option A existed to
-   avoid.
-3. **Wait for upstream.** WebRTC screen capture on Android is a standing
-   platform gap, not an Element Call omission. Nothing suggests a date.
+   §18.3 and hands frames to the page. There is no widget-API action for "here
+   is a video track", and no way to construct a `MediaStream` in the page from
+   native frames at video rates. This is not a hard version of (1); it is not
+   available.
+3. **A second, native LiveKit connection publishing only the screen track.**
+   Technically the closest thing to a real answer — `livekit-android` plus
+   MediaProjection, publishing into the same SFU room. It founders on §17.5:
+   the per-participant E2EE key is negotiated *inside* the widget and the
+   widget API does not expose it, so the native track could only be published
+   unencrypted. Doing that would put plaintext video through the SFU for the
+   one medium most likely to contain someone's passwords. Rejected on those
+   grounds, not on effort.
+4. **Option B for Android** — the native calling stack §17.6 rejected. Screen
+   share is then straightforward. This is a rewrite of the call layer, and the
+   §11.4 argument against it has not changed.
+5. **Wait for upstream.** `getDisplayMedia` on Android is a standing Chromium
+   gap, not an Element Call omission. There is no date.
 
-**Recommendation: (1), and raise it as a decision.** (2) converts a dependency
-back into a liability, which is §11.4's argument in reverse.
+**Recommendation: (1), and raise it as a decision** — §1.5's criterion names
+"four participants and one screen share", and that is still achievable with the
+sharer on a computer. Say so explicitly rather than discovering it at
+acceptance. (3) is the one to revisit if upstream ever exposes the call's
+encryption key to the host.
 
 The §2.8 invariant is unaffected either way, and so is every row of §18.2 that
 is about *not* doing something. What changes is the row that says the share
