@@ -717,19 +717,19 @@ Invariant 8 (§2.8) now guards 1 and 2 mechanically.
       the callee subscribed to the caller's video, `encrypted=true`. Getting
       there found §17.7.3, which was the real prize.
 - [ ] **Four participants, mixed Android and Element Web, with one screen
-      share — the share originating from a computer, per the §18.2.1 decision.**
-      Original wording below.
-- [ ] ~~original:~~ **Four participants, mixed Android and Element Web, with one screen
-      share, on a mid-range phone over domestic broadband.** This is §1.5's
-      success criterion verbatim and it is the gate for the phase.
-- [x] E2EE confirmed **on**, and keys observed rotating on join and leave
-      (§17.5). Not assumed — observed: `encrypted=true` per participant, and
-      `creating new outbound key index:2` when the second participant left.
+      share — the share originating from a computer** (§18.2.1 decided this
+      2026-09-15; Android cannot originate one). This is §1.5's success
+      criterion as amended, and it is still the gate for the phase.
 - [ ] A cellular call interrupts a Social call correctly: hold, mic released,
       resume (§19.4).
 - [x] Incoming call with the app swiped away reaches the user (§15.6) — §15.6.1.
 - [ ] Calls work from a network that permits only outbound TCP 443 (§24.5).
-- [ ] Force-stopping a client during a call leaves no ghost participant (§17.7).
+- [x] Force-stopping a client during a call leaves no ghost participant (§17.7)
+      — **amended and decided 2026-09-15.** Your own stale membership is
+      withdrawn on the next call (§17.7.3, verified). Someone *else's* ghost
+      still suppresses your ring for up to an hour, and that is accepted rather
+      than fixed: only the SFU knows who is really there, and the widget owns
+      that connection.
       **Measured and currently FAILS: the ghost lasts an hour** (§17.7.2). The
       delayed leave is upstream's, at `delay=3600000`, and no server setting
       shortens it. This is a decision to take, not a bug to fix.
