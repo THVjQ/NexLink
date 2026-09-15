@@ -305,12 +305,67 @@ And two harness lessons, because they cost more than the bugs did:
 
 `tools/lib/adb-ui.sh` now has `wait_for_ring` and `answer_ring` doing both.
 
-**What the locked-screen row still needs.** The handset re-locks itself with a
-pattern, and `monkey` cannot launch an app past the keyguard — so every attempt
-to put the app into a push-eligible state while locked silently did nothing.
-Doing this properly needs either a device with no lock set, or someone to
-unlock it and hold it awake (`adb shell svc power stayon true`) while the call
-is placed from the other phone.
+### 15.6.3 Why a sleeping phone does not ring — and it is architectural
+
+The locked-screen row did not just fail; it now has an explanation, and the
+explanation is a consequence of the product's central promise rather than a bug
+in the calling code.
+
+**Measured.** With the callee locked, dozing and push-eligible, the call was
+placed and FCM accepted the push — `sygnal_gcm_status_codes_total{code="200"}`
+went up by four. The phone did not ring. Asking Synapse what it thought it was
+sending:
+
+```
+m.room.encrypted  @call190359:…  sound_tweak=False  -> fcm prio=NORMAL
+```
+
+every time. And a **normal-priority FCM message is deferred while the device is
+in Doze**. That is the entire failure.
+
+**The chain, and why each link is load-bearing:**
+
+1. §2.8 #1 — the homeserver cannot read the event. That is the product.
+2. So it cannot tell a **call** from a **message**: the ring travels as
+   `m.room.encrypted` like everything else (§13.3.5).
+3. Push priority is decided from the matching push rule. Checked against the
+   live rule set: `.m.rule.encrypted_room_one_to_one` carries a `sound` tweak,
+   **`.m.rule.encrypted` does not**. The test room has three members, so the
+   second one applies.
+4. No sound tweak → Matrix `prio: low` → Sygnal sends FCM `normal`
+   (`gcmpushkin.py`: `"normal" if n.prio == "low" else "high"`, which also
+   **overrides** the `fcm_options.android.priority: high` in our config).
+5. Normal priority in Doze → delivered when the device next wakes. Which, for a
+   call, is the same as not delivered.
+
+**§15.6 says "High-priority push for calls, always (§13.6.3)". The deployment
+does not achieve that, and cannot without a decision.** Three options, none free:
+
+1. **Give encrypted events a sound tweak in every room.** One push rule, set by
+   the client at sign-in. Every message then becomes a high-priority wake —
+   which is precisely the battery cost §13's design exists to avoid, paid on
+   every message to make the rare call work.
+2. **Accept that group-room calls do not wake a sleeping phone.** One-to-one
+   calls would still ring, because `.m.rule.encrypted_room_one_to_one` already
+   carries the tweak — which means the product would ring reliably for the case
+   it is mostly for, and silently fail for group calls. That asymmetry has to
+   be *stated*, not discovered.
+3. **Let the server see that an event is a call.** Sending the ring unencrypted,
+   or with a readable type, would fix priority at the cost of telling the
+   homeserver who is calling whom and when. That is metadata §1.3 spends the
+   whole design avoiding.
+
+**(2) is the honest default and (1) is the one to consider**, because a
+messenger whose calls do not ring is not a calling product. This belongs to the
+operator, not to the code.
+
+**Still literally unobserved**, and worth separating from the above: the
+full-screen takeover of a locked screen. Even with priority fixed, nobody has
+yet *seen* the ring paint over a keyguard. The obstacle is mundane — the handset
+re-locks with a pattern and `monkey` cannot launch past the keyguard, so making
+the app push-eligible while locked silently does nothing. It needs a device with
+no lock set, or a person to unlock it and hold it awake
+(`adb shell svc power stayon true`) while the other phone calls.
 
 ---
 
