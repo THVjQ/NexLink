@@ -32,7 +32,7 @@ That is stated so nobody wastes effort expecting a corporate process.
 
 ## 3. How to report
 
-Contact the Operator at the address given in the app or on the service website,
+Contact the Operator at **google.alumni829@passmail.net**,
 with:
 
 - What you found, and where.

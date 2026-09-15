@@ -12,7 +12,7 @@
 | # | Question | Decided by | Blocks | § |
 |---|---|---|---|---|
 | Q2 | Can the acceptance gate run before the account exists — does Synapse permit reserve-then-redeem, or must the invite service proxy registration? | Phase 1 finding | Shape of the invite service | §22.9 |
-| Q3 | Minimum age, which depends on which jurisdictions are served, which depends on where invites go. | Product owner + legal | Acceptance gate copy, phase 5 | §2.7, §4 |
+| ~~Q3~~ | ~~Minimum age~~ **Answered 2026-09-15: sixteen.** `AgeCheck.MINIMUM_AGE` already enforced 16 as §9.6.1's safe EU default; the Terms of Service §3.1 now say it in words. The two must not drift. | — | Done | §2.7, §4 |
 
 **Q1 is closed** — see §37.7. Q2 is now the one phase 1 resolves.
 

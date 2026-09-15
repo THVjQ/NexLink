@@ -74,7 +74,7 @@ and may delete your Account rather than accept them.
 ## 3. Eligibility and registration
 
 ### 3.1 Minimum age
-You must be at least **[MINIMUM AGE — TO CONFIRM]** years old. You must confirm
+You must be at least **16** years old. You must confirm
 this when you create an Account. We do not collect your date of birth; only the
 confirmation is recorded.
 

@@ -16,7 +16,7 @@ is no company, no data protection officer, and no privacy team. One person makes
 these decisions and answers these requests.
 
 ### 1.2 Contact
-The Operator, at the contact address given in the app.
+The Operator, at **google.alumni829@passmail.net**.
 
 ### 1.3 Whether the Privacy Act applies
 The Operator is an individual, not a business with a turnover that would

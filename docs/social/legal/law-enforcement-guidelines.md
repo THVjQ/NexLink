@@ -58,7 +58,7 @@ database backups, which expire after 14 days.
 
 ## 4. How to make a request
 
-1. Serve the request on the Operator using the contact address in the app or on
+1. Serve the request on the Operator at **google.alumni829@passmail.net**, or using the address in
    the service website.
 2. Include the legal basis, the specific data sought, and the relevant time
    period.

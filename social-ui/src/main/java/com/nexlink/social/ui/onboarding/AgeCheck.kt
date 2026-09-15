@@ -16,11 +16,14 @@ import java.util.Calendar
 object AgeCheck {
 
     /**
-     * §2.7 leaves the minimum age open, pending which jurisdictions are actually
-     * served (Q3, §37.1). §9.6.1: *"16 is the safe default for EU users absent a
-     * specific analysis."*
+     * **Decided 2026-09-15: sixteen.** §2.7 had left this open pending Q3
+     * (§37.1), with 16 as the placeholder because §9.6.1 calls it *"the safe
+     * default for EU users absent a specific analysis"*. The operator has now
+     * chosen it, and the Terms of Service §3.1 says sixteen in as many words.
      *
-     * When Q3 is answered, change this constant and nothing else.
+     * The two must not drift: this constant is what the gate enforces and the
+     * Terms are what the user agreed to. Changing one without the other makes
+     * the product lie about itself.
      */
     const val MINIMUM_AGE = 16
 
