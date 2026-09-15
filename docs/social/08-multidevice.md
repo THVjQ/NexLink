@@ -108,6 +108,28 @@ second device, where both are physically present.
 This is the primary path for the web client (§20): the phone scans, or is
 scanned by, the browser.
 
+**Status 2026-09-15: not built.** `VerifyActivity` implements §8.4.1's SAS
+emoji path and nothing else — no QR display, no scanner, no camera use for
+verification at all. SAS passed on hardware on 2026-09-13 (§33.3.3), so devices
+*can* be verified; the QR shortcut simply does not exist.
+
+That matters because **phase 3's acceptance list says "verify by QR"** (§33.4),
+and it cannot be satisfied as written. Three ways forward, and it is a decision
+rather than an oversight:
+
+1. **Accept SAS as the second-device path** and change the acceptance row. SAS
+   is the stronger of the two for a user verifying their own devices with both
+   in hand — it is slower, not weaker.
+2. **Build QR.** It needs a camera permission in `:social` that the app does
+   not currently hold for this purpose, a scanner, and the SDK's QR flow. Not
+   large, but it is new permission surface on a product whose §4.2.1 argument
+   is that it asks for very little.
+3. **Lean on §8.4.3's recovery key**, which is built and tested — a new device
+   proves possession and gains trust with no second device present at all.
+
+Whichever is chosen, the acceptance row should name it. A checklist item for a
+feature nobody built is how a phase gets declared done on a technicality.
+
 ### 8.4.3 Recovery key
 
 A new device can also gain trust by proving possession of the recovery key,

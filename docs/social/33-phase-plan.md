@@ -584,7 +584,8 @@ sent, nothing logged. The second is invisible on three-button navigation.
 - [ ] Edit and delete, propagated.
 - [ ] Push wakes the app and the notification resolves to a **decrypted** sender
       and preview (§13.3.2), with **no persistent foreground service** (§15.3).
-- [ ] Sign in on a second device; verify by QR; **history restores from key
+- [ ] Sign in on a second device; ~~verify by QR~~ **verify by SAS — QR is not
+      built and is a decision, §8.4.2**; **history restores from key
       backup** (§8.5).
 - [ ] Recovery key round-trips between Android and Element Web (§5.9, §7.4.3).
 - [ ] Messages sent offline queue and deliver on reconnect (§13.5.1).
