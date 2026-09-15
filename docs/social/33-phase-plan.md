@@ -790,7 +790,11 @@ testing track.
       (§13.3.5). It needs real users before the number means anything.
 - [ ] Battery impact measured on real phones over real days (§13.7).
 - [ ] Invite quotas (§9.5) exercised — and **tuned against observed behaviour**,
-      which is what those numbers were always waiting for.
+      which is what those numbers were always waiting for. **Blocked on a
+      feature that does not exist:** invites are operator-only today (§9.8,
+      the `invite` CLI), there is no path by which a *user* issues one, so
+      there is no quota to exercise. Either build user-issued invites before
+      phase 6 or drop this row — it cannot be satisfied as written.
 - [ ] At least one user successfully sets up a second device unaided.
 - [ ] At least one user reads the §9.6.1 screens and can accurately say what the
       operator can see. **If they cannot, the screens have failed** and they are

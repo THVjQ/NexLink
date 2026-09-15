@@ -113,6 +113,19 @@ Proposed starting values, to be tuned against real behaviour:
 Quotas are enforced server-side at token issue. A client-side check is a
 convenience, never the control.
 
+**Status 2026-09-15: none of this is built, and that is not a gap — it is a
+feature that has no caller.** Invites are operator-only (§9.8): the `invite`
+CLI mints a Synapse registration token and records it in the tree. There is no
+path by which a *user* issues an invite, so there is nothing for a quota to
+limit. The app has an invite *redemption* flow and no invite *issuing* flow.
+
+Phase 6's acceptance list asks for quotas *"exercised and tuned against observed
+behaviour"* (§33.7). That row cannot be satisfied as written. It is a decision
+before phase 6, not an oversight during it: either user-issued invites get built
+— with §9.5's table as the starting values — or the private launch runs entirely
+on operator-issued invites and the row is dropped. For 10–20 people who know it
+is early, operator-issued is arguably the right answer anyway.
+
 **Suspension behaviour:** a suspended account's unredeemed tokens are revoked
 immediately. Already-redeemed accounts are not automatically suspended — that is
 a moderator decision (§31), because collective punishment for an inviter's
