@@ -237,6 +237,51 @@ liveness).
 
 ---
 
+### 13.3.6 A token rotation could kill push permanently — fixed 2026-09-15
+
+Found while trying to ring a locked handset, and visible only because of the
+delivery metric added hours earlier (§13.3.5):
+
+```
+sygnal_gcm_status_codes_total{code="404",pushkin="…debug.android"} 1.0
+```
+
+A 404 from FCM means *this registration token is no longer valid*. Synapse does
+the right thing with that — it **retires the pusher**. The device then has no
+pusher at all, and the only thing that can fix it is the app registering again.
+
+**It could not.** `PushRegistration.register` began:
+
+```kotlin
+val session = SessionProvider.manager(context).current() ?: return false
+```
+
+`onNewToken` fires in a process FCM has just woken, where nothing has run
+`restore()` yet — the **exact** case `SocialPushService.onMessageReceived`
+already carries a long comment about, one function along. So the sequence is:
+
+1. FCM rotates the token; a push to the old one is rejected 404.
+2. Synapse retires the pusher — correctly.
+3. `onNewToken` fires, `register` returns `false` without a word.
+4. **The device is now unreachable by push and nothing anywhere says so.**
+
+Measured: the test account ended with **zero pushers** and an app that had
+logged *"FCM token rotated, re-registering"* four minutes earlier.
+
+`register` now restores the session the same way the message path does, and
+says so in the log when there is genuinely no session — because silence is what
+turned a routine token rotation into a permanently silent phone.
+
+**Two things worth keeping from this.** The metric found it: without
+`sygnal_gcm_status_codes_total` the 404 would have been a line in a log that is
+now deliberately quiet (§13.3.5), and the symptom would have been "push stopped
+working on that phone, no idea why". And the failure is invisible from the
+device — the app believes it is registered, the server disagrees, and nothing
+compares the two. A periodic re-registration, or a check that the pusher still
+exists, would close that gap; neither is built.
+
+---
+
 ## 13.4 Notifications
 
 ### 13.4.1 Requirements
