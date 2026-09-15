@@ -311,10 +311,18 @@ The locked-screen row did not just fail; it now has an explanation, and the
 explanation is a consequence of the product's central promise rather than a bug
 in the calling code.
 
-**Measured.** With the callee locked, dozing and push-eligible, the call was
-placed and FCM accepted the push — `sygnal_gcm_status_codes_total{code="200"}`
-went up by four. The phone did not ring. Asking Synapse what it thought it was
-sending:
+**What was measured, and what follows from it — kept apart on purpose.**
+
+The device-side observation is the weaker half and is reported as such: across
+several attempts with the callee locked and dozing, FCM accepted the pushes
+(`sygnal_gcm_status_codes_total{code="200"}` rose by four) and the phone did not
+ring. **One of those runs is confounded** — its setup log, read afterwards,
+shows `adb: device not found` partway through, so the `am kill` and the
+stay-awake release never reached the handset and it was not in the state
+intended. That run proves nothing and is not relied on here.
+
+The server-side evidence needs no device at all, and it is what the conclusion
+rests on. Asking Synapse what it thought it was sending:
 
 ```
 m.room.encrypted  @call190359:…  sound_tweak=False  -> fcm prio=NORMAL
@@ -337,6 +345,11 @@ in Doze**. That is the entire failure.
    **overrides** the `fcm_options.android.priority: high` in our config).
 5. Normal priority in Doze → delivered when the device next wakes. Which, for a
    call, is the same as not delivered.
+
+Steps 1–4 are measured against this deployment. Step 5 is Android's documented
+behaviour rather than something observed here, and **a clean locked-device run
+is still owed** — with the handset verifiably connected, killed and asleep
+throughout — before the row is called closed either way.
 
 **§15.6 says "High-priority push for calls, always (§13.6.3)". The deployment
 does not achieve that, and cannot without a decision.** Three options, none free:
