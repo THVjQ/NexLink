@@ -736,22 +736,29 @@ survives its first bad week.
 
 **Work and acceptance:**
 
-- [ ] **SMTP configured on Willard** (§27.2). This unblocks all alerting,
-      including the backup alerting that has been queued behind it since the
-      cron job was created with `stderr: false`.
-- [ ] All five §27.3 alerts firing, verified **by deliberately breaking each
-      one**.
+- [x] **SMTP configured on Willard** (§27.2) — Proton on 587; 465 and 25 are
+      blocked outbound. This unblocked all alerting.
+- [x] All five §27.3 alerts firing, verified **by deliberately breaking each
+      one**. The fifth was a no-op pointing at a VPS that no longer exists;
+      repointed at the federation TLS certificate and verified 2026-09-15
+      (§27.3.3).
 - [ ] Offsite backup to Backblaze B2 working (§23.5). `signing.key` and the
-      database dump included, encrypted before upload.
-- [ ] Restore drill timed and recorded (§23.6.3).
+      database dump included, encrypted before upload. **Deferred by the
+      operator** — the only phase-5 item not started.
+- [x] Restore drill timed and recorded (§23.6.3).
 - [ ] Every §29 runbook written and at least once *followed* by the operator
-      reading it, not from memory.
+      reading it, not from memory. Restore has been; the rest have not.
 - [ ] Terms of service and privacy policy published and versioned (§4.7), and
-      §32's retained-after-deletion items disclosed in them.
-- [ ] Deletion works in-app **and** from the public web page, and purges media
-      (§32.3, §25.7).
+      §32's retained-after-deletion items disclosed in them. **Drafted and
+      exported; waiting on the operator's review** — see `docs/social/legal/`.
+- [x] Deletion works in-app **and** from the public web page, and purges media
+      (§32.3, §25.7) — re-verified 2026-09-15 end to end on a throwaway
+      account: media 200 before, 404 after; the web path leaves media until
+      the hourly sweeper, which was watched doing it.
 - [ ] Reporting and blocking work end to end (§31.3).
-- [ ] §27.6's drift assertions running daily, from **outside** Willard.
+- [x] §27.6's drift assertions running daily, from **outside** Willard — a
+      systemd user timer on the desktop VM; six assertions, green two days
+      running.
 
 ---
 

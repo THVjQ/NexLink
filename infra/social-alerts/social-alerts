@@ -15,7 +15,7 @@ Alert 5 (certificate expiry) is VPS-only and there is no VPS: §24.1.1 took a
 hosted SFU instead. It is present and reports NOT_APPLICABLE rather than being
 deleted, so that the count stays five and the reason stays visible.
 """
-import json, os, re, subprocess, sys, time, urllib.error, urllib.request
+import datetime, json, os, re, subprocess, sys, time, urllib.error, urllib.request
 
 STATE = "/mnt/Pool1-MAIN/social/alerts-state.json"
 HS_PUBLIC = "https://nexlink.thvjq.com.au"
@@ -139,9 +139,49 @@ def check_invite_failures():
     return True, f"{n} failed redemptions in the last hour"
 
 
+FED_TLS_CERT = "/mnt/Pool1-MAIN/social/rtc-tls/cert.pem"
+CERT_WARN_DAYS = int(os.environ.get("SOCIAL_CERT_WARN_DAYS", "14"))
+
+
 def check_cert_expiry():
-    """§27.3 — VPS only, and §24.1.1 means there is no VPS."""
-    return None, "no VPS — §24.1.1 uses a hosted SFU, so there is no certificate to expire"
+    """
+    §27.3 — "certificate expiry < 14 days". Repointed, 2026-09-15.
+
+    §27.3 wrote this row for the VPS, and §24.1.1's hosted SFU removed the
+    VPS — so this check was a no-op returning "there is no certificate to
+    expire". **That was wrong.** There is one, and calling depends on it:
+    MatrixRTC auth makes a federation `openid/userinfo` call, and on a server
+    with federation off that goes through the LAN-only TLS terminator (§21.3),
+    which presents this certificate.
+
+    The failure mode is exactly the one §27.3 wrote the row for — *"breaks
+    calling for firewalled users, silently and partially"* — except it breaks
+    calling for everyone, and messaging keeps working, so nothing else notices.
+
+    It is self-signed and currently good until 2036. That is precisely why it
+    needs an alert rather than a diary entry: a ten-year certificate is one
+    nobody will be thinking about when it goes.
+    """
+    # The convention here is `ok, detail` — **True is healthy**. Getting that
+    # backwards sent one false alarm before it was caught, which is the cheapest
+    # possible way to learn that a new check must be run before it is trusted.
+    if not os.path.exists(FED_TLS_CERT):
+        return False, f"{FED_TLS_CERT} is missing — MatrixRTC auth cannot work without it"
+    rc, out, err = sh(["openssl", "x509", "-in", FED_TLS_CERT, "-noout", "-enddate"])
+    if rc != 0:
+        return False, f"could not read {FED_TLS_CERT}: {err.strip()[:200]}"
+    try:
+        when = out.strip().split("=", 1)[1]
+        end = datetime.datetime.strptime(when, "%b %d %H:%M:%S %Y %Z")
+    except Exception as e:
+        return False, f"could not parse the expiry date ({out.strip()[:80]}): {e}"
+    days = (end - datetime.datetime.utcnow()).days
+    if days < CERT_WARN_DAYS:
+        return False, (f"the federation TLS certificate expires in {days} day(s) "
+                       f"({when}). When it does, calling stops and messaging does "
+                       f"not, so nothing else will tell you. Renew "
+                       f"{FED_TLS_CERT} — §29 has the procedure.")
+    return True, f"federation TLS certificate valid for {days} more day(s)"
 
 
 CHECKS = [

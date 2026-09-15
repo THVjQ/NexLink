@@ -74,6 +74,7 @@ Done, not assumed:
 | Backup failed | Wrote `result=WARN` into `last-run.status` | **FIRED** — "last run did not report OK" |
 | Media store ≥ 80% | Quota to 1 GiB, wrote a 900 MB file | **FIRED** at 87.9% |
 | Invite failures | 20 bad-token registration attempts (plus earlier probing) | **FIRED** at 56 in the hour |
+| Certificate expiry | 2026-09-15: threshold raised above the certificate's life | **FIRED**, then recovered when the threshold went back — §27.3.1 |
 | Certificate expiry | — | **NOT APPLICABLE** — §24.1.1 took a hosted SFU, so there is no VPS and no certificate |
 
 The fifth is reported as not-applicable rather than deleted, so the count stays
@@ -94,6 +95,18 @@ been invisible in review:
 3. **Every healthy check mailed a "recovered" notice on install** — four emails
    announcing that nothing had ever been wrong.
 
+### 27.3.1 The invite alert is the unusual one
+
+The other four are infrastructure. This one is **abuse detection**, and it is
+the only signal the operator gets that the front door is being attacked — the
+redemption endpoint is the service's single unauthenticated write path (§9.7).
+
+The baseline is near zero: invites are issued deliberately and redeemed once
+each. A dozen failures in an hour is not noise, it is a campaign. Set the
+threshold low and expect it never to fire.
+
+---
+
 ### 27.3.2 The registration endpoint is not rate limited
 
 Found while building the invite alert, and it changes how much that alert
@@ -112,17 +125,36 @@ campaign against it except someone noticing.** §27.3.1 already said to "set the
 threshold low and expect it never to fire"; this is why that instruction is
 right.
 
-### 27.3.1 The invite alert is the unusual one
+### 27.3.3 The fifth alert was a no-op, and it should not have been — 2026-09-15
 
-The other four are infrastructure. This one is **abuse detection**, and it is
-the only signal the operator gets that the front door is being attacked — the
-redemption endpoint is the service's single unauthenticated write path (§9.7).
+§27.3's last row says *"Certificate expiry < 14 days — VPS only (§24.6)"*, and
+§24.1.1's hosted SFU removed the VPS. So the check was left returning
+`n/a: "no VPS … there is no certificate to expire"`. **That was wrong, and it
+left the one alert with no coverage pointing at nothing.**
 
-The baseline is near zero: invites are issued deliberately and redeemed once
-each. A dozen failures in an hour is not noise, it is a campaign. Set the
-threshold low and expect it never to fire.
+There is a certificate, and calling depends on it. MatrixRTC auth makes a
+federation `openid/userinfo` call; on a server with federation off that goes
+through the LAN-only TLS terminator (§21.3), which presents
+`/mnt/Pool1-MAIN/social/rtc-tls/cert.pem`. The failure mode is the one §27.3
+wrote the row for — silent and partial — except it is worse: **calling stops
+and messaging does not**, so nothing else in the system notices.
 
----
+It is self-signed and good until **September 2036**. That is exactly why it
+needs an alert rather than a diary entry; a ten-year certificate is one nobody
+is thinking about on the day it goes.
+
+Verified by breaking it the way the other four were — `SOCIAL_CERT_WARN_DAYS`
+raised above the certificate's remaining life, rather than by damaging the
+certificate that calling depends on. Fired with the renewal path in the body,
+recovered when the threshold went back.
+
+**One real mistake worth recording.** The first version returned `True` for
+"there is a problem". The runner's convention is `ok, detail` — `True` means
+*healthy* — so the check fired on a perfectly good certificate and mailed a
+false alarm. Caught on the first run, which is the cheapest possible way to
+learn that a new alert is not trustworthy until it has been run in both states.
+That is now the rule: **break it before believing it**, for the healthy case as
+much as the failing one.
 
 ## 27.4 What is recorded but does not page
 
