@@ -401,3 +401,75 @@ this version. Reports are only visible because the client was changed to use
 `reportContent`. A moderation tool that lists an endpoint nobody has queried is
 a tool that quietly lists nothing.
 
+---
+
+## 31.6 The admin console — built 2026-09-16
+
+`tools/moderate.sh` (§31.5) in a browser, at
+**`https://nexlink.thvjq.com.au/_matrix/nexlink/console`**, styled with the
+app's own palette so it is not one more unfamiliar thing under stress.
+
+Reports, account lookup, suspend / unsuspend / deactivate, and the invite list
+with revoke.
+
+### It holds no credential, and that is the design
+
+The obvious build is a small admin web app. It would need its own public
+hostname, its own certificate, and — the part that matters — **its own copy of
+an admin token in a config file**. A file like that is a standing risk that
+outlives whoever created it.
+
+This has none. It is a Synapse module:
+
+- The page is static markup. It is public, the way Element Web is, and inert.
+- Every data call carries the **caller's own** access token, is checked with
+  `is_user_admin`, and is proxied to Synapse on localhost. A non-admin who
+  signs in successfully gets **403** — verified with a real non-admin account.
+- Sign out and nothing remains anywhere.
+- `/_synapse/admin/*` stays denied at the Cloudflare edge (§26.5.2). Verified
+  after deploying: still **403** from the internet. This console is a narrow
+  authenticated door beside that wall, not a hole in it.
+
+Actions are an **allowlist** — suspend, deactivate, revoke — not a path
+passthrough. A proxy that forwards whatever admin path the browser names is not
+a narrower surface than the admin API; it *is* the admin API.
+
+### It took the homeserver down for two minutes, and the reason is worth keeping
+
+The first version registered the page as a leaf at `/_matrix/nexlink/admin` and
+the endpoints beneath it at `/_matrix/nexlink/admin/api/…`. Synapse's
+`create_resource_tree` cannot attach children to a leaf, and raised
+
+```
+KeyError: "<nexlink_admin._Page object>-b'api'"
+```
+
+**inside `start_listening`** — so this was not a module that failed to load, it
+was a homeserver that failed to *boot*, restarting in a loop. Messaging and
+calls were down until the config was rolled back.
+
+Two lessons, both already applied:
+
+1. **The page and the API now live on separate subtrees** — `/console` and
+   `/v1/admin/…`.
+2. **The tree can be checked without restarting anything**, and now always is:
+
+   ```bash
+   sudo docker exec <synapse> python3 - <<'PY'
+   from twisted.web.resource import Resource
+   from synapse.util.httpresourcetree import create_resource_tree
+   import nexlink_admin as A
+   create_resource_tree({A.PAGE: A._Page("/data/nexlink_admin.html"),
+                         A.API + "/reports": Resource()}, Resource())
+   PY
+   ```
+
+   That call is the exact thing that failed. Running it against the real
+   Synapse, in the container, with the module imported, costs seconds and would
+   have caught this before anyone noticed. A module that imports cleanly is not
+   a module that mounts cleanly — importing was verified and proved nothing.
+
+**`docs/social/29-runbooks.md` rollback that worked:** restore the newest
+`homeserver.yaml.pre-*` backup and restart. Take the backup *before* the edit;
+it is the only reason this was two minutes rather than an evening.
+

@@ -1,0 +1,281 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>NexLink Social — admin</title>
+<style>
+/* The app's dark palette, verbatim from social-ui/res/values-night/colors.xml.
+   An operator tool that looks like a different product is one more thing to
+   place under stress. */
+:root{
+  --bg:#0A0E15; --surface:#141A24; --surface2:#1E2633; --surface3:#2B3545;
+  --accent:#6BA6FF; --fill:#1E5FD1; --on-fill:#fff;
+  --text:#EEF2F8; --text2:#C9D2DF; --muted:#8E9AAB; --divider:#2A3444;
+  --danger:#FF7A8C; --good:#4ED9A0; --warn:#FFC067;
+  --font:Roboto,system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
+  font-size:15px;line-height:1.5}
+.bar{background:var(--surface);padding:14px 20px;display:flex;align-items:center;
+  gap:14px;position:sticky;top:0;z-index:5;box-shadow:0 1px 0 #0006}
+.bar h1{font-size:19px;margin:0;font-weight:700}
+.bar .who{font-size:12.5px;color:var(--muted);margin-top:2px}
+.bar .sp{flex:1}
+.wrap{max-width:860px;margin:0 auto;padding:18px 12px 60px}
+.card{background:var(--surface);border-radius:20px;overflow:hidden;margin:0 0 14px}
+.row{padding:14px 16px;border-bottom:1px solid var(--divider)}
+.row:last-child{border-bottom:0}
+h2{font-size:13px;letter-spacing:.06em;color:var(--muted);margin:22px 0 8px 14px;
+  text-transform:uppercase}
+button{font-family:var(--font);font-size:15px;font-weight:700;border:0;
+  border-radius:16px;padding:12px 20px;min-height:48px;cursor:pointer;
+  background:var(--fill);color:var(--on-fill)}
+button.quiet{background:var(--surface2);color:var(--accent)}
+button.danger{background:var(--surface2);color:var(--danger)}
+button:disabled{opacity:.5;cursor:default}
+input{font-family:var(--font);font-size:16px;width:100%;min-height:48px;
+  background:var(--surface2);color:var(--text);border:0;border-radius:16px;
+  padding:12px 16px;margin:6px 0}
+input::placeholder{color:var(--muted)}
+.muted{color:var(--muted);font-size:13.5px}
+.mono{font-family:ui-monospace,Menlo,monospace}
+.pill{display:inline-block;font-size:12px;font-weight:700;border-radius:11px;
+  padding:3px 9px;background:var(--fill);color:var(--on-fill)}
+.pill.bad{background:#3A1F26;color:var(--danger)}
+.pill.ok{background:#162A22;color:var(--good)}
+.pill.warn{background:#2E2415;color:var(--warn)}
+.flex{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.grow{flex:1;min-width:0}
+.err{color:var(--danger);padding:10px 16px}
+.hide{display:none}
+.note{color:var(--muted);font-size:13px;padding:10px 16px 0}
+a{color:var(--accent)}
+</style>
+
+<div class="bar">
+  <div>
+    <h1>NexLink Social</h1>
+    <div class="who" id="who">admin console</div>
+  </div>
+  <div class="sp"></div>
+  <button class="quiet hide" id="out" onclick="signOut()">Sign out</button>
+</div>
+
+<div class="wrap">
+
+  <div id="login">
+    <h2>Sign in</h2>
+    <div class="card"><div class="row">
+      <div class="muted" style="margin-bottom:8px">
+        A <b>server admin</b> account. Everything here runs as you — this server
+        holds no admin token of its own.
+      </div>
+      <input id="u" placeholder="username" autocomplete="username">
+      <input id="p" type="password" placeholder="password" autocomplete="current-password">
+      <div class="flex" style="margin-top:8px">
+        <button onclick="signIn()" id="go">Sign in</button>
+      </div>
+      <div class="err" id="loginErr"></div>
+    </div></div>
+  </div>
+
+  <div id="app" class="hide">
+    <h2>Reports</h2>
+    <div class="card" id="reports"><div class="row muted">Loading…</div></div>
+
+    <h2>Look up an account</h2>
+    <div class="card"><div class="row">
+      <div class="flex">
+        <input class="grow" id="uq" placeholder="username or @user:server" style="margin:0">
+        <button class="quiet" onclick="lookup()">Look up</button>
+      </div>
+      <div id="user"></div>
+    </div></div>
+
+    <h2>Invite codes</h2>
+    <div class="card" id="invites"><div class="row muted">Loading…</div></div>
+    <div class="note">
+      Only <b>LIVE</b> codes can still create an account. There is no quota on
+      user-issued invites, so this list is the control.
+    </div>
+  </div>
+</div>
+
+<script>
+const HS = location.origin, API = "/_matrix/nexlink/v1/admin";
+let tok = sessionStorage.getItem("nl_tok") || "", me = sessionStorage.getItem("nl_me") || "";
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, {
+    ...opts,
+    headers: { "Authorization": "Bearer " + tok, "Content-Type": "application/json" },
+  });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.error || ("HTTP " + r.status));
+  return body;
+}
+
+async function signIn() {
+  $("go").disabled = true; $("loginErr").textContent = "";
+  // The username is normalised the same way the app does it (MatrixUsername):
+  // people type the address they can see, not the localpart.
+  const user = $("u").value.trim().replace(/^@/, "").split(":")[0].toLowerCase();
+  try {
+    const r = await fetch(HS + "/_matrix/client/v3/login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "m.login.password",
+        identifier: { type: "m.id.user", user }, password: $("p").value }),
+    });
+    const b = await r.json();
+    if (!r.ok) throw new Error(
+      r.status === 429 ? "Too many attempts. Wait about 30 seconds."
+                       : (b.error || "Sign-in failed."));
+    tok = b.access_token; me = b.user_id;
+    sessionStorage.setItem("nl_tok", tok); sessionStorage.setItem("nl_me", me);
+    $("p").value = "";
+    await start();
+  } catch (e) {
+    $("loginErr").textContent = e.message;
+  } finally { $("go").disabled = false; }
+}
+
+function signOut() {
+  fetch(HS + "/_matrix/client/v3/logout", { method: "POST",
+    headers: { "Authorization": "Bearer " + tok }, body: "{}" }).catch(() => {});
+  sessionStorage.clear(); tok = ""; me = "";
+  $("app").classList.add("hide"); $("login").classList.remove("hide");
+  $("out").classList.add("hide"); $("who").textContent = "admin console";
+}
+
+async function start() {
+  try {
+    const reports = await api("/reports");
+    $("login").classList.add("hide"); $("app").classList.remove("hide");
+    $("out").classList.remove("hide"); $("who").textContent = me;
+    renderReports(reports);
+    renderInvites(await api("/invites"));
+  } catch (e) {
+    // A 403 here means signed in but not an admin — say which.
+    $("loginErr").textContent = e.message;
+    $("login").classList.remove("hide");
+  }
+}
+
+function renderReports(d) {
+  const rs = d.event_reports || [];
+  if (!rs.length) { $("reports").innerHTML =
+    '<div class="row muted">Nothing has been reported.</div>'; return; }
+  $("reports").innerHTML = rs.map(r => `
+    <div class="row">
+      <div class="flex">
+        <b>#${esc(r.id)}</b>
+        <span class="muted">${new Date(r.received_ts).toLocaleString()}</span>
+      </div>
+      <div style="margin-top:6px">
+        <div class="muted">reported by</div>
+        <div class="mono">${esc(r.user_id)}</div>
+        <div class="muted" style="margin-top:6px">against</div>
+        <div class="mono">${esc(r.sender || "(unknown)")}</div>
+        <div class="muted" style="margin-top:6px">reason</div>
+        <div>${esc((r.reason || "").trim() || "(none given)")}</div>
+      </div>
+      <div class="flex" style="margin-top:10px">
+        <button class="quiet" onclick="lookupThis('${esc(r.sender || "")}')">Look up sender</button>
+      </div>
+    </div>`).join("") +
+    `<div class="row muted">Message content is not here and cannot be — it is
+     end-to-end encrypted. A report is who, where and why.</div>`;
+}
+
+function lookupThis(id) { $("uq").value = id; lookup(); }
+
+async function lookup() {
+  const raw = $("uq").value.trim();
+  if (!raw) return;
+  const id = raw.startsWith("@") ? raw : "@" + raw + ":" + location.hostname;
+  $("user").innerHTML = '<div class="muted" style="padding-top:10px">Looking up…</div>';
+  try {
+    const u = await api("/user?id=" + encodeURIComponent(id));
+    if (u.errcode) { $("user").innerHTML = `<div class="err">${esc(u.error)}</div>`; return; }
+    const pill = (on, label, cls) => on ? `<span class="pill ${cls}">${label}</span>` : "";
+    $("user").innerHTML = `
+      <div style="padding-top:12px">
+        <div class="mono">${esc(u.name)}</div>
+        <div class="muted">${esc(u.displayname || "(no display name)")}</div>
+        <div class="flex" style="margin-top:8px">
+          ${pill(u.admin, "admin", "")}
+          ${pill(u.suspended, "suspended", "warn")}
+          ${pill(u.deactivated, "deactivated", "bad")}
+          ${pill(!u.suspended && !u.deactivated, "active", "ok")}
+        </div>
+        <div class="flex" style="margin-top:12px">
+          <button class="quiet" onclick="act('suspend','${esc(u.name)}',${!u.suspended})">
+            ${u.suspended ? "Unsuspend" : "Suspend"}</button>
+          <button class="danger" onclick="deactivate('${esc(u.name)}')">Deactivate</button>
+        </div>
+        <div class="muted" style="margin-top:8px">
+          Suspending is reversible and also revokes that account's unused
+          invites. Deactivating is not reversible.
+        </div>
+      </div>`;
+  } catch (e) { $("user").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+
+async function act(action, user, suspend) {
+  try { await api("/action", { method: "POST",
+        body: JSON.stringify({ action, user, suspend }) });
+    lookup();
+  } catch (e) { alert(e.message); }
+}
+
+function deactivate(user) {
+  // Typed confirmation, matching tools/moderate.sh. This is the one action
+  // with no way back (§7.6), so it should be hard to do by accident.
+  const typed = prompt(
+    "Deactivating " + user + " CANNOT be undone.\n\n" +
+    "Suspending is reversible and is usually the right first step.\n\n" +
+    "Type the full user id to confirm:");
+  if (typed !== user) return;
+  act("deactivate", user);
+}
+
+function renderInvites(d) {
+  const ts = d.registration_tokens || [], now = Date.now();
+  if (!ts.length) { $("invites").innerHTML =
+    '<div class="row muted">No invite codes exist.</div>'; return; }
+  const rows = ts.map(t => {
+    const spent = t.uses_allowed != null && t.completed >= t.uses_allowed;
+    const expired = t.expiry_time != null && t.expiry_time < now;
+    const live = !spent && !expired;
+    const pretty = t.token.length === 12 ? t.token.match(/.{4}/g).join("-") : t.token;
+    return { live, html: `
+      <div class="row flex">
+        <div class="grow">
+          <span class="mono">${esc(pretty)}</span>
+          <div class="muted">used ${esc(t.completed)}/${esc(t.uses_allowed)} ·
+            ${t.expiry_time ? "expires " + new Date(t.expiry_time).toLocaleDateString() : "no expiry"}</div>
+        </div>
+        ${live ? `<span class="pill ok">LIVE</span>
+          <button class="danger" onclick="revoke('${esc(t.token)}')">Revoke</button>`
+               : `<span class="pill">${spent ? "spent" : "expired"}</span>`}
+      </div>` };
+  });
+  $("invites").innerHTML = rows.sort((a, b) => b.live - a.live)
+    .map(r => r.html).join("");
+}
+
+async function revoke(code) {
+  if (!confirm("Revoke " + code + "? It stops working immediately.")) return;
+  try { await api("/action", { method: "POST",
+        body: JSON.stringify({ action: "revoke", code }) });
+    renderInvites(await api("/invites"));
+  } catch (e) { alert(e.message); }
+}
+
+if (tok) start(); else { $("login").classList.remove("hide"); }
+</script>
