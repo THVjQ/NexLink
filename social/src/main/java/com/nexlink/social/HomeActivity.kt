@@ -442,6 +442,9 @@ class HomeActivity : AppCompatActivity() {
                 add("Sign in" to { signIn.launch(SignInActivity.intent(this@HomeActivity)) })
                 return@buildList
             }
+            // §9.5 — first, because inviting someone is the only item here a
+            // user has a reason to open twice.
+            add("Invite someone" to { startActivity(InviteActivity.intent(this@HomeActivity)) })
             add("Verify this device" to { startActivity(VerifyActivity.intent(this@HomeActivity)) })
             add("Your devices" to { startActivity(DevicesActivity.intent(this@HomeActivity)) })
             add("Blocked people" to { startActivity(BlockedActivity.intent(this@HomeActivity)) })

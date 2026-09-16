@@ -330,6 +330,74 @@ Two things follow, and both are now done:
 
 ---
 
+## 9.5.1 User-issued invites — built 2026-09-16
+
+§9.5 stood written and unbuilt on the argument that nothing was being delegated
+yet. The operator asked for delegation, so it is built.
+
+**Quota: none.** The operator chose unlimited invites over the earned quotas in
+the table above. The cost is stated plainly rather than buried: with no cap, a
+single compromised or careless account becomes open registration, and §9.1's
+cost argument stops holding at that moment. The mitigations that remain are the
+record (below) and the operator's ability to revoke tokens and suspend an
+account — not prevention. §9.5's table stays as the specification for the day
+that trade stops being acceptable; re-imposing it is a config value, not a
+rewrite.
+
+There *is* a burst guard — 30 per hour per user — which is **not** a quota. It
+exists so a stuck client or a loop cannot fill `registration_tokens`; a person
+inviting people by hand will never reach it.
+
+### Why a Synapse module rather than a service
+
+Minting a registration token needs Synapse **admin** credentials. A phone can
+never hold those: an admin token reads every room's metadata and can deactivate
+any account. So the mint has to happen somewhere the user cannot reach.
+
+The obvious shape is a small service beside Synapse. The deciding constraint was
+routing: public routing here is **per-hostname in the Cloudflare dashboard**
+(§26.5.2), so a new service means a new hostname, a new certificate path, and a
+new piece of public attack surface whose whole job is creating accounts. A
+module is served by Synapse itself on a host already routed and already TLS'd,
+and `get_user_by_req` authenticates the caller through the same code path as
+every other endpoint. Nothing new is exposed and no authentication is
+re-implemented.
+
+`POST /_synapse/client/nexlink/invite` → `{code, formatted, expires_at}`.
+
+### The coupling, stated
+
+`registration_tokens` is an **internal** Synapse table, not a public interface.
+The module writes to it directly rather than calling the admin API, so that no
+admin token has to exist in configuration for the module to leak. The table has
+been stable since Synapse 1.35 and its shape was verified against 1.160 before
+deploying — but an upstream schema change will break this, and that is the price
+of not keeping an admin credential on disk.
+
+### The record
+
+Every issuance appends `{issuer, code_sha256, issued_at, expires_at}` to
+`/data/nexlink-invites.jsonl`. **The raw code is never written** — §29.1 already
+requires that of the operator CLI, and a file of live invite codes is a file of
+account-creation credentials. With no quota in force, this record *is* the
+accountability: it is how "where did this account come from" gets answered, and
+how one person's invites get revoked as a group.
+
+### Deployment
+
+Two changes on Willard, both reversible:
+
+1. `PYTHONPATH=/data` on the Synapse service (an `app.update`, done
+   2026-09-16 — inert on its own).
+2. A `modules:` block in `homeserver.yaml` naming
+   `nexlink_invites.NexLinkInvites`, plus the module file at `/data`.
+
+Disabling is deleting the block and restarting. **Codes already issued keep
+working** — they are ordinary registration tokens, and nothing about redemption
+goes through the module.
+
+---
+
 ## 9.8 Operator invite issuance
 
 The operator needs a path that does not depend on the app being installed:

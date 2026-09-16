@@ -988,6 +988,11 @@ class RustSocialSession private constructor(
     private val _devices = MutableStateFlow<List<DeviceInfo>>(emptyList())
     override fun devices(): Flow<List<DeviceInfo>> = _devices.asStateFlow()
 
+    /** §9.5 — issuing an invite, via the Synapse module that holds the admin rights. */
+    fun inviteIssuer(): com.nexlink.social.core.InviteIssuer =
+        com.nexlink.social.core.InviteIssuer(
+            client.session().homeserverUrl, client.session().accessToken)
+
     /** §8.6 — the SDK has no device list, so this goes to the raw C-S API. */
     fun deviceManager(): DeviceManager =
         DeviceManager(client.session().homeserverUrl, client.session().accessToken)
