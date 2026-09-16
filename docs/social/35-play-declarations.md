@@ -165,6 +165,36 @@ Required by Play for any app with accounts. Point it at the public deletion page
 
 ---
 
+## App access — the reviewer needs a way in
+
+Play asks whether any functionality is restricted. **It is: the app is
+invite-only**, so a reviewer who installs it cannot create an account and will
+reject the submission as untestable. Provide these under
+*App content → App access → All or some functionality is restricted*:
+
+| Field | Value |
+|---|---|
+| Instructions | Open the app, choose **Sign in** (not "I have an invite code"), and use the username and password below. |
+| Username | `playreview` |
+| Password | (the demo password — not written in this repository, which is public) |
+
+Notes for whoever fills the form in:
+
+- **The username is `playreview`, not the full address.** A Matrix address
+  (`@playreview:nexlink.thvjq.com.au`) also works — the sign-in screen accepts
+  either since §6.x — but the short form is what to put in the box.
+- The account has an **invitation waiting** in a room called "Welcome", so the
+  reviewer lands on something rather than an empty inbox. Accepting it and
+  sending a message exercises the main flow.
+- **Send it a message or two from a real device before submitting.** Messages
+  are end-to-end encrypted, so they cannot be seeded from the server — a
+  conversation with actual content has to come from a signed-in client.
+- It is an ordinary user account with no special rights. Deactivate it after
+  review (§32.3) or leave it; it can issue invites like any account (§9.5.1),
+  which is worth knowing given there is no quota.
+
+---
+
 ## Release details
 
 | | |
