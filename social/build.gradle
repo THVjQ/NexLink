@@ -41,6 +41,22 @@ android {
         manifestPlaceholders = [
             nexlinkBridgePermission: 'com.thvjq.nexlink.permission.SOCIAL_BRIDGE'
         ]
+
+        // §33 — a debug APK for a person to install, rather than for adb.
+        //
+        // The SDK's Rust libraries are built for four ABIs and the debug APK is
+        // ~247 MB because of it; arm64-v8a alone is ~70 MB. That difference is
+        // the difference between a build someone can be sent and one they
+        // cannot.
+        //
+        //     ./gradlew :social:assembleDebug -Pabi=arm64-v8a
+        //
+        // Opt-in on purpose: a default-filtered build would silently produce an
+        // APK that will not install on some phone nobody thought to check, and
+        // "it just fails on that handset" is a bad trade for a smaller file.
+        if (project.hasProperty('abi')) {
+            ndk { abiFilters project.property('abi').split(',') }
+        }
     }
 
     signingConfigs {
