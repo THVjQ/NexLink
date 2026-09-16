@@ -14,6 +14,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import com.nexlink.social.core.session.MatrixUsername
 import com.nexlink.social.ui.chrome.Chrome
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -97,7 +98,9 @@ class CreateAccountActivity : AppCompatActivity() {
         root.removeAllViews()
         root.addView(text(
             "Your username is permanent — it can't be changed later, because " +
-            "changing it would let someone impersonate you.",
+            "changing it would let someone impersonate you.\n\n" +
+            "Lowercase letters, numbers, dots, dashes and underscores. Capitals " +
+            "are folded down: a Matrix address cannot contain them.",
             14f, UiR.color.social_muted))
         root.addView(gap(12))
 
@@ -114,7 +117,7 @@ class CreateAccountActivity : AppCompatActivity() {
             isAllCaps = false
             layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = dp(16) }
             setOnClickListener {
-                user = u.text.toString().trim().lowercase()
+                user = MatrixUsername.normalise(u.text.toString())
                 pass = p.text.toString()
                 code = InviteCode.normalise(c.text.toString())
                 start()

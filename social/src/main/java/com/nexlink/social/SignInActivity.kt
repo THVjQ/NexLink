@@ -12,6 +12,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import com.nexlink.social.core.session.MatrixUsername
 import com.nexlink.social.ui.chrome.Chrome
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -85,7 +86,7 @@ class SignInActivity : AppCompatActivity() {
         })
 
         go.setOnClickListener {
-            val u = user.text.toString().trim()
+            val u = normaliseUsername(user.text.toString())
             val p = pass.text.toString()
             if (u.isEmpty() || p.isEmpty()) { status.text = "Enter your username and password."; return@setOnClickListener }
             go.isEnabled = false
@@ -96,10 +97,48 @@ class SignInActivity : AppCompatActivity() {
                     setResult(Activity.RESULT_OK); finish()
                 } else {
                     // §14.2.2's principle applied to sign-in: say what happened.
-                    status.text = r.exceptionOrNull()?.message ?: "Sign-in failed."
+                    status.text = explain(r.exceptionOrNull())
                     go.isEnabled = true
                 }
             }
+        }
+    }
+
+    /**
+     * People type their address, not their localpart.
+     *
+     * The server stores `thvjq`; someone reading their own ID off the app types
+     * `@thvjq:nexlink.thvjq.com.au`, or just `@thvjq`, and both used to be sent
+     * verbatim. Synapse then logged *"Attempted to login as @thvjq but they do
+     * not exist"* and answered 403 — which the screen reported as though the
+     * password were wrong. Observed on the operator's own first sign-in.
+     *
+     * Capitals are folded for the same reason: a Matrix localpart cannot
+     * contain them, so `THVjQ` can only ever be a display name, and rejecting
+     * it teaches nothing.
+     */
+    internal fun normaliseUsername(raw: String): String = MatrixUsername.normalise(raw)
+
+    /**
+     * §14.2.2 — say what happened, and what to do about it.
+     *
+     * The case that matters is Synapse's login rate limit (`rc_login.account`,
+     * one attempt per 20 seconds). A second try straight after a *successful*
+     * sign-in gets a 429, and the raw message reads like a server fault rather
+     * than "wait a moment" — so someone who mistypes once and immediately
+     * retries concludes their password is wrong when it is not.
+     */
+    internal fun explain(e: Throwable?): String {
+        val m = e?.message ?: return "Sign-in failed."
+        return when {
+            m.contains("M_LIMIT_EXCEEDED", true) || m.contains("Too Many Requests", true) ||
+                m.contains("429") ->
+                "Too many attempts just now. Wait about 30 seconds and try again — " +
+                    "this is the server's rate limit, not your password."
+            m.contains("M_FORBIDDEN", true) || m.contains("Invalid username or password", true) ->
+                "That username or password was not accepted. Your username is the " +
+                    "short name, without the @ and without the server after it."
+            else -> m
         }
     }
 
