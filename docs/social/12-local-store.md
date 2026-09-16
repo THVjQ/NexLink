@@ -399,3 +399,55 @@ user's conversations are gone.
   controls.
 - Is per-conversation retention worth the complexity over a global setting?
   **Leaning no** for the first release.
+
+---
+
+## 12.4.7 Sign-out left the crypto store behind, and the app could never sign in again
+
+Reported 2026-09-16 by the operator, on the second sign-in to their own account:
+
+```
+failed to read or write to the crypto store
+the account in the store doesn't match the account in the constructor:
+expected @thvjq:…:JRWDBPLIJJ, got @thvjq:…:DIDOUYBDVB
+OlmError(Store(MismatchedAccount{…}))
+```
+
+A login issues a **new** device id. The SDK opens the SQLite crypto store at a
+fixed path and refuses it if it belongs to a different device — correctly, since
+silently adopting another device's Olm account would be far worse. So a store
+that outlives its sign-out makes the app **permanently unable to sign in**, and
+there is no way out from inside it: the user has to find Clear Storage in
+Android's settings, which nothing in the app mentions.
+
+**Two causes, both ours.**
+
+1. `signOut` called `stopSync()`, which stops the sync loop and leaves the
+   uniffi `Client` alive — and a live `Client` holds the store open. The delete
+   that followed unlinked files the SDK then recreated. There is now a
+   `shutdown()` that destroys the client first.
+
+2. The delete was `File(path).deleteRecursively()` inside a `runCatching` that
+   ignored the result. `deleteRecursively` returns **false** when any single
+   file resists; discarding that return made a *partial* delete look like a
+   successful one, and a partial delete leaves a crypto store at exactly the
+   path the next sign-in opens.
+
+**The fix is a rename, not a better delete.** `StoreWipe` moves the directory
+aside and *then* deletes it. A rename is atomic and cannot half-happen: once it
+returns, nothing can find the old store at the live path, whether or not the
+bytes have gone. A later `sweep()` clears what the delete could not, so a
+failing delete costs disk rather than costing the user their account.
+
+**And the store is wiped on every sign-in, not only on sign-out.** A sign-in is
+only reachable when signed out, so any store present is stale by definition.
+Wiping there costs nothing and moves the whole class of failure from *unlikely*
+to *unreachable* — which matters because the failure mode is total and silent.
+
+Five unit tests in `StoreWipeTest`, including a directory made read-only so the
+delete genuinely fails part-way; that test was confirmed to fail against the old
+delete-in-place code. Verified on the handset afterwards: `files/matrix` is gone
+after sign-out, and signing straight back in — typing the full address
+`@thvjq:nexlink.thvjq.com.au`, the form that also used to 403 (§6.x) — lands on
+the inbox.
+

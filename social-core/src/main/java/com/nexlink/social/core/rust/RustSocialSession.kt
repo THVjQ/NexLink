@@ -225,6 +225,24 @@ class RustSocialSession private constructor(
         syncService.stop()
     }
 
+    /**
+     * Stop syncing **and let go of the store**.
+     *
+     * [stopSync] stops the sync loop but leaves the uniffi `Client` alive, and
+     * a live `Client` holds the SQLite crypto store open. Sign-out then deleted
+     * a directory the SDK was still writing to, which on Android succeeds at
+     * the syscall level and achieves nothing useful: the files come back. See
+     * §12.4.7 — this is what produced `MismatchedAccount` on the next sign-in.
+     */
+    suspend fun shutdown() {
+        runCatching { stopSync() }
+        synchronized(timelines) {
+            timelines.values.forEach { runCatching { it.close() } }
+            timelines.clear()
+        }
+        runCatching { client.destroy() }
+    }
+
     /** The last published state, for callers that need it synchronously. */
     fun currentState(): SessionState = _state.value
 

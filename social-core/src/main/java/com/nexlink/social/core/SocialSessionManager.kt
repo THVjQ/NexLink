@@ -44,6 +44,22 @@ class SocialSessionManager(private val context: Context) {
         runCatching {
             SocialPlatform.init()
             _state.value = SessionState.Restoring
+            // §12.4.7 — a fresh sign-in starts from an empty store, always.
+            //
+            // A login issues a NEW device id, and the SDK refuses to open a
+            // crypto store belonging to a different one:
+            //
+            //   the account in the store doesn't match the account in the
+            //   constructor: expected …:JRWDBPLIJJ, got …:DIDOUYBDVB
+            //
+            // Sign-out is supposed to have cleared it, and when that fails the
+            // app becomes **permanently unable to sign in** with no way out
+            // from inside it — the user has to find Clear Storage in Android's
+            // settings, which nothing tells them. Wiping here costs nothing (a
+            // sign-in is only reachable when signed out, so any store present
+            // is by definition stale) and makes the whole class of failure
+            // unreachable rather than merely unlikely.
+            wipeStore()
             val (data, cache) = paths()
             val s = RustSocialSession.login(
                 homeserverUrl = homeserverUrl,
@@ -134,11 +150,30 @@ class SocialSessionManager(private val context: Context) {
      * §20.5.1 makes the same point about the web client.
      */
     suspend fun signOut() {
-        runCatching { session?.stopSync() }
+        // shutdown(), not stopSync(): the latter leaves the uniffi Client alive
+        // and a live Client holds the store open, so the delete below deleted
+        // files the SDK promptly recreated (§12.4.7).
+        runCatching { session?.shutdown() }
         session = null
         store.clear()
-        val (data, cache) = paths()
-        runCatching { File(data).deleteRecursively(); File(cache).deleteRecursively() }
+        wipeStore()
         _state.value = SessionState.SignedOut
+    }
+
+    /**
+     * Remove the SDK's store — by **renaming first**, then deleting.
+     *
+     * `deleteRecursively()` walks the tree and returns `false` if any single
+     * file resists, and the previous code wrapped that in `runCatching`, so a
+     * partial delete reported success and left a crypto store behind. A rename
+     * is atomic and cannot half-happen: the moment it returns, nothing can find
+     * the old store at the path a new session will use, whether or not the
+     * bytes have gone yet. The delete that follows is then best-effort and its
+     * failure is survivable.
+     */
+    private fun wipeStore() {
+        val (data, cache) = paths()
+        StoreWipe.wipe(listOf(File(data), File(cache)))
+        StoreWipe.sweep(listOf(context.filesDir, context.cacheDir))
     }
 }

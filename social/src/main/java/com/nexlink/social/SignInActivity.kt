@@ -135,6 +135,13 @@ class SignInActivity : AppCompatActivity() {
                 m.contains("429") ->
                 "Too many attempts just now. Wait about 30 seconds and try again — " +
                     "this is the server's rate limit, not your password."
+            // §12.4.7. Unreachable once the store is wiped on every sign-in —
+            // but if it ever comes back, the escape hatch is in Android's
+            // settings and nothing else would tell the user that.
+            m.contains("MismatchedAccount", true) || m.contains("crypto store", true) ->
+                "This phone still had data from a previous sign-in. It is cleared " +
+                    "automatically now, so try once more. If it keeps happening, " +
+                    "clear this app's storage in Android settings and sign in again."
             m.contains("M_FORBIDDEN", true) || m.contains("Invalid username or password", true) ->
                 "That username or password was not accepted. Your username is the " +
                     "short name, without the @ and without the server after it."
