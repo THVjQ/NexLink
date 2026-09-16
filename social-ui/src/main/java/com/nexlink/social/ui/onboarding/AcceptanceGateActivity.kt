@@ -346,9 +346,28 @@ class AcceptanceGateActivity : AppCompatActivity() {
      * (§33.4) replaces this with the real registration call, which redeems the
      * token and writes the `acceptance_record` (§9.6.2) server-side.
      */
+    /**
+     * Open the document — §4.7.
+     *
+     * This was a toast reading *"document not yet written"* for four days while
+     * the screen above it asked the user to read both documents. They were
+     * written the whole time; they were simply never shipped. §9.6.4 records
+     * what that cost: the rule requiring each document to be opened before its
+     * checkbox enabled had to be dropped, because it was gating consent on
+     * opening something that did not exist.
+     *
+     * :social-ui cannot reference an activity in :social (§10.4 — the
+     * dependency points the other way), so the host supplies the route. If none
+     * is set, this says so rather than pretending: a legal document that
+     * silently fails to open is the failure this replaced.
+     */
     private fun openPolicy(which: String) {
-        toast("$which ${if (which == POLICY_TERMS) PolicyVersions.TERMS else PolicyVersions.PRIVACY} " +
-              "— document not yet written (§4.7, phase 5)")
+        val open = policyOpener
+        if (open == null) {
+            toast("Couldn't open the document on this screen.")
+            return
+        }
+        open(this, which == POLICY_PRIVACY)
     }
 
     private fun finishGate() {
@@ -371,6 +390,15 @@ class AcceptanceGateActivity : AppCompatActivity() {
     }
 
     companion object {
+        /**
+         * How to show a policy document. Set by the application (:social) at
+         * startup; :social-ui must not know the activity exists (§10.4).
+         *
+         * @param privacy true for the Privacy Policy, false for the Terms.
+         */
+        @JvmStatic
+        var policyOpener: ((android.content.Context, Boolean) -> Unit)? = null
+
         const val EXTRA_INVITE_CODE = "invite_code"
         const val EXTRA_AGE_CONFIRMED = "age_confirmed"
         const val EXTRA_TERMS_VERSION = "terms_version"

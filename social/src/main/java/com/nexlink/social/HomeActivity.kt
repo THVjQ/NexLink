@@ -458,6 +458,15 @@ class HomeActivity : AppCompatActivity() {
             // The same link NexLink carries in its settings (§10.5 — two
             // products, one person paying for both). Above Sign out, because
             // Sign out stays last.
+            // §4.7 — reachable after signing up, not only inside the gate.
+            // Someone who accepted terms six months ago must still be able to
+            // read what they accepted.
+            add("Terms of Service" to {
+                startActivity(PolicyActivity.intent(this@HomeActivity, PolicyActivity.DOC_TERMS))
+            })
+            add("Privacy Policy" to {
+                startActivity(PolicyActivity.intent(this@HomeActivity, PolicyActivity.DOC_PRIVACY))
+            })
             add("Buy me a coffee" to { openCoffee() })
             add("Sign out" to { confirmSignOut() })
         }

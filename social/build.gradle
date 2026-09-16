@@ -21,6 +21,22 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
+/**
+ * §4.7 — the legal documents ship inside the app, copied from the one place
+ * they are written.
+ *
+ * They are NOT duplicated into src/: a second copy is a copy that drifts, and
+ * the failure mode is the worst kind — an app showing a policy that is not the
+ * policy. Generated into the build directory and added as an asset source, so
+ * the only editable copy stays docs/social/legal/.
+ */
+tasks.register('copyLegalDocs', Copy) {
+    from rootProject.file('docs/social/legal')
+    include 'terms-of-service.md', 'privacy-policy.md'
+    into layout.buildDirectory.dir('generated/legalAssets/legal')
+}
+tasks.named('preBuild') { dependsOn 'copyLegalDocs' }
+
 android {
     namespace 'com.nexlink.social'
     compileSdk libs.versions.compileSdk.get().toInteger()
@@ -66,6 +82,12 @@ android {
             keyAlias      keystoreProperties['keyAlias'] ?: 'nexlink'
             keyPassword   keystoreProperties['keyPassword']
         }
+    }
+
+    sourceSets {
+        // Not a GString: an interpolated path here silently resolves to
+        // nothing and the assets vanish from the APK without any error at all.
+        main { assets.srcDirs += layout.buildDirectory.dir('generated/legalAssets').get().asFile }
     }
 
     buildTypes {

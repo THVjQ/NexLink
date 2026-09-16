@@ -32,6 +32,15 @@ class SocialApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // §4.7 — the acceptance gate lives in :social-ui and cannot see this
+        // activity, so the route is handed to it rather than imported.
+        com.nexlink.social.ui.onboarding.AcceptanceGateActivity.policyOpener =
+            { ctx, privacy ->
+                ctx.startActivity(PolicyActivity.intent(
+                    ctx,
+                    if (privacy) PolicyActivity.DOC_PRIVACY else PolicyActivity.DOC_TERMS,
+                ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
         SocialPlatform.init()
         sessions = SocialSessionManager(this)
         // §19.2 — register the self-managed phone account before any call is

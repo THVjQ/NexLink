@@ -96,6 +96,11 @@
             android:label="@string/app_name" />
 
         <activity
+            android:name=".PolicyActivity"
+            android:exported="false"
+            android:label="@string/app_name" />
+
+        <activity
             android:name=".InviteActivity"
             android:exported="false"
             android:label="@string/app_name" />
