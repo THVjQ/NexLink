@@ -48,6 +48,9 @@ logger = logging.getLogger(__name__)
 # MUST stay identical to InviteCode.ALPHABET in :social-core, or the app will
 # refuse a code the server considers valid.
 ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+# Must match InviteIssuer.PATH in :social-core.
+PATH = "/_matrix/nexlink/v1/invite"
 CODE_LENGTH = 12
 
 DEFAULT_VALID_DAYS = 14
@@ -274,9 +277,26 @@ class NexLinkInvites:
     def __init__(self, config: Dict[str, Any], api: ModuleApi):
         self._api = api
         self._config = config
-        api.register_web_resource(
-            "/_synapse/client/nexlink/invite", _InviteResource(api, config)
-        )
+        # **Under /_matrix/, as a sibling of Synapse's own trees.**
+        #
+        # Routing decided this, and two wrong answers came first:
+        #
+        #   /_synapse/client/nexlink/invite — works perfectly on localhost and
+        #     returns 404 from a phone. The Cloudflare tunnel routes `/_matrix/`
+        #     to Synapse and sends everything else to a catch-all that lands on
+        #     Element Web (infra/runbooks/cloudflare-tunnel-routes.md), so the
+        #     request never arrived. The same trap DeviceManager documents.
+        #
+        #   /_matrix/client/unstable/com.thvjq.nexlink/invite — the *correct*
+        #     namespace for a custom Client-Server API, and it 404s even on
+        #     localhost: Synapse's own JsonResource owns `/_matrix/client` and
+        #     answers for every child of it, so a module cannot nest inside.
+        #     The "Attaching …" log line appears and means nothing.
+        #
+        # `/_matrix/nexlink/` is a sibling of client/federation/media/key, which
+        # Synapse does not claim, and it is inside the one prefix the tunnel
+        # already sends here. No dashboard change, and nothing to forget later.
+        api.register_web_resource(PATH, _InviteResource(api, config))
         logger.info("nexlink: user-issued invites registered")
 
     @staticmethod

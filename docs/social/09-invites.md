@@ -363,7 +363,35 @@ and `get_user_by_req` authenticates the caller through the same code path as
 every other endpoint. Nothing new is exposed and no authentication is
 re-implemented.
 
-`POST /_synapse/client/nexlink/invite` → `{code, formatted, expires_at}`.
+`POST /_matrix/nexlink/v1/invite` → `{code, formatted, expires_at}`;
+`GET` lists the caller's own; `DELETE ?code=` revokes an unredeemed one.
+
+### 9.5.2 The path took three attempts, and routing decided it
+
+Worth writing down, because the first two both *looked* right:
+
+1. **`/_synapse/client/nexlink/invite`** — the natural home for a module's
+   endpoint, and it works perfectly on localhost. From a phone it returns
+   **404**: the Cloudflare tunnel routes `/_matrix/` to Synapse and sends
+   everything else to a catch-all that lands on Element Web
+   (`infra/runbooks/cloudflare-tunnel-routes.md`), so the request never arrived.
+   The same trap `DeviceManager` documents for a trailing slash. Fixing it in
+   the dashboard was possible but means a route nobody diffs — §2.1's drift
+   argument — and a step the operator has to remember on every rebuild.
+
+2. **`/_matrix/client/unstable/com.thvjq.nexlink/invite`** — the *correct*
+   namespace for a custom Client-Server API. It 404s **even on localhost**:
+   Synapse's own `JsonResource` owns `/_matrix/client` and answers for every
+   child of it, so a module cannot nest inside. `register_web_resource` still
+   logs `Attaching …`, which means the log line is not evidence of anything.
+
+3. **`/_matrix/nexlink/v1/invite`** — a sibling of `client`, `federation`,
+   `media` and `key`, which Synapse does not claim, inside the one prefix the
+   tunnel already sends here. Verified 401 unauthenticated from the public
+   internet and end-to-end from the handset.
+
+**Verify by request, never by reading the config** (§26.5.2). Every one of those
+three was "obviously correct" until it was asked.
 
 ### The coupling, stated
 
@@ -391,6 +419,10 @@ Two changes on Willard, both reversible:
    2026-09-16 — inert on its own).
 2. A `modules:` block in `homeserver.yaml` naming
    `nexlink_invites.NexLinkInvites`, plus the module file at `/data`.
+
+**Both done 2026-09-16; the feature is live.** Verified end to end: a code
+created from the phone appears in `registration_tokens`, lists back under
+"Waiting to be used", and revoking it from the phone removes the row.
 
 Disabling is deleting the block and restarting. **Codes already issued keep
 working** — they are ordinary registration tokens, and nothing about redemption

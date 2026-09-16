@@ -134,6 +134,15 @@ class InviteIssuer(
     }
 
     companion object {
-        const val PATH = "/_synapse/client/nexlink/invite"
+        /**
+         * A sibling of Synapse's own `/_matrix/` trees. `/_synapse/...` is not
+         * routed publicly (404 from a phone, fine on localhost), and
+         * `/_matrix/client/unstable/...` — the tidier namespace — 404s even on
+         * localhost because Synapse's own resource owns every child of
+         * `/_matrix/client`. See the module for the full note.
+         *
+         * Must match PATH in infra/synapse-modules/nexlink_invites.py.
+         */
+        const val PATH = "/_matrix/nexlink/v1/invite"
     }
 }
