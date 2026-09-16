@@ -76,6 +76,7 @@ class NewChatActivity : AppCompatActivity() {
             hint = "username"
             setText(query)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            minHeight = dp(48)      // §14.10 — measured at 45dp on hardware
         }
         root.addView(field)
 
@@ -98,6 +99,7 @@ class NewChatActivity : AppCompatActivity() {
             }
             val nameField = EditText(this).apply {
                 hint = "Group name"; setText(groupName)
+                minHeight = dp(48)  // §14.10, same as the username field
             }
             root.addView(nameField)
             root.addView(Button(this).apply {

@@ -66,6 +66,7 @@ class SearchActivity : AppCompatActivity() {
             hint = "Search messages"
             inputType = InputType.TYPE_CLASS_TEXT
             setText(query)
+            minHeight = dp(48)      // §14.10 — measured at 45dp on hardware
         }
         root.addView(field)
 

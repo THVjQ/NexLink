@@ -460,9 +460,48 @@ the inbox card and rows, the overflow menu, day markers, message grouping, the
 squared speaker-side corner, right-aligned in-bubble timestamps, the composer
 above a raised keyboard, and the floating button clear of the gesture bar.
 
-**Still not seen on hardware:** an *incoming* bubble and its sender name (the
-second handset was not connected, and the test room has no messages from anyone
-else), the stacked composer at font scale 1.8, and a re-run of
-`tools/a11y-audit.py` on every screen. The two-device harnesses were updated for
-the moved controls (`HOME_RE`/`SIGNED_OUT_RE`, `open_home_menu`) but have not
-been run since.
+### 14.12.1 Font scale and the a11y sweep — 2026-09-16
+
+**Font scale 1.8 passes.** The stacked composer does what §14.10 designed it to
+do: the input takes a full-width line of its own and the attach and send
+controls sit beneath it. The title bar scales and ellipsises — the inbox
+subtitle becomes `@call190359:nexlink.t…` rather than wrapping or clipping — and
+bubbles re-wrap against the cap. Nothing is cut off on either screen.
+
+**`tools/a11y-audit.py` run on all nine reachable screens** (inbox, conversation,
+search, new conversation, verify, devices, blocked, export, storage), each
+audited twice — once as opened and once scrolled to the end, per the clipping
+trap in §14.10.1.
+
+*Content descriptions: clean everywhere.* Every clickable element on every
+screen carries text or a description, which is the drawn-icon decision (§14.12)
+paying off — an emoji control would have had to earn that one control at a time.
+
+*Touch targets: four real failures, all now fixed.*
+
+| control | was | why |
+|---|---|---|
+| Search field | 45dp | a bare `EditText` is as tall as its text; no minimum was stated |
+| New conversation username (and group name) | 45dp | same |
+| Composer input | 44dp | **introduced by the rebuild** |
+| Composer send button | 44dp | **introduced by the rebuild** |
+
+The last two are the instructive ones: 44dp is the *iOS* minimum. Android's is
+48, §14.10 says 48, and the number still got written as 44 — which is exactly
+the kind of slip that survives review and dies on a measurement.
+
+*Two findings were the documented false positive*, and both were proved so
+rather than assumed: Storage's "Unlimited" radio reported 30dp before scrolling
+and passed after, and Devices' "Remove" reported 47dp only after scrolling and
+**stayed at 47dp once an explicit `minHeight = dp(48)` was added** — a number
+that does not move when the source changes is the viewport clipping the bounds,
+not the control being small. The explicit minimum was kept anyway, so the next
+audit does not have to re-derive that.
+
+**Still not seen on hardware:** an *incoming* bubble and its sender name — this
+needs a second party, and with one handset that means an Element Web session,
+which needs an account this session was not permitted to create. The three
+signed-out screens (sign in, create account, restore from backup) cannot be
+audited without signing out, and `am start` cannot reach them because they are
+correctly not exported. The two-device harnesses were updated for the moved
+controls (`HOME_RE`/`SIGNED_OUT_RE`, `open_home_menu`) but have not been run.

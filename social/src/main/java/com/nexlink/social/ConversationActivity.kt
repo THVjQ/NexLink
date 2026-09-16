@@ -262,7 +262,9 @@ class ConversationActivity : AppCompatActivity() {
             setHintTextColor(colour(UiR.color.social_muted))
             background = chrome.rounded(colour(UiR.color.social_surface2), 20f)
             setPadding(dp(16), dp(11), dp(16), dp(11))
-            minHeight = dp(44)
+            // §14.10 is 48dp, not 44 — 44 is the iOS figure, and using it here
+            // was a slip the handset caught.
+            minHeight = dp(48)
             layoutParams =
                 if (stacked) LinearLayout.LayoutParams(MATCH, WRAP)
                 else LinearLayout.LayoutParams(0, WRAP, 1f)
@@ -280,11 +282,10 @@ class ConversationActivity : AppCompatActivity() {
                 },
                 circular = true,
             )
-            layoutParams = LinearLayout.LayoutParams(dp(44), dp(44)).also {
+            layoutParams = LinearLayout.LayoutParams(dp(48), dp(48)).also {
                 it.marginStart = dp(6)
-                it.bottomMargin = dp(1)
             }
-            val p = dp(11)
+            val p = dp(13)
             setPadding(p, p, p, p)
         }
 

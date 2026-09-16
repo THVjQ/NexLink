@@ -107,6 +107,7 @@ class DevicesActivity : AppCompatActivity() {
             addView(Button(this@DevicesActivity).apply {
                 text = "Remove"
                 isAllCaps = false
+                minHeight = dp(48)      // §14.10 — measured at 47dp
                 setOnClickListener { confirmRemove(d) }
             })
         }
