@@ -1,87 +1,69 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Mirrors NexLink's palette (app/src/main/res/values/colors.xml) so the two apps
-  look like siblings. §10.7 wants this moved to :shared and consumed by both —
-  that is a separate, reviewable change, and doing it here would mean editing
-  :shared while it carries unrelated uncommitted work.
+  LIGHT THEME.
 
-  Prefixed `social_` so that if the two palettes ever DO land in one module, the
-  merge is a rename rather than a silent collision.
--->
-<!--
-  LIGHT THEME. Five colours here were darkened on 2026-09-12 because
-  tools/check-contrast.py found them below WCAG AA against social_bg — a §14.10
-  requirement that had never been checked. They were mirrored from NexLink's
-  iOS-like palette, which assumes a white background and a dark-mode-first user;
-  the phone this is developed on runs dark, so nobody saw it.
+  **Recoloured 2026-09-16.** The palette was a neutral iOS grey system — pure
+  #F2F2F7 ground, pure white cards, pure black text — and on a phone it read as
+  an unfinished wireframe rather than a product. Grey is not a neutral choice;
+  it is the absence of one.
 
-  Measured before -> after, against #F2F2F7:
+  Every neutral here is now biased a few degrees toward the accent's hue, which
+  is what makes a surface read as *chosen* rather than *defaulted*. The ground
+  is a cool off-white, the cards are white so they lift off it, and the text is
+  a very dark blue-black rather than #000000 — pure black on white is harsher
+  than any printed page and is the single loudest tell of an unstyled Android
+  app.
 
-    social_muted       2.92 -> 4.83   (the colour of nearly every explanatory line)
-    social_accent      3.67 -> 4.81
-    social_danger      3.51 -> 4.81
-    social_cannot_see  3.92 -> 4.81
-    social_can_see     4.19 -> 4.81
+  The accent is unchanged in role and slightly deepened: it has to carry white
+  text as a fill (see social_accent_fill) and still read as a link on the
+  ground.
 
-  Darkened in HSV so hue and saturation are unchanged and the palette still
-  reads as the same family. Targeted 4.8 rather than 4.5 so a later nudge does
-  not silently drop below the line. The dark theme already passed and is
-  untouched.
-
-  social_cannot_see and social_can_see are deliberately at the SAME ratio: §9.6.1
-  requires the two columns to carry equal visual weight, and fixing contrast
-  must not quietly make one of them louder than the other.
+  EVERY pair below is checked by tools/check-contrast.py in BOTH themes and
+  passes WCAG AA (§14.10). The previous palette's five AA failures were found by
+  that script and not by eye; do not add a colour here without adding its pair.
 -->
 <resources>
-    <color name="social_bg">#F2F2F7</color>
+    <!-- the screen behind everything -->
+    <color name="social_bg">#F4F6FB</color>
+    <!-- cards, rows, bars -->
     <color name="social_surface">#FFFFFF</color>
-    <color name="social_surface2">#F2F2F7</color>
-    <color name="social_surface3">#E5E5EA</color>
-    <color name="social_accent">#0166DA</color>
-    <color name="social_accent2">#4ca3ff</color>
-    <color name="social_text">#000000</color>
-    <color name="social_text2">#3C3C43</color>
-    <color name="social_muted">#6A6A6E</color>
-    <color name="social_divider">#C6C6C8</color>
-    <color name="social_danger">#BE3C40</color>
-    <!-- §9.6.1 screen 2: the two columns carry equal visual weight, so these
-         are deliberately the same saturation. Green-vs-red would editorialise. -->
-    <color name="social_cannot_see">#1C7A43</color>
-    <color name="social_can_see">#A45600</color>
-    <!--
-      MESSAGING CHROME (added 2026-09-15 with the §14 surface rebuild).
-
-      Everything below is a *role*, not a shade: `social_accent_fill` is "the
-      colour a filled control is painted", used by the send button, the unread
-      badge and your own message bubble alike. Naming them by role is what stops
-      the next change from picking a slightly different blue for each one, which
-      is how the first version ended up looking assembled rather than designed.
-
-      Every pair these form with text is in tools/check-contrast.py's PAIRS and
-      passes WCAG AA in BOTH themes (§14.10). `social_accent` itself is NOT used
-      as a fill: white on it measures 4.09:1 in the dark theme, which is why
-      `social_accent_fill` exists and is a shade darker there.
-    -->
-    <color name="social_accent_fill">#0166DA</color>
+    <!-- inputs, the composer field, a recessed row -->
+    <color name="social_surface2">#EDF1F8</color>
+    <!-- chips, day markers, the quietest fill -->
+    <color name="social_surface3">#DFE6F2</color>
+    <!-- links, selected state, text on a ground -->
+    <color name="social_accent">#1257D6</color>
+    <!-- the lighter end of the accent gradient -->
+    <color name="social_accent2">#3B82F6</color>
+    <!-- a FILLED control: send, unread badge, your own bubble -->
+    <color name="social_accent_fill">#1257D6</color>
+    <!-- text on any filled control -->
     <color name="social_on_accent_fill">#FFFFFF</color>
-    <!-- Timestamps inside your own bubble: legible, but quieter than the text. -->
-    <color name="social_on_accent_fill_meta">#E8F1FD</color>
+    <!-- the timestamp inside your own bubble -->
+    <color name="social_on_accent_fill_meta">#E4EEFE</color>
+    <!-- primary text -->
+    <color name="social_text">#0C1420</color>
+    <!-- secondary text — previews, body copy -->
+    <color name="social_text2">#2E3A4D</color>
+    <!-- captions, timestamps, explanatory lines -->
+    <color name="social_muted">#59657A</color>
+    <!-- hairlines. Decorative: see DECORATIVE in check-contrast.py -->
+    <color name="social_divider">#D5DDEB</color>
+    <!-- destructive and failed states -->
+    <color name="social_danger">#C2273D</color>
+    <!-- §9.6.1 'we cannot see' column -->
+    <color name="social_cannot_see">#12694A</color>
+    <!-- §9.6.1 'we can see' column — same weight, deliberately -->
+    <color name="social_can_see">#8A4B00</color>
+    <!-- the standing-warning card -->
+    <color name="social_banner_bg">#FFF3E0</color>
+    <!-- an incoming message -->
     <color name="social_bubble_theirs">#FFFFFF</color>
-    <color name="social_bubble_meta">#6A6A6E</color>
-    <!-- The inline warning card (no backup, no screen lock). Tinted rather than
-         red-filled: these are standing conditions the user may live with for a
-         while, and a full red block reads as an error that just happened. -->
-    <color name="social_banner_bg">#FFF4E5</color>
-
-    <!--
-      Avatar tints. Five, picked by hashing the display name, so the same person
-      keeps the same colour across the inbox and the timeline — that consistency
-      is most of what makes an initial read as an identity rather than a letter.
-      All five carry white at >= 4.5:1, so they are the same value in both
-      themes: a dark-theme variant would have to be lighter, which is exactly
-      the direction that breaks the text on them.
-    -->
+    <!-- the time under an incoming message -->
+    <color name="social_bubble_meta">#59657A</color>
+    <!-- the initial in an avatar -->
     <color name="social_on_avatar">#FFFFFF</color>
+    <!-- avatar tints, hashed from the name -->
     <color name="social_avatar1">#2C6BB0</color>
     <color name="social_avatar2">#7A4FA3</color>
     <color name="social_avatar3">#1F7A5C</color>

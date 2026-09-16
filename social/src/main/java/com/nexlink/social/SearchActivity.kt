@@ -37,6 +37,7 @@ import com.nexlink.social.ui.R as UiR
 class SearchActivity : AppCompatActivity() {
 
     private lateinit var root: LinearLayout
+    private lateinit var chrome: Chrome
     private var hits: List<MessageSearchHit> = emptyList()
     private var searched = false
 
@@ -46,8 +47,8 @@ class SearchActivity : AppCompatActivity() {
         // Chrome. It also takes the system-bar insets that padForSystemBars
         // used to take here, so a screen's last row still clears the gesture
         // bar (§14.10) — that is the one thing this replacement must not lose.
-        val page = Chrome(this).page("Search", onBack = { finish() },
-            horizontalPaddingDp = 20)
+        chrome = Chrome(this)
+        val page = chrome.page("Search", onBack = { finish() })
         root = page.content
         setContentView(page.root)
         render()
@@ -55,12 +56,10 @@ class SearchActivity : AppCompatActivity() {
 
     private fun render() {
         root.removeAllViews()
-        root.addView(text(
+        root.addView(chrome.note(
             "Searches messages on this phone. Anything sent before you added " +
             "this device isn't here — nobody can search your messages on the " +
-            "server, including us.",
-            13f, UiR.color.social_muted))
-        root.addView(gap(12))
+            "server, including us."))
 
         val field = EditText(this).apply {
             hint = "Search messages"
@@ -68,12 +67,17 @@ class SearchActivity : AppCompatActivity() {
             setText(query)
             minHeight = dp(48)      // §14.10 — measured at 45dp on hardware
         }
-        root.addView(field)
+        root.addView(field, LinearLayout.LayoutParams(MATCH, WRAP).apply {
+            marginStart = dp(12); marginEnd = dp(12)
+        })
 
         root.addView(android.widget.Button(this).apply {
             text = "Search"
             isAllCaps = false
-            layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = dp(8) }
+            tag = Chrome.PRIMARY
+            layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).apply {
+                topMargin = dp(8); marginStart = dp(12); marginEnd = dp(12)
+            }
             setOnClickListener {
                 query = field.text.toString().trim()
                 if (query.isEmpty()) return@setOnClickListener
@@ -83,10 +87,19 @@ class SearchActivity : AppCompatActivity() {
         })
 
         if (searched) {
-            root.addView(gap(12)); root.addView(divider()); root.addView(gap(8))
             if (hits.isEmpty()) {
-                root.addView(text("Nothing found on this device.", 14f, UiR.color.social_muted))
-            } else hits.forEach { root.addView(hitRow(it)) }
+                root.addView(chrome.emptyState("Nothing found",
+                    "No message on this device matches that."))
+            } else {
+                root.addView(chrome.sectionHeader(
+                    if (hits.size == 1) "1 RESULT" else "${hits.size} RESULTS"))
+                val card = chrome.card()
+                hits.forEachIndexed { i, h ->
+                    if (i > 0) card.addView(chrome.rowDivider(insetStartDp = 16))
+                    card.addView(hitRow(h))
+                }
+                root.addView(card)
+            }
         }
     }
 
@@ -105,8 +118,9 @@ class SearchActivity : AppCompatActivity() {
 
     private fun hitRow(h: MessageSearchHit): View = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding(0, dp(10), 0, dp(10))
+        setPadding(dp(16), dp(12), dp(16), dp(12))
         isClickable = true
+        background = chrome.ripple(null)
         addView(text(
             (h.senderDisplayName ?: h.sender.value) + " · " +
                 DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(h.timestamp)),

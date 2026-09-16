@@ -124,7 +124,7 @@ class VerifyActivity : AppCompatActivity() {
                 root.addView(body(
                     "Verified. Both devices now trust each other, and this one can " +
                     "read your history."))
-                root.addView(button("Done") { finish() })
+                root.addView(button("Done", primary = true) { finish() })
             }
             is VerificationStep.Cancelled -> {
                 root.addView(body(
@@ -152,7 +152,7 @@ class VerifyActivity : AppCompatActivity() {
                 "  ${req.deviceId}\n\n" +
                 "If this is not you, on a device you are holding right now, " +
                 "refuse it and change your password."))
-            root.addView(button("It's me — continue") {
+            root.addView(button("It's me — continue", primary = true) {
                 engaged = true; render()
                 lifecycleScope.launch {
                     runCatching { flow?.accept() }
@@ -186,7 +186,8 @@ class VerifyActivity : AppCompatActivity() {
             "them.\n\n" +
             "If they don't match, someone else is trying to add a device to " +
             "your account."))
-        root.addView(button(if (started) "Waiting for your other device…" else "Start") {
+        root.addView(button(if (started) "Waiting for your other device…" else "Start",
+            primary = !started) {
             if (started) return@button
             started = true; engaged = true; render()
             lifecycleScope.launch {
@@ -276,13 +277,20 @@ class VerifyActivity : AppCompatActivity() {
         setPadding(0, dp(6), 0, dp(6))
     }
 
-    private fun button(t: String, onTap: () -> Unit) = Button(this).apply {
-        text = t
-        isAllCaps = false
-        minHeight = dp(48)   // §14.10
-        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) }
-        setOnClickListener { onTap() }
-    }
+    /**
+     * @param primary the affirmative action. Exactly one per state — a screen
+     *   that offers "It's me" and "Refuse" with equal weight is asking the user
+     *   to make a security decision by coin toss.
+     */
+    private fun button(t: String, primary: Boolean = false, onTap: () -> Unit) =
+        Button(this).apply {
+            text = t
+            isAllCaps = false
+            if (primary) tag = Chrome.PRIMARY
+            minHeight = dp(48)   // §14.10
+            layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) }
+            setOnClickListener { onTap() }
+        }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 

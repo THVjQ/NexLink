@@ -104,6 +104,7 @@ class NewChatActivity : AppCompatActivity() {
             root.addView(nameField)
             root.addView(Button(this).apply {
                 text = "Create group"
+            tag = Chrome.PRIMARY
                 isAllCaps = false
                 layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = dp(8) }
                 setOnClickListener {
@@ -117,6 +118,7 @@ class NewChatActivity : AppCompatActivity() {
 
         root.addView(Button(this).apply {
             text = "Search"
+            tag = Chrome.PRIMARY
             isAllCaps = false
             layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = dp(8) }
             setOnClickListener {

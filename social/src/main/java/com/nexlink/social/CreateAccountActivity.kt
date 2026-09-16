@@ -110,6 +110,7 @@ class CreateAccountActivity : AppCompatActivity() {
 
         root.addView(Button(this).apply {
             text = "Continue"
+            tag = Chrome.PRIMARY
             isAllCaps = false
             layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = dp(16) }
             setOnClickListener {

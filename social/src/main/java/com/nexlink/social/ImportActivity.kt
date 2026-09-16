@@ -125,7 +125,8 @@ class ImportActivity : AppCompatActivity() {
         root.addView(statusView)
 
         go = Button(this).apply {
-            text = "Restore"; isAllCaps = false; isEnabled = false
+            text = "Restore"
+            tag = Chrome.PRIMARY; isAllCaps = false; isEnabled = false
             layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = dp(16) }
         }
         root.addView(go)

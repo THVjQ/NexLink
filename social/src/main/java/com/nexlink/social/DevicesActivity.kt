@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Typeface
 import android.os.Bundle
+import android.view.Gravity
 import android.text.InputType
 import android.util.TypedValue
 import android.view.View
@@ -42,6 +43,7 @@ import com.nexlink.social.ui.R as UiR
 class DevicesActivity : AppCompatActivity() {
 
     private lateinit var root: LinearLayout
+    private lateinit var chrome: Chrome
     private var devices: List<DeviceInfo> = emptyList()
     private var status: String? = null
 
@@ -51,8 +53,8 @@ class DevicesActivity : AppCompatActivity() {
         // Chrome. It also takes the system-bar insets that padForSystemBars
         // used to take here, so a screen's last row still clears the gesture
         // bar (§14.10) — that is the one thing this replacement must not lose.
-        val page = Chrome(this).page("Your devices", onBack = { finish() },
-            horizontalPaddingDp = 20)
+        chrome = Chrome(this)
+        val page = chrome.page("Your devices", onBack = { finish() })
         root = page.content
         setContentView(page.root)
         render()
@@ -78,40 +80,77 @@ class DevicesActivity : AppCompatActivity() {
 
     private fun render() {
         root.removeAllViews()
-        root.addView(text(
+        root.addView(chrome.note(
             "Every place you're signed in. If you see something here you don't " +
-            "recognise, remove it and change your password.",
-            14f, UiR.color.social_muted))
-        status?.let { root.addView(gap(8)); root.addView(text(it, 14f, UiR.color.social_accent)) }
-        root.addView(gap(12))
-        devices.forEach { root.addView(row(it)) }
+            "recognise, remove it and change your password."))
+        status?.let { root.addView(chrome.note(it).apply {
+            setTextColor(ContextCompat.getColor(this@DevicesActivity, UiR.color.social_accent))
+        }) }
+        if (devices.isEmpty()) return
+        val card = chrome.card()
+        devices.forEachIndexed { i, d ->
+            if (i > 0) card.addView(chrome.rowDivider(insetStartDp = 16))
+            card.addView(row(d))
+        }
+        root.addView(card)
     }
 
+    /**
+     * One signed-in device.
+     *
+     * **Remove is a trailing text action, not a full-width button.** It used to
+     * be the latter, which gave a list of five devices five large blue slabs —
+     * the destructive action was the loudest thing on a screen whose job is to
+     * let you *read* the list and spot the one you do not recognise.
+     */
     private fun row(d: DeviceInfo): View = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(0, dp(12), 0, dp(12))
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(16), dp(12), dp(8), dp(12))
 
-        val name = d.displayName ?: "Unnamed device"
-        addView(text(if (d.isCurrent) "$name — this device" else name,
-            17f, UiR.color.social_text, bold = true))
-        addView(text(d.id.value, 13f, UiR.color.social_muted))
-
-        d.lastSeenAt?.let {
-            val when_ = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
-                .format(Date(it))
-            val ip = d.lastSeenIp?.let { i -> " · $i" } ?: ""
-            addView(text("Last used $when_$ip", 13f, UiR.color.social_muted))
-        }
+        addView(LinearLayout(this@DevicesActivity).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, WRAP, 1f)
+            val name = d.displayName ?: "Unnamed device"
+            addView(text(name, 16f, UiR.color.social_text, bold = true))
+            if (d.isCurrent) addView(TextView(this@DevicesActivity).apply {
+                text = "This device"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(ContextCompat.getColor(
+                    this@DevicesActivity, UiR.color.social_on_accent_fill))
+                setPadding(dp(8), dp(2), dp(8), dp(3))
+                background = chrome.rounded(ContextCompat.getColor(
+                    this@DevicesActivity, UiR.color.social_accent_fill), 9f)
+                layoutParams = LinearLayout.LayoutParams(WRAP, WRAP)
+                    .apply { topMargin = dp(4) }
+            })
+            addView(text(d.id.value, 12.5f, UiR.color.social_muted))
+            d.lastSeenAt?.let {
+                val when_ = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+                    .format(Date(it))
+                val ip = d.lastSeenIp?.let { i -> " · $i" } ?: ""
+                addView(text("Last used $when_$ip", 12.5f, UiR.color.social_muted))
+            }
+        })
 
         if (!d.isCurrent) {
-            addView(Button(this@DevicesActivity).apply {
+            addView(TextView(this@DevicesActivity).apply {
                 text = "Remove"
-                isAllCaps = false
-                minHeight = dp(48)      // §14.10 — measured at 47dp
+                gravity = Gravity.CENTER
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(ContextCompat.getColor(
+                    this@DevicesActivity, UiR.color.social_danger))
+                setPadding(dp(14), dp(10), dp(14), dp(10))
+                minHeight = dp(48)      // §14.10
+                minWidth = dp(48)
+                contentDescription = "Remove ${d.displayName ?: "this device"}"
+                background = chrome.ripple(chrome.rounded(ContextCompat.getColor(
+                    this@DevicesActivity, UiR.color.social_surface2), 12f))
                 setOnClickListener { confirmRemove(d) }
             })
         }
-        addView(divider())
     }
 
     private fun confirmRemove(d: DeviceInfo) {

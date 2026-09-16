@@ -112,6 +112,7 @@ class RecoverySetupActivity : AppCompatActivity() {
         root.addView(gap(12))
         val confirm = CheckBox(this).apply {
             text = "I have saved my recovery key somewhere safe"
+            tag = Chrome.PRIMARY
             setTextColor(ContextCompat.getColor(this@RecoverySetupActivity, UiR.color.social_text))
         }
         root.addView(confirm)

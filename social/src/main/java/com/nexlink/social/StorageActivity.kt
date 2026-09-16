@@ -7,7 +7,6 @@ import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
-import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -41,6 +40,7 @@ import com.nexlink.social.ui.R as UiR
 class StorageActivity : AppCompatActivity() {
 
     private lateinit var root: LinearLayout
+    private lateinit var chrome: Chrome
     private var usage: StoreUsage? = null
     private var status: String? = "Measuring…"
     private var retention: MediaRetention = MediaRetention.DEFAULT
@@ -51,8 +51,8 @@ class StorageActivity : AppCompatActivity() {
         // Chrome. It also takes the system-bar insets that padForSystemBars
         // used to take here, so a screen's last row still clears the gesture
         // bar (§14.10) — that is the one thing this replacement must not lose.
-        val page = Chrome(this).page("Storage", onBack = { finish() },
-            horizontalPaddingDp = 20)
+        chrome = Chrome(this)
+        val page = chrome.page("Storage", onBack = { finish() })
         root = page.content
         setContentView(page.root)
         retention = StoragePrefs.retention(this)
@@ -92,107 +92,99 @@ class StorageActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * §12.5.3 — largest first, because the user is here to find what is big.
+     *
+     * **Rebuilt 2026-09-16.** This was four headings and four paragraphs down a
+     * bare background: the figures the screen exists to report were the same
+     * size and weight as the prose explaining them, and the total was a
+     * sentence. It is now a headline figure, a proportional bar, and one
+     * grouped card — the shape every storage screen on the phone already uses,
+     * because it is the shape that answers "what is taking the space" without
+     * reading.
+     */
     private fun render() {
         root.removeAllViews()
 
         val u = usage
         if (u == null) {
-            root.addView(body(status ?: "Measuring…"))
+            root.addView(chrome.note(status ?: "Measuring…"))
             return
         }
 
-        root.addView(body("NexLink Social is using ${bytes(diskBytes)} on this phone."))
-        root.addView(gap())
+        root.addView(chrome.hero(bytes(diskBytes), "used by NexLink Social on this phone"))
 
-        // Largest first — §12.5.3. The user is here to find what is big, and
-        // ordering by size is the whole of that job.
-        listOf(
+        val rows = listOf(
             Row("Photos, videos and files", u.mediaBytes,
-                "Downloaded attachments. Cleared safely — they download again when you open them."),
+                "Downloaded attachments. Cleared safely — they download again when you open them.",
+                tint = UiR.color.social_accent),
             Row("Message cache", u.eventCacheBytes,
-                "A local copy of your conversations. Cleared safely — it re-syncs from the server."),
+                "A local copy of your conversations. Cleared safely — it re-syncs from the server.",
+                tint = UiR.color.social_avatar2),
             Row("Account data", u.stateBytes,
-                "Room names, members and settings. Small, and re-syncs."),
+                "Room names, members and settings. Small, and re-syncs.",
+                tint = UiR.color.social_can_see),
             Row("Encryption keys", u.cryptoBytes,
                 "Never cleared. These are what let you read your own history — " +
                     "deleting them would lose it permanently, and nothing can bring it back.",
-                clearable = false)
+                clearable = false, tint = UiR.color.social_cannot_see)
         ).sortedWith(compareByDescending<Row> { it.clearable }.thenByDescending { it.bytes })
-            .forEach { root.addView(usageRow(it)) }
 
-        root.addView(gap())
-        root.addView(sectionTitle("Media cache limit"))
-        root.addView(body(
+        // The bar is the same data as the rows, in the same order and the same
+        // colours. A chart that disagrees with the table beside it is worse than
+        // no chart, so both read from `rows`.
+        val total = rows.sumOf { it.bytes }.coerceAtLeast(1L)
+        val card = chrome.card()
+        card.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(14), dp(16), dp(6))
+            addView(chrome.bar(rows.map {
+                (it.bytes.toFloat() / total) to ContextCompat.getColor(this@StorageActivity, it.tint)
+            }))
+        })
+        rows.forEachIndexed { i, r ->
+            if (i > 0) card.addView(chrome.rowDivider(insetStartDp = 16))
+            card.addView(chrome.infoRow(r.label, bytes(r.bytes), r.detail,
+                swatch = ContextCompat.getColor(this, r.tint)))
+        }
+        root.addView(card)
+
+        root.addView(chrome.sectionHeader("MEDIA CACHE LIMIT"))
+        val limit = chrome.card()
+        MediaRetention.CHOICES.forEachIndexed { i, (label, policy) ->
+            if (i > 0) limit.addView(chrome.rowDivider(insetStartDp = 50))
+            limit.addView(chrome.choiceRow(
+                label, policy.maxCacheBytes == retention.maxCacheBytes
+            ) { choose(policy) })
+        }
+        root.addView(limit)
+        root.addView(chrome.note(
             "When downloaded photos and videos go over this, the oldest are removed " +
                 "first. Your messages are never affected."))
-        root.addView(retentionChoices())
 
-        root.addView(gap())
-        root.addView(Button(this).apply {
-            text = "Clear cache"
-            minHeight = dp(48)   // §14.10
-            setOnClickListener { confirmClear(u) }
+        root.addView(with(chrome) { spacer(10) })
+        root.addView(chrome.quietButton("Clear cache") { confirmClear(u) }.apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { marginStart = dp(12); marginEnd = dp(12) }
+            setTextColor(ContextCompat.getColor(this@StorageActivity, UiR.color.social_danger))
         })
-        root.addView(body(
-            "Empties downloaded media and the local message cache. " +
-                "**Your messages and your encryption keys are not deleted.** " +
-                "Conversations re-download the next time you open them."))
+        root.addView(chrome.note(
+            "Empties downloaded media and the local message cache. Your messages and " +
+                "your encryption keys are not deleted. Conversations re-download the " +
+                "next time you open them."))
     }
 
     private class Row(
         val label: String,
         val bytes: Long,
         val detail: String,
-        val clearable: Boolean = true
+        val clearable: Boolean = true,
+        val tint: Int,
     )
 
-    private fun usageRow(r: Row): View = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(0, dp(10), 0, dp(10))
-        addView(LinearLayout(this@StorageActivity).apply {
-            orientation = LinearLayout.HORIZONTAL
-            addView(TextView(this@StorageActivity).apply {
-                text = r.label
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-                setTypeface(null, Typeface.BOLD)
-                setTextColor(ContextCompat.getColor(this@StorageActivity, UiR.color.social_text))
-                layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
-            })
-            addView(TextView(this@StorageActivity).apply {
-                text = bytes(r.bytes)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-                setTextColor(ContextCompat.getColor(this@StorageActivity, UiR.color.social_text2))
-                gravity = Gravity.END
-            })
-        })
-        addView(body(r.detail))
-    }
 
-    /**
-     * §12.5.2's four choices, as radio-like buttons.
-     *
-     * "Unlimited" is genuinely offered. Hiding it does not stop the store
-     * growing — it only stops the user understanding why it did.
-     */
-    private fun retentionChoices(): View = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        MediaRetention.CHOICES.forEach { (label, policy) ->
-            val selected = policy.maxCacheBytes == retention.maxCacheBytes
-            addView(TextView(this@StorageActivity).apply {
-                text = (if (selected) "●  " else "○  ") + label
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-                setTextColor(ContextCompat.getColor(this@StorageActivity,
-                    if (selected) UiR.color.social_accent else UiR.color.social_text))
-                // §14.10 — the whole row is the target, not the glyph.
-                minHeight = dp(48)
-                gravity = Gravity.CENTER_VERTICAL
-                isClickable = true
-                contentDescription =
-                    "Media cache limit $label" + if (selected) ", selected" else ""
-                setOnClickListener { choose(policy) }
-            })
-        }
-    }
 
     private fun choose(policy: MediaRetention) {
         retention = policy

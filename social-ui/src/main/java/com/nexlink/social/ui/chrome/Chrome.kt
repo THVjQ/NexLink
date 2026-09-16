@@ -209,6 +209,17 @@ class Chrome(private val a: Activity) {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(horizontalPaddingDp), dp(12), dp(horizontalPaddingDp), dp(24))
         }
+        // Every screen builds its content by `removeAllViews()` then `addView`,
+        // so styling can hang off the moment a child arrives rather than on
+        // eleven screens each remembering to call [polish] at the end of their
+        // own render. A screen written tomorrow gets it too, which is the
+        // difference between a convention and a mechanism.
+        content.setOnHierarchyChangeListener(object : ViewGroup.OnHierarchyChangeListener {
+            override fun onChildViewAdded(parent: View?, child: View?) {
+                child?.let { polish(it) }
+            }
+            override fun onChildViewRemoved(parent: View?, child: View?) = Unit
+        })
         val scroll = ScrollView(a).apply {
             isFillViewport = true
             addView(content)
@@ -264,7 +275,7 @@ class Chrome(private val a: Activity) {
         setTextColor(colour(R.color.social_on_accent_fill))
         minHeight = dp(50)
         setPadding(dp(20), dp(13), dp(20), dp(13))
-        background = ripple(rounded(colour(R.color.social_accent_fill), 14f))
+        background = ripple(accentFill(16f))
         isClickable = true
         setOnClickListener { onClick() }
     }
@@ -279,7 +290,7 @@ class Chrome(private val a: Activity) {
         setPadding(dp(20), dp(13), dp(20), dp(13))
         background = ripple(GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
-            cornerRadius = dp(14).toFloat()
+            cornerRadius = dp(16).toFloat()
             setColor(0x00000000)
             setStroke(dp(1), colour(R.color.social_divider))
         })
@@ -322,7 +333,7 @@ class Chrome(private val a: Activity) {
     fun card(marginHorizontalDp: Int = 12, marginTopDp: Int = 0): LinearLayout =
         LinearLayout(a).apply {
             orientation = LinearLayout.VERTICAL
-            background = rounded(colour(R.color.social_surface), 16f)
+            background = rounded(colour(R.color.social_surface), 20f)
             clipToOutline = true
             outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
             layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).apply {
@@ -379,7 +390,7 @@ class Chrome(private val a: Activity) {
         onAction: () -> Unit,
     ): View = LinearLayout(a).apply {
         orientation = LinearLayout.VERTICAL
-        background = rounded(colour(R.color.social_banner_bg), 14f)
+        background = rounded(colour(R.color.social_banner_bg), 18f)
         setPadding(dp(14), dp(12), dp(14), dp(12))
         layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).apply {
             marginStart = dp(12); marginEnd = dp(12); bottomMargin = dp(10)
@@ -404,7 +415,7 @@ class Chrome(private val a: Activity) {
             gravity = Gravity.CENTER
             setPadding(dp(16), dp(10), dp(16), dp(10))
             minHeight = dp(44)
-            background = ripple(rounded(colour(R.color.social_accent_fill), 11f))
+            background = ripple(accentFill(13f))
             isClickable = true
             setOnClickListener { onAction() }
             layoutParams = LinearLayout.LayoutParams(WRAP, WRAP)
@@ -432,6 +443,174 @@ class Chrome(private val a: Activity) {
             setLineSpacing(dp(4).toFloat(), 1f)
             setPadding(0, dp(8), 0, 0)
         })
+    }
+
+    /**
+     * A headline figure on its own card — the one number a screen exists to
+     * report, at a size that says so.
+     *
+     * Settings screens in this app were paragraphs of prose with the figures
+     * buried in them, which is the wrong shape: someone opening "Storage" wants
+     * the total before they want the explanation.
+     */
+    fun hero(value: CharSequence, label: CharSequence): View = LinearLayout(a).apply {
+        orientation = LinearLayout.VERTICAL
+        background = rounded(colour(R.color.social_surface), 20f)
+        setPadding(dp(18), dp(18), dp(18), dp(18))
+        layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).apply {
+            marginStart = dp(12); marginEnd = dp(12); bottomMargin = dp(6)
+        }
+        addView(TextView(a).apply {
+            text = value
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 30f)
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(colour(R.color.social_text))
+        })
+        addView(TextView(a).apply {
+            text = label
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(colour(R.color.social_muted))
+            setPadding(0, dp(2), 0, 0)
+        })
+    }
+
+    /**
+     * A proportional bar. Segments are (fraction, colour) and are drawn in
+     * order; anything left over is the track.
+     *
+     * Rounded as one piece rather than per segment, so it reads as a single
+     * quantity divided up rather than a row of separate chips.
+     */
+    fun bar(segments: List<Pair<Float, Int>>, heightDp: Int = 10): View = object : View(a) {
+        private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        private val clip = android.graphics.Path()
+        override fun onDraw(canvas: android.graphics.Canvas) {
+            val r = height / 2f
+            clip.reset()
+            clip.addRoundRect(0f, 0f, width.toFloat(), height.toFloat(), r, r,
+                android.graphics.Path.Direction.CW)
+            canvas.clipPath(clip)
+            paint.color = colour(R.color.social_surface3)
+            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+            var x = 0f
+            for ((fraction, c) in segments) {
+                val w = width * fraction.coerceIn(0f, 1f)
+                paint.color = c
+                canvas.drawRect(x, 0f, x + w, height.toFloat(), paint)
+                x += w
+            }
+        }
+    }.apply {
+        layoutParams = LinearLayout.LayoutParams(MATCH, dp(heightDp)).apply {
+            topMargin = dp(12)
+        }
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+
+    /**
+     * A row inside a [card]: a bold label, a value on the right, and an
+     * optional explanatory line under both.
+     */
+    fun infoRow(
+        label: CharSequence,
+        value: CharSequence? = null,
+        detail: CharSequence? = null,
+        swatch: Int? = null,
+        onClick: (() -> Unit)? = null,
+    ): View = LinearLayout(a).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(16), dp(13), dp(16), dp(13))
+        if (onClick != null) {
+            isClickable = true
+            background = ripple(null)
+            setOnClickListener { onClick() }
+        }
+        addView(LinearLayout(a).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            swatch?.let {
+                addView(View(a).apply {
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL; setColor(it)
+                    }
+                    layoutParams = LinearLayout.LayoutParams(dp(10), dp(10)).apply {
+                        marginEnd = dp(9)
+                    }
+                })
+            }
+            addView(TextView(a).apply {
+                text = label
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(colour(R.color.social_text))
+                layoutParams = LinearLayout.LayoutParams(0, WRAP, 1f)
+            })
+            value?.let {
+                addView(TextView(a).apply {
+                    text = it
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                    setTextColor(colour(R.color.social_text2))
+                    // Figures in a column must line up, or the eye cannot
+                    // compare them, which is the only reason they are listed.
+                    typeface = android.graphics.Typeface.MONOSPACE
+                })
+            }
+        })
+        detail?.let {
+            addView(TextView(a).apply {
+                text = it
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f)
+                setTextColor(colour(R.color.social_muted))
+                setLineSpacing(dp(3).toFloat(), 1f)
+                setPadding(0, dp(3), 0, 0)
+            })
+        }
+    }
+
+    /**
+     * One option in a set. A filled dot rather than a platform RadioButton,
+     * because the platform one cannot be tinted to the palette without a theme
+     * overlay and comes with its own padding rules.
+     */
+    fun choiceRow(label: CharSequence, selected: Boolean, onClick: () -> Unit): View =
+        LinearLayout(a).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            minimumHeight = dp(52)                 // §14.10
+            isClickable = true
+            background = ripple(null)
+            setOnClickListener { onClick() }
+            contentDescription = "$label" + if (selected) ", selected" else ""
+            addView(View(a).apply {
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    if (selected) setColor(colour(R.color.social_accent_fill))
+                    else {
+                        setColor(0x00000000)
+                        setStroke(dp(2), colour(R.color.social_divider))
+                    }
+                }
+                layoutParams = LinearLayout.LayoutParams(dp(20), dp(20)).apply {
+                    marginEnd = dp(14)
+                }
+            })
+            addView(TextView(a).apply {
+                text = label
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                setTextColor(colour(
+                    if (selected) R.color.social_text else R.color.social_text2))
+                if (selected) setTypeface(typeface, Typeface.BOLD)
+            })
+        }
+
+    /** Explanatory copy between cards, indented to the card's text column. */
+    fun note(text: CharSequence): TextView = TextView(a).apply {
+        this.text = text
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f)
+        setTextColor(colour(R.color.social_muted))
+        setLineSpacing(dp(3).toFloat(), 1f)
+        setPadding(dp(28), dp(8), dp(28), dp(4))
     }
 
     // ── identity ────────────────────────────────────────────────────────────
@@ -515,8 +694,8 @@ class Chrome(private val a: Activity) {
         // missed it because its stand-in parent was horizontal.
         layoutParams = LinearLayout.LayoutParams(WRAP, WRAP)
         orientation = LinearLayout.VERTICAL
-        val big = dp(18).toFloat()
-        val small = dp(5).toFloat()
+        val big = dp(20).toFloat()
+        val small = dp(6).toFloat()
         val radii = if (mine)
             floatArrayOf(big, big, big, big, small, small, big, big)
         else
@@ -547,6 +726,97 @@ class Chrome(private val a: Activity) {
     }
 
     // ── primitives ──────────────────────────────────────────────────────────
+
+    /**
+     * The fill for a primary control: the accent, with a gentle vertical
+     * gradient into a darker version of itself.
+     *
+     * Both ends are the same hue and the *light* end is the one
+     * `tools/check-contrast.py` measures, so white on it stays at the verified
+     * ratio — a gradient that brightens toward a second colour would quietly
+     * take the button below AA at one end and nothing would catch it.
+     */
+    fun accentFill(radiusDp: Float = 16f): GradientDrawable {
+        val top = colour(R.color.social_accent_fill)
+        val bottom = darken(top, 0.86f)
+        return GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(top, bottom))
+            .apply { cornerRadius = radiusDp * density }
+    }
+
+    private fun darken(c: Int, factor: Float): Int {
+        fun ch(shift: Int) = ((c shr shift and 0xFF) * factor).toInt().coerceIn(0, 255)
+        return (0xFF shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
+    }
+
+    /**
+     * Restyle a screen that was built from bare platform widgets.
+     *
+     * Eleven screens predate this file and each assembled its own `Button`s and
+     * `EditText`s, which meant every one of them rendered in whatever the
+     * Material default happened to be: square-ish, all-caps-ish, and grey. They
+     * could each be rewritten — but the honest reading is that this is a
+     * *presentation* concern, and one walk of the finished hierarchy fixes all
+     * of them at once and keeps fixing the next screen someone writes.
+     *
+     * Call it after the screen has added its views. It is idempotent.
+     *
+     * A button tagged [PRIMARY] gets the filled accent; every other button gets
+     * the tonal treatment, which is the right default — a screen where three
+     * buttons all shout has no primary action at all.
+     */
+    fun polish(root: View) {
+        when (root) {
+            is android.widget.EditText -> styleField(root)
+            is android.widget.CheckBox -> styleCheckbox(root)
+            // Order matters: CheckBox and EditText are both Buttons/TextViews
+            // further up the hierarchy, so they are matched first.
+            is android.widget.Button -> styleButton(root, root.tag == PRIMARY)
+            is ViewGroup -> for (i in 0 until root.childCount) polish(root.getChildAt(i))
+            else -> Unit
+        }
+    }
+
+    fun styleButton(b: android.widget.Button, primary: Boolean) {
+        b.isAllCaps = false
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+        b.setTypeface(b.typeface, Typeface.BOLD)
+        b.minHeight = dp(48)                       // §14.10
+        b.minimumHeight = dp(48)
+        b.setPadding(dp(20), dp(12), dp(20), dp(12))
+        b.stateListAnimator = null                 // kills the Material lift
+        if (primary) {
+            b.setTextColor(colour(R.color.social_on_accent_fill))
+            b.background = ripple(accentFill(16f))
+            b.elevation = dp(1).toFloat()
+        } else {
+            b.setTextColor(colour(R.color.social_accent))
+            b.background = ripple(rounded(colour(R.color.social_surface2), 16f))
+            b.elevation = 0f
+        }
+        (b.layoutParams as? LinearLayout.LayoutParams)?.let {
+            if (it.topMargin == 0) it.topMargin = dp(8)
+        }
+    }
+
+    fun styleField(e: android.widget.EditText) {
+        e.background = rounded(colour(R.color.social_surface2), 16f)
+        e.setPadding(dp(16), dp(13), dp(16), dp(13))
+        e.minHeight = dp(48)                       // §14.10
+        e.minimumHeight = dp(48)
+        e.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+        e.setTextColor(colour(R.color.social_text))
+        e.setHintTextColor(colour(R.color.social_muted))
+        (e.layoutParams as? LinearLayout.LayoutParams)?.let {
+            if (it.topMargin == 0) it.topMargin = dp(8)
+        }
+    }
+
+    fun styleCheckbox(c: android.widget.CheckBox) {
+        c.buttonTintList = ColorStateList.valueOf(colour(R.color.social_accent))
+        c.setTextColor(colour(R.color.social_text))
+        c.setPadding(dp(10), dp(12), 0, dp(12))
+        c.minHeight = dp(48)                       // §14.10
+    }
 
     fun rounded(fillColour: Int, radiusDp: Float): GradientDrawable = GradientDrawable().apply {
         shape = GradientDrawable.RECTANGLE
@@ -636,6 +906,8 @@ class Chrome(private val a: Activity) {
         android.text.format.DateFormat.getTimeFormat(a).format(java.util.Date(ts))
 
     companion object {
+        /** Tag a button with this to have [polish] give it the filled accent. */
+        const val PRIMARY = "chrome:primary"
         const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
     }

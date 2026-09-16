@@ -114,6 +114,7 @@ class ExportActivity : AppCompatActivity() {
         status?.let { root.addView(gap(12)); root.addView(text(it, 14f, UiR.color.social_accent)) }
         root.addView(Button(this).apply {
             text = "Export"
+            tag = Chrome.PRIMARY
             isAllCaps = false
             minHeight = dp(48)
             layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = dp(16) }

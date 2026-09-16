@@ -1,30 +1,55 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="social_bg">#000000</color>
-    <color name="social_surface">#1c1c1e</color>
-    <color name="social_surface2">#2c2c2e</color>
-    <color name="social_surface3">#3a3a3c</color>
-    <color name="social_accent">#0178FF</color>
-    <color name="social_accent2">#4ca3ff</color>
-    <color name="social_text">#ffffff</color>
-    <color name="social_text2">#ebebf5</color>
-    <color name="social_muted">#8e8e93</color>
-    <color name="social_divider">#38383a</color>
-    <color name="social_danger">#FF6369</color>
-    <color name="social_cannot_see">#4CD07D</color>
-    <color name="social_can_see">#FFB347</color>
-    <!-- See the light palette for what each of these is for. Only the three
-         that have to move for contrast do move: the fill darkens (white on the
-         dark theme's brighter accent is 4.09:1, under AA), the bubble sits on
-         surface2, and the metadata grey lightens. -->
-    <color name="social_accent_fill">#0B5ED7</color>
-    <color name="social_on_accent_fill">#FFFFFF</color>
-    <color name="social_on_accent_fill_meta">#E8F1FD</color>
-    <color name="social_bubble_theirs">#2c2c2e</color>
-    <color name="social_bubble_meta">#A0A0A8</color>
-    <color name="social_banner_bg">#2C2022</color>
+<!--
+  DARK THEME. See the light palette for the 2026-09-16 recolour.
 
+  The ground is a blue-black rather than #000000. True black is the other
+  wireframe tell: it makes every card a floating rectangle with no relationship
+  to the surface behind it, and on an OLED panel it smears on scroll. Three
+  elevations (bg -> surface -> surface2 -> surface3) do the work that a shadow
+  does in the light theme, because a shadow is invisible on a dark ground.
+-->
+<resources>
+    <!-- the screen behind everything -->
+    <color name="social_bg">#0A0E15</color>
+    <!-- cards, rows, bars -->
+    <color name="social_surface">#141A24</color>
+    <!-- inputs, the composer field, a recessed row -->
+    <color name="social_surface2">#1E2633</color>
+    <!-- chips, day markers, the quietest fill -->
+    <color name="social_surface3">#2B3545</color>
+    <!-- links, selected state, text on a ground -->
+    <color name="social_accent">#6BA6FF</color>
+    <!-- the lighter end of the accent gradient -->
+    <color name="social_accent2">#93C2FF</color>
+    <!-- a FILLED control: send, unread badge, your own bubble -->
+    <color name="social_accent_fill">#1E5FD1</color>
+    <!-- text on any filled control -->
+    <color name="social_on_accent_fill">#FFFFFF</color>
+    <!-- the timestamp inside your own bubble -->
+    <color name="social_on_accent_fill_meta">#E4EEFE</color>
+    <!-- primary text -->
+    <color name="social_text">#EEF2F8</color>
+    <!-- secondary text — previews, body copy -->
+    <color name="social_text2">#C9D2DF</color>
+    <!-- captions, timestamps, explanatory lines -->
+    <color name="social_muted">#8E9AAB</color>
+    <!-- hairlines. Decorative: see DECORATIVE in check-contrast.py -->
+    <color name="social_divider">#2A3444</color>
+    <!-- destructive and failed states -->
+    <color name="social_danger">#FF7A8C</color>
+    <!-- §9.6.1 'we cannot see' column -->
+    <color name="social_cannot_see">#4ED9A0</color>
+    <!-- §9.6.1 'we can see' column — same weight, deliberately -->
+    <color name="social_can_see">#FFC067</color>
+    <!-- the standing-warning card -->
+    <color name="social_banner_bg">#2A1E1B</color>
+    <!-- an incoming message -->
+    <color name="social_bubble_theirs">#1E2633</color>
+    <!-- the time under an incoming message -->
+    <color name="social_bubble_meta">#98A4B5</color>
+    <!-- the initial in an avatar -->
     <color name="social_on_avatar">#FFFFFF</color>
+    <!-- avatar tints, hashed from the name -->
     <color name="social_avatar1">#2C6BB0</color>
     <color name="social_avatar2">#7A4FA3</color>
     <color name="social_avatar3">#1F7A5C</color>

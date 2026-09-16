@@ -68,6 +68,7 @@ class SignInActivity : AppCompatActivity() {
 
         val go = Button(this).apply {
             text = "Sign in"
+            tag = Chrome.PRIMARY
             isAllCaps = false
             layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = dp(16) }
         }

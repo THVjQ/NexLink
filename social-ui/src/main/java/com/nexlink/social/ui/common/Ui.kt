@@ -77,9 +77,23 @@ internal class Ui(private val ctx: Context) {
     }
 
     fun primaryButton(text: CharSequence, onClick: () -> Unit): Button = Button(ctx).apply {
+        // The gate is the first screen anyone sees, so it must not look like
+        // the platform default while the rest of the app does not. Same shape
+        // and fill as Chrome's filled button (§14.12); duplicated rather than
+        // imported because the onboarding package predates Chrome and there is
+        // no dependency between them.
         this.text = text
         isAllCaps = false
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+        setTypeface(typeface, Typeface.BOLD)
+        setTextColor(col(R.color.social_on_accent_fill))
+        minHeight = 48.px()
+        setPadding(20.px(), 13.px(), 20.px(), 13.px())
+        stateListAnimator = null
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 16.px().toFloat()
+            setColor(col(R.color.social_accent_fill))
+        }
         setOnClickListener { onClick() }
         layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = 16.px() }
     }
@@ -87,7 +101,10 @@ internal class Ui(private val ctx: Context) {
     fun textButton(text: CharSequence, onClick: () -> Unit): Button = Button(ctx).apply {
         this.text = text
         isAllCaps = false
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
         setTextColor(col(R.color.social_accent))
+        minHeight = 48.px()                      // §14.10
+        stateListAnimator = null
         setBackgroundColor(0x00000000)
         setOnClickListener { onClick() }
         gravity = Gravity.START or Gravity.CENTER_VERTICAL
@@ -99,7 +116,10 @@ internal class Ui(private val ctx: Context) {
         // §9.6.1 — none pre-ticked.
         isChecked = false
         setTextColor(col(R.color.social_text))
-        setPadding(8.px(), 10.px(), 0, 10.px())
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+        buttonTintList = android.content.res.ColorStateList.valueOf(col(R.color.social_accent))
+        minHeight = 48.px()                      // §14.10
+        setPadding(10.px(), 12.px(), 0, 12.px())
         setOnCheckedChangeListener { _, checked -> onToggle(checked) }
     }
 

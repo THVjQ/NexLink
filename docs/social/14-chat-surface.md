@@ -505,3 +505,54 @@ signed-out screens (sign in, create account, restore from backup) cannot be
 audited without signing out, and `am start` cannot reach them because they are
 correctly not exported. The two-device harnesses were updated for the moved
 controls (`HOME_RE`/`SIGNED_OUT_RE`, `open_home_menu`) but have not been run.
+
+---
+
+## 14.13 Recoloured and regrouped 2026-09-16 — "not just black grey white stuff"
+
+§14.12 fixed the *structure* of two screens and left the other nine as prose on
+a bare background, in a palette that was pure greys. The operator's verdict on
+seeing it was fair: it looked like a wireframe, not a product.
+
+**Grey is not a neutral choice; it is the absence of one.** Every neutral is now
+biased a few degrees toward the accent hue — a cool off-white ground in light,
+a blue-black in dark — and neither pure `#000000` nor pure `#FFFFFF` is used as
+a ground any more. Pure black in particular is the loudest wireframe tell: every
+card floats on it with no relationship to the surface behind, and it smears on
+an OLED scroll. Depth now comes from four stacked surfaces (`bg`, `surface`,
+`surface2`, `surface3`), which is what works in dark where a shadow is invisible.
+
+**34 pairs, both themes, all AA.** The palette was written by computing every
+pair before a line of Kotlin changed, rather than by picking colours and
+checking after. `tools/check-contrast.py` grew seven pairs it had been missing —
+text and links on `surface2`, which is new as an input fill.
+
+**Three mechanisms rather than nine edits.** The nine remaining screens were
+each built from bare platform widgets, and rewriting them one at a time invites
+the next screen to be written the old way:
+
+- **`Chrome.polish(view)`** restyles `Button`, `EditText` and `CheckBox` in a
+  finished hierarchy — rounded, 48dp, themed. `Chrome.page` hangs it off an
+  `OnHierarchyChangeListener`, so a screen gets it by being added to a page and
+  a screen written tomorrow gets it too.
+- **`Chrome.PRIMARY`** marks the one action a screen exists for. Everything
+  else renders tonal, which is the right default: a screen where three buttons
+  all shout has no primary action. `VerifyActivity` gained a `primary`
+  parameter for exactly this reason — it was offering "It's me" and "Refuse"
+  with identical weight, which asks the user to make a security decision by
+  coin toss.
+- **`hero` / `bar` / `infoRow` / `choiceRow` / `note`** are the vocabulary the
+  settings screens needed. Storage, Devices, Blocked and Search were rebuilt
+  around them and now group into cards.
+
+**Storage is the example worth reading.** It was four headings and four
+paragraphs: the figures the screen exists to report were the same size and
+weight as the prose explaining them, and the total was a sentence. It is now a
+headline figure, a proportional bar and one grouped card — and the bar and the
+table are generated from the same list in the same order with the same colours,
+because a chart that disagrees with the table beside it is worse than no chart.
+
+**The onboarding gate was styled at its own source.** `Ui.kt` predates `Chrome`
+and has no dependency on it, so its primary button and checkbox were updated to
+match rather than being left as the platform default. It is the first screen
+anyone sees; it cannot be the one screen that looks unfinished.

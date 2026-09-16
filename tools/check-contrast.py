@@ -61,6 +61,14 @@ PAIRS = [
     ("social_on_avatar",        "social_avatar3",        4.5, "the initial in an avatar"),
     ("social_on_avatar",        "social_avatar4",        4.5, "the initial in an avatar"),
     ("social_on_avatar",        "social_avatar5",        4.5, "the initial in an avatar"),
+
+    ("social_muted",            "social_surface2",       4.5, "hint text in an input"),
+    ("social_text",             "social_surface2",       4.5, "typed text in an input"),
+    ("social_text2",            "social_surface2",       4.5, "body copy on a recessed row"),
+    ("social_accent",           "social_surface",        4.5, "a link on a card"),
+    ("social_accent",           "social_surface2",       4.5, "a link on a recessed row"),
+    ("social_danger",           "social_surface",        4.5, "a destructive action on a card"),
+    ("social_text2",            "social_surface",        4.5, "body copy on a card"),
 ]
 
 # Reported, but not failed.
