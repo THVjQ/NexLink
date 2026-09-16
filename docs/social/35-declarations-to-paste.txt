@@ -1,0 +1,83 @@
+THE TWO DECLARATIONS PLAY IS BLOCKING ON
+=========================================
+App content → Foreground service permissions, and → Full-screen intent.
+Both are forms in the console. Answers below are paste-ready.
+
+
+─────────────────────────────────────────────────────────────────────
+1. FOREGROUND SERVICE PERMISSIONS
+─────────────────────────────────────────────────────────────────────
+Does your app use foreground service permissions?   YES
+
+Declared types:  FOREGROUND_SERVICE_CAMERA
+                 FOREGROUND_SERVICE_MICROPHONE
+
+Video:  upload 09-foreground-service-demo.mp4 to YouTube as UNLISTED and paste
+        the link. Play will not accept a file upload here — it wants a URL.
+
+
+WHAT IT IS USED FOR  (paste into the description box)
+
+NexLink Social is a private messenger with voice and video calling. The
+microphone and camera are used only during a call that the user has started or
+answered, and only for the duration of that call.
+
+The foreground service exists so an in-progress call survives the user leaving
+the app or locking the screen — the same expectation people have of any phone
+call. It is started when the call connects and stopped when the call ends. While
+it runs, an ongoing call notification is shown and Android displays its own
+active-call indicator in the status bar.
+
+The app does not record. There is no MediaRecorder or MediaMuxer anywhere in the
+codebase, and an automated check asserts this on every build.
+
+No foreground service runs when there is no call. Messages arrive by Firebase
+Cloud Messaging with no persistent service of any kind.
+
+
+WHAT THE VIDEO SHOWS
+  0:00  the conversation list
+  0:12  opening a conversation and starting a call
+  0:16  the in-call screen: microphone, camera and hang-up controls, with a
+        live camera preview (deliberately blurred — it is a real person's room)
+  0:48  the app backgrounded, with Android's active-call indicator and a
+        running timer in the status bar. This is the foreground service doing
+        the one job it exists for.
+
+  Two areas are blurred: the camera preview and the home screen. Both showed a
+  real person's private surroundings. Nothing about the permission use is
+  hidden by it — the controls, the notification and the timer are all visible.
+
+
+─────────────────────────────────────────────────────────────────────
+2. FULL-SCREEN INTENT PERMISSION
+─────────────────────────────────────────────────────────────────────
+Does your app use USE_FULL_SCREEN_INTENT?   YES
+
+WHY  (paste into the description box)
+
+NexLink Social is a calling app. The full-screen intent is used for exactly one
+thing: presenting the incoming-call screen when a call arrives while the device
+is locked, so the user can answer it — the behaviour expected of any phone call.
+
+It is never used for promotions, reminders, or any notification that is not an
+incoming call. Calls are posted as CallStyle notifications, and the app
+registers its calls with Android's Telecom framework as a self-managed
+connection service (MANAGE_OWN_CALLS), so that an incoming mobile call and an
+in-app call interact correctly rather than competing for the microphone.
+
+
+─────────────────────────────────────────────────────────────────────
+ABOUT THE OTHER TWO ERRORS
+─────────────────────────────────────────────────────────────────────
+  "You can't rollout this release because it doesn't allow any existing users
+   to upgrade to the newly added app bundles."
+  "This release does not add or remove any app bundles."
+
+Neither is about the app. Together they mean NO BUNDLE IS ATTACHED to that
+release — the .aab either failed to upload or went to a different track. Open
+the release, upload nexlink-social-release.aab under "App bundles", and both
+clear.
+
+If Play says the version code is already used, bump versionCode in
+social/build.gradle and rebuild. It is currently 2.

@@ -154,17 +154,42 @@ private class Markdown(private val a: PolicyActivity, private val chrome: Chrome
         return out
     }
 
-    /** `**bold**` and `` `code` ``, applied as spans so the text stays selectable. */
+    /**
+     * `**bold**`, `*italic*` and `` `code` ``, applied as spans so the text
+     * stays selectable.
+     *
+     * Italics are here because leaving them out did not mean "no italics" — it
+     * meant the asterisks were **printed**, and the first paragraph of the
+     * shipped privacy policy opened with a literal `*A plain-language summary…*`.
+     * Seen on the handset; invisible in the source, where the markup is correct.
+     */
     private fun inline(s: String): CharSequence {
         val sb = SpannableStringBuilder()
         var i = 0
         while (i < s.length) {
             val bold = s.indexOf("**", i)
             val tick = s.indexOf('`', i)
-            val next = listOf(bold, tick).filter { it >= 0 }.minOrNull() ?: -1
+            // A single asterisk that is not the start of a bold run.
+            var ital = -1
+            var k = i
+            while (k < s.length) {
+                val at = s.indexOf('*', k)
+                if (at < 0) break
+                if (at != bold) { ital = at; break }
+                k = at + 2
+            }
+            val next = listOf(bold, tick, ital).filter { it >= 0 }.minOrNull() ?: -1
             if (next < 0) { sb.append(s.substring(i)); break }
             sb.append(s.substring(i, next))
-            if (next == bold) {
+            if (next == ital && next != bold) {
+                val end = s.indexOf('*', next + 1)
+                if (end < 0) { sb.append(s.substring(next)); break }
+                val start = sb.length
+                sb.append(s.substring(next + 1, end))
+                sb.setSpan(StyleSpan(Typeface.ITALIC), start, sb.length,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                i = end + 1
+            } else if (next == bold) {
                 val end = s.indexOf("**", next + 2)
                 if (end < 0) { sb.append(s.substring(next)); break }
                 val start = sb.length
