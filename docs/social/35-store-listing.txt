@@ -1,0 +1,81 @@
+NEXLINK SOCIAL — PLAY STORE LISTING
+====================================
+
+APP NAME (30 char limit)
+------------------------
+NexLink Social
+
+
+SHORT DESCRIPTION (80 char limit) — 62 characters
+--------------------------------------------------
+Private messages and calls. End-to-end encrypted, invite only.
+
+  Alternatives, if you prefer a different emphasis:
+  · Encrypted messages and calls, for people you actually know.        (52)
+  · End-to-end encrypted messaging. No phone number, no ads.            (55)
+  · A small, private messenger. Encrypted end to end, invite only.     (62)
+
+
+FULL DESCRIPTION (4000 char limit) — about 2,050 characters
+------------------------------------------------------------
+NexLink Social is a small, private messenger.
+
+Your messages and calls are end-to-end encrypted. They are scrambled on your
+phone and can only be unscrambled by the people you are talking to — not by us,
+and not by anyone who gets hold of the server.
+
+It is invite only. You cannot sign up without a code from someone already here,
+and there is no directory to browse. Nobody can find you by your phone number or
+your email address, because we never ask for either.
+
+WHAT YOU CAN DO
+• Send messages, photos and files
+• Make voice and video calls
+• React, reply, edit and delete
+• Search your own messages, on your own phone
+• Use more than one device, and verify each one so you know it is really yours
+• Move your history to a new phone with a recovery key
+
+WHAT WE CAN AND CANNOT SEE
+Most apps are vague about this. We would rather not be.
+
+We cannot see the content of your messages, the content of your calls, your
+photos and files, or your message history.
+
+We can see who you message and when, roughly how often and how much, your IP
+address, and which devices you use. Google's push service is told that a message
+arrived for you — never what it says.
+
+The app shows you this, in exactly these words, before you create an account.
+
+NO ACCOUNT ATTACHED TO YOU
+An account here is a username and a password. No phone number, no email address,
+no real name. There are no ads, and there is no analytics or tracking code in the
+app.
+
+HONEST LIMITS
+This is run by one person, not a company. There is no support team and no uptime
+guarantee, and it is offered as-is.
+
+It is early software. It works, and it will have rough edges.
+
+If you lose both your recovery key and your phone, your message history is gone.
+That is what end-to-end encryption actually means, and nobody — including us —
+can undo it for you. The app will ask you to set up a recovery key. Do it.
+
+You need an invite code to create an account. If you do not have one, this app
+will not be much use to you yet.
+
+From the maker of NexLink.
+
+
+NOTES FOR WHOEVER PASTES THIS IN
+---------------------------------
+· Every claim above is one the app actually keeps. "No analytics or tracking"
+  and "no ads" are true today — if an SDK is ever added, this text has to change
+  in the same commit, or the listing becomes a false statement.
+· Voice notes are NOT listed, because there is no way to record one yet. Group
+  calls are not claimed either: the code supports them, but only one-to-one has
+  been verified on real hardware.
+· The "what we can and cannot see" wording matches the in-app screen (§9.6.1)
+  and the Data safety form (§35.1). If you change one, change all three.
