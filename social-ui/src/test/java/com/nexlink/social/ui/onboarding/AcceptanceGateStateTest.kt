@@ -38,15 +38,25 @@ class AcceptanceGateStateTest {
         s.advance(); assertEquals(4, s.displayStep())
     }
 
-    /** §9.6.1 — "each requiring the user to have opened it before the checkbox enables". */
-    @Test fun `a checkbox cannot be ticked before its document is opened`() {
+    /**
+     * §9.6.1 used to require each document to be *opened* before its checkbox
+     * would enable. **The operator removed that on 2026-09-16 (§9.6.4)** and
+     * this test now pins the replacement behaviour, rather than being deleted:
+     * a rule that was once enforced and is now deliberately not enforced
+     * deserves a test saying so, or the next reader cannot tell the difference
+     * between a decision and a regression.
+     *
+     * Whether a document was opened is still tracked — that is what re-imposing
+     * the rule would need.
+     */
+    @Test fun `a checkbox can be ticked without opening its document`() {
         val s = atTerms()
-        assertFalse(s.setTermsChecked(true))
-        assertFalse(s.termsChecked)
-
-        s.openTerms()
         assertTrue(s.setTermsChecked(true))
         assertTrue(s.termsChecked)
+        assertFalse("opening is still recorded, just not required", s.termsOpened)
+
+        s.openTerms()
+        assertTrue(s.termsOpened)
     }
 
     @Test fun `the warranty statement has no document to open`() {
@@ -57,7 +67,7 @@ class AcceptanceGateStateTest {
 
     /** §9.6.1 — "A single combined checkbox is legally weaker and is not used." */
     @Test fun `all three boxes are required`() {
-        val s = atTerms().apply { openTerms(); openPrivacy() }
+        val s = atTerms()
 
         s.setTermsChecked(true);   assertFalse(s.termsComplete)
         s.setPrivacyChecked(true); assertFalse(s.termsComplete)
@@ -65,7 +75,7 @@ class AcceptanceGateStateTest {
     }
 
     @Test fun `cannot advance past terms until all three are ticked`() {
-        val s = atTerms().apply { openTerms(); openPrivacy() }
+        val s = atTerms()
         s.setTermsChecked(true); s.setPrivacyChecked(true)
         assertFalse(s.advance())
         assertEquals(Step.TERMS, s.step)

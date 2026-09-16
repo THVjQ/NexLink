@@ -82,17 +82,23 @@ class AcceptanceGateState {
     fun openPrivacy() { privacyOpened = true }
 
     /**
-     * §9.6.1: each document must be opened *before* its checkbox enables.
-     * Returns false if the tick was refused, so the UI can say why.
+     * §9.6.1 originally required each document to be opened *before* its
+     * checkbox would enable. **Removed 2026-09-16 at the operator's
+     * instruction** (§9.6.4).
+     *
+     * `termsOpened` / `privacyOpened` are still tracked, because whether the
+     * documents were opened is worth knowing and is what a future version would
+     * need to re-impose the rule. They no longer gate the tick.
+     *
+     * The Boolean return is kept so callers need not change and so re-imposing
+     * the rule is a one-line change here rather than a signature change.
      */
     fun setTermsChecked(checked: Boolean): Boolean {
-        if (checked && !termsOpened) return false
         termsChecked = checked
         return true
     }
 
     fun setPrivacyChecked(checked: Boolean): Boolean {
-        if (checked && !privacyOpened) return false
         privacyChecked = checked
         return true
     }

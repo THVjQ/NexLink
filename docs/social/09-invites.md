@@ -272,6 +272,64 @@ counters sit in the application layer alongside `invite_record`.
 guessed or a code has leaked publicly. This is a paging-level alert (§27), not
 a dashboard curiosity.
 
+## 9.6.4 The open-the-document-first rule, removed 2026-09-16
+
+§9.6.1 required each policy document to be **opened** before its checkbox would
+enable. The operator removed that requirement. Recorded here with the trade
+stated, because a consent rule that quietly disappears is exactly the kind of
+change a later reader must be able to find.
+
+**What it cost.** "I have read and accept" now records an acceptance that the
+product did not observe the user in a position to make. That is weaker evidence
+of informed consent than the original design, and if the acceptance record is
+ever relied on, this is the sentence that matters.
+
+**What it was actually enforcing.** Nothing readable. `openPolicy` is still a
+stub that shows a toast — *"document not yet written (§4.7, phase 5)"* — so the
+rule required the user to open something that does not exist. It was gating
+consent on a gesture, not on reading. The honest fix is to ship the documents
+(they are drafted, `docs/social/legal/`) and then re-impose the rule; until
+then the requirement was theatre with a real cost, which is how it managed to
+hide a crash for four days.
+
+**Re-imposing it is one line** in `AcceptanceGateState.setTermsChecked` /
+`setPrivacyChecked`, and `termsOpened` / `privacyOpened` are still tracked for
+exactly that reason. `AcceptanceGateStateTest` pins the current behaviour rather
+than having been deleted, so the difference between a decision and a regression
+stays visible.
+
+### 9.6.4a The crash it was hiding
+
+**Account creation was impossible, and nothing said so.** Found 2026-09-16 while
+creating the operator's own account on a handset.
+
+`AcceptanceGateActivity.renderTerms` declared its Continue button as a
+`lateinit var` above the three checkboxes and assigned it below them. Every
+checkbox listener touched it. That is safe while a box is only toggled by a
+finger — but `Ui.checkbox` installs its change listener *before* the caller's
+`.apply { isChecked = … }` runs, so **restoring a ticked box during a re-render
+fires the listener**, and a re-render happens whenever the screen is rebuilt:
+tapping either "Read the…" link, for instance. The process died with
+`UninitializedPropertyAccessException`.
+
+From the user's side there was no crash dialog and no message — the gate simply
+vanished and an empty account form came back, which reads as "it went back a
+step". The invite token was left `pending` with no account, which is §2.8's
+third invariant behaving perfectly and is also why nothing looked broken on the
+server: a token that reads `pending: 1, completed: 0` is indistinguishable from
+someone who changed their mind.
+
+Two things follow, and both are now done:
+
+- The fix is **ordering, not a null check**: the button is built before the
+  listeners that close over it.
+- The regression test has to build the views, because the bug lived in the
+  interaction between a view builder and an activity and no test of the state
+  machine could have reached it. `AcceptanceGateTermsScreenTest` drives the real
+  screen under Robolectric, and was confirmed to fail against the unfixed code.
+
+---
+
 ## 9.8 Operator invite issuance
 
 The operator needs a path that does not depend on the app being installed:

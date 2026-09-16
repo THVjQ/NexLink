@@ -55,7 +55,7 @@
 
     <!-- ── Screen 4: Terms and acceptance ─────────────────────────────── -->
     <string name="gate4_title">Terms</string>
-    <string name="gate4_body">Please read both documents. Each opens in full — you need to open one before you can tick it.</string>
+    <string name="gate4_body">Please read both documents before you accept them.</string>
     <string name="gate4_read_terms">Read the Terms of Service</string>
     <string name="gate4_read_privacy">Read the Privacy Policy</string>
     <!-- §9.6.1: three separate checkboxes, none pre-ticked. "A single combined
@@ -63,7 +63,6 @@
     <string name="gate4_cb_terms">I have read and accept the Terms of Service</string>
     <string name="gate4_cb_privacy">I have read and accept the Privacy Policy</string>
     <string name="gate4_cb_warranty">I understand this service is operated by an individual and provided without warranty</string>
-    <string name="gate4_must_open">Open the document first — then you can tick this.</string>
 
     <!-- ── Screen 5: Age ──────────────────────────────────────────────── -->
     <!-- §9.6.1: "a date-of-birth entry, not a yes/no checkbox — a checkbox is

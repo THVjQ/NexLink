@@ -213,8 +213,32 @@ class AcceptanceGateActivity : AppCompatActivity() {
         addNav()
     }
 
-    // ── screen 4 (§9.6.1: three boxes, none pre-ticked, docs opened first) ───
+    // ── screen 4 (§9.6.1: three boxes, none pre-ticked) ─────────────────────
 
+    /**
+     * **Two changes here, 2026-09-16, both from one crash on a real handset.**
+     *
+     * *The crash.* `next` was a `lateinit` declared above the checkboxes and
+     * assigned below them, and every checkbox listener touched it. That is fine
+     * while a checkbox is only toggled by a finger — but `Ui.checkbox` installs
+     * its listener before the caller's `.apply { isChecked = … }` runs, so
+     * **restoring a ticked box during a re-render fires the listener**, and the
+     * re-render happens before `next` exists. Tick the warranty box, then tap
+     * either "Read the…" link, and the process dies with
+     * `UninitializedPropertyAccessException`. From the user's side the gate
+     * simply reappears as an empty account form: no error, no message, and the
+     * invite token left `pending` with no account. **Account creation was
+     * impossible on that build and nothing said so.**
+     *
+     * The fix is ordering, not a null check: the button is built first and the
+     * listeners close over a value that already exists.
+     *
+     * *The rule.* §9.6.1 required each document to be opened before its box
+     * would enable. The operator asked for that to go (2026-09-16) and it is
+     * gone — see §9.6.4 for the trade, which is real: the documents are still
+     * a stub (`openPolicy` toasts), so the requirement was gating consent on
+     * opening something that does not exist yet.
+     */
     private fun renderTerms() {
         root.addView(ui.title(getString(R.string.gate4_title)))
         root.addView(ui.body(getString(R.string.gate4_body)))
@@ -230,25 +254,22 @@ class AcceptanceGateActivity : AppCompatActivity() {
         root.addView(ui.divider())
         root.addView(with(ui) { spacer(8) })
 
-        lateinit var next: Button
+        // Built BEFORE the checkboxes. See the note above: a listener that can
+        // fire during construction must not reference something constructed
+        // later.
+        val next = ui.primaryButton(getString(R.string.gate_continue)) {
+            if (state.advance()) render()
+        }
 
         val cbTerms = ui.checkbox(getString(R.string.gate4_cb_terms)) { checked ->
-            if (!state.setTermsChecked(checked)) {
-                toast(getString(R.string.gate4_must_open))
-                render()
-                return@checkbox
-            }
+            state.setTermsChecked(checked)
             next.isEnabled = state.termsComplete
-        }.apply { isEnabled = state.termsOpened; isChecked = state.termsChecked }
+        }.apply { isChecked = state.termsChecked }
 
         val cbPrivacy = ui.checkbox(getString(R.string.gate4_cb_privacy)) { checked ->
-            if (!state.setPrivacyChecked(checked)) {
-                toast(getString(R.string.gate4_must_open))
-                render()
-                return@checkbox
-            }
+            state.setPrivacyChecked(checked)
             next.isEnabled = state.termsComplete
-        }.apply { isEnabled = state.privacyOpened; isChecked = state.privacyChecked }
+        }.apply { isChecked = state.privacyChecked }
 
         val cbWarranty = ui.checkbox(getString(R.string.gate4_cb_warranty)) { checked ->
             state.setWarrantyChecked(checked)
@@ -257,9 +278,6 @@ class AcceptanceGateActivity : AppCompatActivity() {
 
         root.addView(cbTerms); root.addView(cbPrivacy); root.addView(cbWarranty)
 
-        next = ui.primaryButton(getString(R.string.gate_continue)) {
-            if (state.advance()) render()
-        }
         next.isEnabled = state.termsComplete
         root.addView(next)
         root.addView(backButton())
