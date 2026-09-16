@@ -556,3 +556,45 @@ because a chart that disagrees with the table beside it is worse than no chart.
 and has no dependency on it, so its primary button and checkbox were updated to
 match rather than being left as the platform default. It is the first screen
 anyone sees; it cannot be the one screen that looks unfinished.
+
+---
+
+## 14.14 A walk through every screen, 2026-09-16
+
+The operator asked for every setting and feature to be opened and *read*, not
+merely tapped. Doing that found five things, three of them reported by a real
+first user (the operator's father) and two only visible by reading.
+
+**Reported, and all three were ours:**
+
+| symptom | cause |
+|---|---|
+| "said not logged in, but tapping Sign in showed signed in" | `SocialSessionManager`'s state flow started at `SignedOut`, so every cold start rendered the welcome screen until `restore()` finished. A stored session is a synchronous fact; there was never a reason to guess wrong first. It starts at `Restoring` now. |
+| "chat names just show a random string" | `title = info.displayName ?: room.id()`. For a direct message the SDK has no display name until the other member's profile syncs, so a new chat was titled `!AbCdEf…`. Now falls back to `heroes` — the SDK's own answer to naming an unnamed room — and to "New conversation", never to an id. |
+| "starting a chat didn't show till logged in again" | `createGroup` called `refreshRooms()` before returning and `startDirectMessage` did not. The room existed; the inbox had not been told. The next cold start resynced and it appeared, which made a missing refresh look like a sign-in problem. |
+
+**Found by reading:**
+
+- **Search reported "Nothing found" for a word that was on screen.** The index
+  ignores very short terms: verified on the handset, `Test` finds its message
+  and `Hi` finds nothing. "Nothing found" is a claim *about the user's
+  messages*, and it was false — so it is only made when a search actually ran.
+  A query under three characters now says why, and an empty one no longer
+  silently does nothing.
+- **Recovery was unreachable once it was set up.** The only route was the
+  §8.5.2 warning banner, which disappears the moment there is a backup — so the
+  route to your recovery key vanished exactly when you had a key to worry about.
+  It now has a permanent overflow entry, and because §7.4's flow *replaces* the
+  key rather than showing it, the screen is state-aware: arriving with a key
+  already in place says so, and the button reads "Create a new key (the old one
+  stops working)" instead of "Create my recovery key".
+- Smaller: the menu said "Export my messages" and the screen said "Export your
+  messages".
+
+**Checked and correct:** the overflow, invite, verify, devices (including the
+"This device" pill), blocked empty state, export, storage (figures, bar,
+choices), search results, new conversation, the conversation itself with an
+**incoming bubble and its sender name** — the one thing §14.12 could not verify
+for want of a second party — long-press safety menu, the participants dialog,
+and the display name `THVjQ` resolving through.
+

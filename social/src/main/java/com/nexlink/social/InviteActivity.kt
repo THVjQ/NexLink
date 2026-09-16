@@ -44,6 +44,7 @@ class InviteActivity : AppCompatActivity() {
     private lateinit var chrome: Chrome
     private lateinit var root: LinearLayout
     private var invite: Invite? = null
+    private var outstanding: List<Invite> = emptyList()
     private var busy = false
     private var error: String? = null
 
@@ -54,6 +55,20 @@ class InviteActivity : AppCompatActivity() {
         root = page.content
         setContentView(page.root)
         render()
+        refresh()
+    }
+
+    /** §9.5.1 — what this user has outstanding, so a code can be taken back. */
+    private fun refresh() {
+        lifecycleScope.launch {
+            val s = SessionProvider.manager(this@InviteActivity).current() as? RustSocialSession
+                ?: return@launch
+            withContext(Dispatchers.IO) { s.inviteIssuer().list() }
+                .onSuccess { outstanding = it; render() }
+                // A list that will not load must not bury the button that
+                // still works, so this is deliberately silent on screen.
+                .onFailure { outstanding = emptyList() }
+        }
     }
 
     private fun render() {
@@ -104,6 +119,122 @@ class InviteActivity : AppCompatActivity() {
                 setTextColor(ContextCompat.getColor(this@InviteActivity, UiR.color.social_danger))
             })
         }
+
+        renderOutstanding()
+    }
+
+    /**
+     * Codes already issued — §9.5.1.
+     *
+     * This is the screen the operator asked for on the reasoning that with no
+     * quota, revocation is the only control left. So the live ones come first
+     * and each carries its own Revoke; used and expired ones are listed below,
+     * greyed, because "did they ever use it?" is the other question someone
+     * opens this screen to answer.
+     */
+    private fun renderOutstanding() {
+        if (outstanding.isEmpty()) return
+        val (live, spent) = outstanding.partition { it.live }
+
+        if (live.isNotEmpty()) {
+            root.addView(chrome.sectionHeader("WAITING TO BE USED"))
+            val card = chrome.card()
+            live.forEachIndexed { i, inv ->
+                if (i > 0) card.addView(chrome.rowDivider(insetStartDp = 16))
+                card.addView(outstandingRow(inv, revocable = true))
+            }
+            root.addView(card)
+        }
+        if (spent.isNotEmpty()) {
+            root.addView(chrome.sectionHeader("ALREADY USED OR EXPIRED"))
+            val card = chrome.card()
+            spent.forEachIndexed { i, inv ->
+                if (i > 0) card.addView(chrome.rowDivider(insetStartDp = 16))
+                card.addView(outstandingRow(inv, revocable = false))
+            }
+            root.addView(card)
+        }
+    }
+
+    private fun outstandingRow(inv: Invite, revocable: Boolean): View =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(12), dp(8), dp(12))
+            addView(LinearLayout(this@InviteActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, WRAP, 1f)
+                addView(TextView(this@InviteActivity).apply {
+                    text = inv.formatted
+                    typeface = Typeface.MONOSPACE
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                    setTextColor(ContextCompat.getColor(this@InviteActivity,
+                        if (revocable) UiR.color.social_text else UiR.color.social_muted))
+                })
+                addView(TextView(this@InviteActivity).apply {
+                    text = when {
+                        inv.used -> "Used"
+                        inv.expired -> "Expired"
+                        inv.expiresAt > 0 -> "Expires " + DateFormat
+                            .getDateInstance(DateFormat.MEDIUM).format(Date(inv.expiresAt))
+                        else -> "Waiting"
+                    }
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
+                    setTextColor(ContextCompat.getColor(this@InviteActivity, UiR.color.social_muted))
+                })
+            })
+            if (revocable) addView(TextView(this@InviteActivity).apply {
+                text = "Revoke"
+                gravity = Gravity.CENTER
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(ContextCompat.getColor(this@InviteActivity, UiR.color.social_danger))
+                setPadding(dp(14), dp(10), dp(14), dp(10))
+                minHeight = dp(48)          // §14.10
+                minWidth = dp(48)
+                contentDescription = "Revoke invite code " + inv.formatted.replace("-", " ")
+                background = chrome.ripple(chrome.rounded(ContextCompat.getColor(
+                    this@InviteActivity, UiR.color.social_surface2), 12f))
+                setOnClickListener { confirmRevoke(inv) }
+            })
+        }
+
+    /**
+     * Revoking asks, unlike blocking (§31.3.1).
+     *
+     * The difference is who is inconvenienced. Blocking protects the person
+     * doing it and is reversible in one tap; revoking breaks something you
+     * already gave to somebody else, and they find out by the code not working,
+     * with nothing to tell them why.
+     */
+    private fun confirmRevoke(inv: Invite) {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Revoke this code?")
+            .setMessage(
+                "${inv.formatted} will stop working straight away.\n\n" +
+                    "If you've already given it to someone, they won't be able to " +
+                    "make an account and nothing will tell them why — so it is " +
+                    "worth a message."
+            )
+            .setNegativeButton("Keep it", null)
+            .setPositiveButton("Revoke") { _, _ ->
+                lifecycleScope.launch {
+                    val s = SessionProvider.manager(this@InviteActivity)
+                        .current() as? RustSocialSession ?: return@launch
+                    withContext(Dispatchers.IO) { s.inviteIssuer().revoke(inv.code) }
+                        .onSuccess {
+                            if (invite?.code == inv.code) invite = null
+                            Snackbar.make(findViewById(android.R.id.content),
+                                "Code revoked", Snackbar.LENGTH_SHORT).show()
+                            refresh()
+                        }
+                        .onFailure {
+                            error = it.message ?: "Couldn't revoke that code."
+                            render()
+                        }
+                }
+            }
+            .show()
     }
 
     /**
@@ -158,6 +289,7 @@ class InviteActivity : AppCompatActivity() {
             r.onSuccess { invite = it }
                 .onFailure { error = it.message ?: "Couldn't create an invite." }
             render()
+            refresh()
         }
     }
 

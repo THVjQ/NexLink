@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  NexLink's N, inside a speech bubble.
+
+  §10.5 makes these separate products with separate listings, so the icon has
+  two jobs at once: say "this is NexLink" and say "this is not the SMS one".
+  Reusing the exact N letterform from app/src/main/res/drawable/ic_launcher_
+  foreground.xml does the first; the bubble does the second, and does it without
+  a word, which matters because the launcher label is truncated on most phones.
+
+  Everything sits inside the adaptive-icon safe zone (the middle 66 of 108dp):
+  a launcher that masks to a circle clips the corners of this canvas, and a tail
+  drawn out at 92 would lose its point.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+
+    <!-- bubble body -->
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M34,26 L74,26 A14,14 0 0 1 88,40 L88,62 A14,14 0 0 1 74,76 L52,76 L38,87 L40,76 L34,76 A14,14 0 0 1 20,62 L20,40 A14,14 0 0 1 34,26 Z"/>
+
+    <!-- NexLink's N, scaled to sit in the bubble -->
+    <group android:scaleX="0.62" android:scaleY="0.62"
+        android:translateX="20.5" android:translateY="17.8">
+        <path android:fillColor="#1257D6"
+            android:pathData="M30,28 L46,28 L62,72 L62,28 L78,28 L78,80 L62,80 L46,36 L46,80 L30,80 Z"/>
+    </group>
+</vector>

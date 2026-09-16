@@ -31,6 +31,7 @@ import org.matrix.rustcomponents.sdk.LatestEventValue
 import org.matrix.rustcomponents.sdk.MediaSource
 import org.matrix.rustcomponents.sdk.ReceiptType
 import org.matrix.rustcomponents.sdk.Membership
+import org.matrix.rustcomponents.sdk.RoomInfo
 import org.matrix.rustcomponents.sdk.Room as SdkRoom
 import org.matrix.rustcomponents.sdk.RoomListEntriesListener
 import org.matrix.rustcomponents.sdk.RoomListEntriesUpdate
@@ -914,7 +915,12 @@ class RustSocialSession private constructor(
     override suspend fun startDirectMessage(userId: UserId): Result<RoomId> = ioCatching {
         // Reuse an existing DM rather than creating a second one. Two rooms with
         // the same person is confusing and splits history for no reason.
-        client.getDmRoom(userId.value)?.let { return@ioCatching RoomId(it.id()) }
+        client.getDmRoom(userId.value)?.let {
+            // Refresh here too: the room may exist server-side without being in
+            // the list this process has built yet.
+            refreshRooms()
+            return@ioCatching RoomId(it.id())
+        }
 
         val id = client.createRoom(
             CreateRoomParameters(
@@ -932,6 +938,12 @@ class RustSocialSession private constructor(
                 canonicalAlias = null
             )
         )
+        // §14.1 — `createGroup` did this and this did not, so starting a
+        // one-to-one chat created the room and left the inbox looking exactly
+        // as it did before. Reported as the new chat "not showing till logged
+        // in again": the next cold start resynced and it appeared, which made
+        // it look like a sign-in problem rather than a missing refresh.
+        refreshRooms()
         RoomId(id)
     }
 
@@ -957,7 +969,7 @@ class RustSocialSession private constructor(
                 val preview = remote?.content?.toRoomPreview()
                 RoomSummary(
                     id = RoomId(room.id()),
-                    title = info.displayName ?: room.id(),
+                    title = roomTitleOf(info, room.id()),
                     avatarUrl = info.avatarUrl,
                     lastMessagePreview = preview,
                     lastMessageAt = (latest as? LatestEventValue.Remote)?.timestamp?.toLong() ?: 0L,
@@ -992,6 +1004,40 @@ class RustSocialSession private constructor(
     fun inviteIssuer(): com.nexlink.social.core.InviteIssuer =
         com.nexlink.social.core.InviteIssuer(
             client.session().homeserverUrl, client.session().accessToken)
+
+    /**
+     * What to call a conversation — §14.1.
+     *
+     * `RoomInfo.displayName` is null until the SDK has enough state to compute
+     * one, and for a direct message that means until the other member's profile
+     * has synced. The old fallback was `room.id()`, so a new chat was titled
+     * `!AbCdEf...:nexlink.thvjq.com.au` — reported as *"chat names just show
+     * random string, not the usernames of the other person"*. The room id is
+     * never the right thing to show a person: it is not a name, it does not
+     * become one, and it looks like a bug because it is one.
+     *
+     * `heroes` is the SDK's own answer to the same question — the handful of
+     * members Matrix uses to name an unnamed room — and it is populated from
+     * the membership list, which arrives well before profiles do.
+     *
+     * The last resort is "New conversation" rather than an id: if we genuinely
+     * do not know who this is yet, saying so is better than showing something
+     * unreadable that will change under the user a moment later.
+     */
+    private fun roomTitleOf(info: RoomInfo, roomId: String): String {
+        info.displayName?.trim()?.takeIf { it.isNotEmpty() && !it.startsWith("!") }
+            ?.let { return it }
+
+        val names = info.heroes.mapNotNull { hero ->
+            hero.displayName?.trim()?.takeIf { it.isNotEmpty() }
+                ?: hero.userId.substringAfter('@').substringBefore(':').takeIf { it.isNotEmpty() }
+        }
+        return when {
+            names.isEmpty() -> "New conversation"
+            names.size <= 3 -> names.joinToString(", ")
+            else -> names.take(2).joinToString(", ") + " and ${names.size - 2} others"
+        }
+    }
 
     /** §8.6 — the SDK has no device list, so this goes to the raw C-S API. */
     fun deviceManager(): DeviceManager =

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Social app's launcher background.
+
+  NexLink's is #397CAF. This is the Social palette's accent (social_accent_fill,
+  #1257D6) — the same family, a step deeper, so the two are told apart at a
+  glance on a home screen rather than needing to be read.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#1257D6"/>
+</shape>

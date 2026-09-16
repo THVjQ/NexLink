@@ -121,5 +121,69 @@ class Record(unittest.TestCase):
         r._record("@luca:x", "8WGJRYJV4MZ0", 999)   # must not raise
 
 
+class DeleteTxn:
+    """A txn for DELETE, where the caller decides how many rows matched.
+    `FakeTxn` derives rowcount from an insert, which silently overwrote the
+    value this test was setting."""
+
+    def __init__(self, rows_affected):
+        self.rowcount = rows_affected
+        self.sql = None
+
+    def execute(self, sql, args):
+        self.sql = sql
+
+
+class Revoke(unittest.TestCase):
+    def test_only_an_unused_code_is_deleted(self):
+        txn = DeleteTxn(rows_affected=1)
+        self.assertTrue(m._delete_unused_token(txn, "8WGJRYJV4MZ0"))
+        # completed = 0 is the guard: a spent token is the server's record that
+        # an account was created from it, so deleting it would erase the link.
+        self.assertIn("completed = 0", txn.sql)
+
+    def test_a_spent_code_is_left_alone(self):
+        txn = DeleteTxn(rows_affected=0)
+        self.assertFalse(m._delete_unused_token(txn, "8WGJRYJV4MZ0"))
+
+
+class Ownership(unittest.TestCase):
+    """One user must not be able to see or revoke another's invites — with no
+    quota in force this separation is the only thing between 'list your own'
+    and 'an authenticated user can shut down everyone's'."""
+
+    def resource(self, path):
+        return m._InviteResource(api=None, config={"record_path": path})
+
+    def test_only_the_issuers_own_records_are_returned(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "invites.jsonl")
+            r = self.resource(path)
+            r._record("@luca:x", "AAAAAAAAAAAA", 1)
+            r._record("@dad:x", "BBBBBBBBBBBB", 2)
+            r._record("@luca:x", "CCCCCCCCCCCC", 3)
+
+            luca = r._mine("@luca:x")
+            self.assertEqual(len(luca), 2)
+            self.assertNotIn(
+                __import__("hashlib").sha256(b"BBBBBBBBBBBB").hexdigest(), luca)
+            self.assertEqual(len(r._mine("@dad:x")), 1)
+            self.assertEqual(r._mine("@nobody:x"), {})
+
+    def test_a_truncated_line_does_not_hide_the_rest(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "invites.jsonl")
+            r = self.resource(path)
+            r._record("@luca:x", "AAAAAAAAAAAA", 1)
+            with open(path, "a") as f:
+                f.write('{"issuer": "@luca:x", "cod\n')     # a half-written line
+            r._record("@luca:x", "CCCCCCCCCCCC", 3)
+            self.assertEqual(len(r._mine("@luca:x")), 2)
+
+    def test_a_missing_record_file_is_not_an_error(self):
+        r = self.resource("/nonexistent/dir/invites.jsonl")
+        self.assertEqual(r._mine("@luca:x"), {})
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

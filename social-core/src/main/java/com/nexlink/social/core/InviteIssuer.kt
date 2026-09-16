@@ -8,7 +8,18 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /** One issued invite. [formatted] is what a human reads; [code] is what is typed. */
-data class Invite(val code: String, val formatted: String, val expiresAt: Long)
+data class Invite(
+    val code: String,
+    val formatted: String,
+    val expiresAt: Long,
+    val issuedAt: Long = 0L,
+    /** Someone has created an account with it. It can no longer be revoked. */
+    val used: Boolean = false,
+    val expired: Boolean = false,
+) {
+    /** Still worth giving to somebody. */
+    val live: Boolean get() = !used && !expired
+}
 
 /**
  * §9.5 — a user inviting someone, rather than asking the operator to.
@@ -74,6 +85,51 @@ class InviteIssuer(
             code == 401 || code == 403 -> "You're not signed in any more. Sign in and try again."
             code == 429 -> message ?: "Too many invites in a short time. Try again shortly."
             else -> message ?: "The server couldn't create an invite (error $code)."
+        }
+    }
+
+    /** §9.5.1 — the codes this user issued. The server filters by issuer. */
+    fun list(): Result<List<Invite>> = runCatching {
+        val req = Request.Builder()
+            .url("$base$PATH")
+            .header("Authorization", "Bearer $accessToken")
+            .get().build()
+        http.newCall(req).execute().use { r ->
+            val raw = r.body?.string().orEmpty()
+            if (!r.isSuccessful) throw IllegalStateException(errorFrom(r.code, raw))
+            val arr = JSONObject(raw).optJSONArray("invites") ?: return@use emptyList()
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                Invite(
+                    code = o.getString("code"),
+                    formatted = o.optString("formatted").ifEmpty { o.getString("code") },
+                    expiresAt = o.optLong("expires_at"),
+                    issuedAt = o.optLong("issued_at"),
+                    used = o.optBoolean("used"),
+                    expired = o.optBoolean("expired"),
+                )
+            }
+        }
+    }
+
+    /**
+     * Revoke an unredeemed code.
+     *
+     * A code already used cannot be revoked and the server says so with a 409 —
+     * the account exists by then, and unmaking it is §31's business, not this
+     * endpoint's.
+     */
+    fun revoke(code: String): Result<Unit> = runCatching {
+        val req = Request.Builder()
+            .url("$base$PATH?code=" + java.net.URLEncoder.encode(code, "UTF-8"))
+            .header("Authorization", "Bearer $accessToken")
+            .delete().build()
+        http.newCall(req).execute().use { r ->
+            val raw = r.body?.string().orEmpty()
+            if (!r.isSuccessful) throw IllegalStateException(
+                if (r.code == 409) "That code has already been used, so it can't be revoked."
+                else errorFrom(r.code, raw)
+            )
         }
     }
 

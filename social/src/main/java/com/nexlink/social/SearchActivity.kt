@@ -37,6 +37,10 @@ import com.nexlink.social.ui.R as UiR
 class SearchActivity : AppCompatActivity() {
 
     private lateinit var root: LinearLayout
+    /** The query was too short to be indexed — see the note in the click handler. */
+    private var shortQuery = false
+    /** Search has been pressed at least once, so an empty field can be explained. */
+    private var attempted = false
     private lateinit var chrome: Chrome
     private var hits: List<MessageSearchHit> = emptyList()
     private var searched = false
@@ -79,12 +83,39 @@ class SearchActivity : AppCompatActivity() {
                 topMargin = dp(8); marginStart = dp(12); marginEnd = dp(12)
             }
             setOnClickListener {
-                query = field.text.toString().trim()
-                if (query.isEmpty()) return@setOnClickListener
+                val typed = field.text.toString().trim()
+                // Two dead ends found by walking the screen (§14.9.2):
+                //
+                //   * an empty field did nothing at all — no search, no message,
+                //     a button that appears broken;
+                //   * a one- or two-character query reported "Nothing found",
+                //     which is a lie. The index ignores very short terms, so
+                //     searching "Hi" reported nothing while the word sat on
+                //     screen in the conversation behind it. Verified on the
+                //     handset: "Test" finds its message, "Hi" finds nothing.
+                //
+                // Saying nothing was found is a claim about the messages. Only
+                // make it when a search actually ran.
+                shortQuery = typed.isNotEmpty() && typed.length < MIN_QUERY
+                attempted = true
+                if (typed.isEmpty() || shortQuery) {
+                    query = typed; searched = false; hits = emptyList(); render()
+                    return@setOnClickListener
+                }
+                query = typed
                 searched = true
                 runSearch()
             }
         })
+
+        if (shortQuery) {
+            root.addView(chrome.note(
+                "Search needs at least $MIN_QUERY characters — shorter words are " +
+                    "not indexed, so a search for them finds nothing even when " +
+                    "the word is there."))
+        } else if (query.isEmpty() && attempted) {
+            root.addView(chrome.note("Type what you're looking for, then tap Search."))
+        }
 
         if (searched) {
             if (hits.isEmpty()) {
@@ -151,6 +182,9 @@ class SearchActivity : AppCompatActivity() {
         }
 
     companion object {
+        /** Measured on the handset: 2 characters finds nothing, 4 works. */
+        private const val MIN_QUERY = 3
+
         private const val MATCH = LinearLayout.LayoutParams.MATCH_PARENT
         private const val WRAP = LinearLayout.LayoutParams.WRAP_CONTENT
         fun intent(c: Context) = Intent(c, SearchActivity::class.java)

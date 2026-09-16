@@ -66,6 +66,95 @@ class _InviteResource(DirectServeJsonResource):
         self._record_path = config.get("record_path", "/data/nexlink-invites.jsonl")
         self._recent: Dict[str, list] = {}
 
+    async def _async_render_GET(self, request: SynapseRequest) -> None:
+        """
+        The codes this user issued that are still worth anything.
+
+        Only *their* codes. The record is keyed by issuer and the query is
+        filtered by it, so one user cannot enumerate — let alone revoke —
+        another's invites. With no quota in force (§9.5.1) that separation is
+        doing real work: it is the difference between "see your own invites" and
+        "an authenticated user can shut down everyone's".
+        """
+        requester = await self._api.get_user_by_req(request)
+        user_id = requester.user.to_string()
+        mine = self._mine(user_id)
+        if not mine:
+            respond_with_json(request, 200, {"invites": []}, send_cors=True)
+            return
+
+        rows = await self._api.run_db_interaction(
+            "nexlink_list_invites", _select_tokens, list(mine.keys()))
+        now_ms = int(time.time() * 1000)
+        out = []
+        for token, uses_allowed, pending, completed, expiry in rows:
+            rec = mine.get(sha256(token.encode()).hexdigest())
+            if rec is None:
+                continue
+            used = completed > 0 or (uses_allowed is not None and completed >= uses_allowed)
+            out.append({
+                "code": token,
+                "formatted": format_code(token),
+                "issued_at": rec.get("issued_at"),
+                "expires_at": expiry,
+                "used": used,
+                "expired": expiry is not None and expiry < now_ms,
+            })
+        out.sort(key=lambda r: r.get("issued_at") or 0, reverse=True)
+        respond_with_json(request, 200, {"invites": out}, send_cors=True)
+
+    async def _async_render_DELETE(self, request: SynapseRequest) -> None:
+        """
+        Revoke one unredeemed code.
+
+        A code already redeemed is NOT deleted: the row is Synapse's record that
+        an account was created with it, and removing it would erase that link.
+        Revoking something already spent is meaningless anyway — the account
+        exists, and suspending it is §31's job, not this endpoint's.
+        """
+        requester = await self._api.get_user_by_req(request)
+        user_id = requester.user.to_string()
+        code = request.args.get(b"code", [b""])[0].decode().replace("-", "").upper()
+
+        if sha256(code.encode()).hexdigest() not in self._mine(user_id):
+            # Same answer whether it was someone else's or never existed, so
+            # this cannot be used to test whether a code is real.
+            respond_with_json(request, 404,
+                              {"errcode": "M_NOT_FOUND", "error": "No such invite."},
+                              send_cors=True)
+            return
+
+        removed = await self._api.run_db_interaction(
+            "nexlink_revoke_invite", _delete_unused_token, code)
+        if removed:
+            logger.info("nexlink: invite revoked by %s", user_id)
+            respond_with_json(request, 200, {"revoked": True}, send_cors=True)
+        else:
+            respond_with_json(request, 409,
+                              {"errcode": "M_UNKNOWN",
+                               "error": "That code has already been used."},
+                              send_cors=True)
+
+    def _mine(self, user_id: str) -> Dict[str, Dict[str, Any]]:
+        """code_sha256 -> record, for one issuer. Read fresh each time: the file
+        is small, and caching it would mean a revoke on one worker is invisible
+        to another."""
+        out: Dict[str, Dict[str, Any]] = {}
+        try:
+            with open(self._record_path) as f:
+                for line in f:
+                    try:
+                        rec = json.loads(line)
+                    except ValueError:
+                        continue          # a truncated line must not hide the rest
+                    if rec.get("issuer") == user_id:
+                        out[rec.get("code_sha256", "")] = rec
+        except FileNotFoundError:
+            pass
+        except OSError:
+            logger.exception("nexlink: could not read the invite record")
+        return out
+
     async def _async_render_POST(self, request: SynapseRequest) -> None:
         # Authenticated as the calling user by Synapse itself. An unauthenticated
         # request never reaches the body of this method.
@@ -133,6 +222,33 @@ class _InviteResource(DirectServeJsonResource):
             # An unwritable record must not stop someone inviting a friend, but
             # it must not pass silently either.
             logger.exception("nexlink: could not write the invite record")
+
+
+def _select_tokens(txn, hashes):
+    """
+    Every unexpired-or-not token, filtered to the caller's in Python.
+
+    The record stores only the SHA-256 of a code (§29.1), and SQL cannot hash,
+    so the join happens here rather than in the query. The table holds one row
+    per invite ever issued on this server, which for a private launch is tens —
+    if it ever becomes tens of thousands, store the token id alongside the hash
+    instead of scanning.
+    """
+    txn.execute(
+        "SELECT token, uses_allowed, pending, completed, expiry_time"
+        " FROM registration_tokens"
+    )
+    return txn.fetchall()
+
+
+def _delete_unused_token(txn, code: str) -> bool:
+    """Delete only if nothing has been created with it. `completed = 0` is the
+    guard: a spent token is the server's record that an account came from it."""
+    txn.execute(
+        "DELETE FROM registration_tokens WHERE token = ? AND completed = 0",
+        (code,),
+    )
+    return txn.rowcount > 0
 
 
 def _insert_token(txn, code: str, expiry_ms: int) -> bool:

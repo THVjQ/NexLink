@@ -19,7 +19,23 @@ class SocialSessionManager(private val context: Context) {
 
     private val store = SessionStore(context)
 
-    private val _state = MutableStateFlow<SessionState>(SessionState.SignedOut)
+    /**
+     * **Not `SignedOut`.** §13.1.
+     *
+     * The initial value is what every screen renders in the instant before
+     * `restore()` finishes, and starting at `SignedOut` meant a cold start
+     * showed the welcome screen — "you have no account" — to someone who was
+     * signed in the whole time. Tapping Sign in then revealed they already
+     * were, which is exactly how it was reported: *"said not logged in but when
+     * sign in clicked it showed signed in"*.
+     *
+     * A stored session is a fact available synchronously, so there is no reason
+     * to guess wrong first. `Restoring` renders as "Opening your messages…",
+     * which is both true and reassuring; `SignedOut` was neither.
+     */
+    private val _state = MutableStateFlow<SessionState>(
+        if (store.hasSession) SessionState.Restoring else SessionState.SignedOut
+    )
     val state: Flow<SessionState> = _state.asStateFlow()
 
     @Volatile private var session: RustSocialSession? = null

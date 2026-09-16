@@ -51,14 +51,43 @@ class RecoverySetupActivity : AppCompatActivity() {
         renderIntro()
     }
 
+    /**
+     * Has this account already got recovery set up?
+     *
+     * It matters because §7.4's flow **replaces** the key rather than showing
+     * the existing one — that is inherent, the old key is not recoverable by
+     * design. Reaching this screen from the warning banner meant it could only
+     * be a first-time setup; now that it has a permanent menu entry (§7.4.1),
+     * someone can arrive here already holding a key, and creating a new one
+     * silently would break the key they have written down and every other
+     * device relying on it.
+     */
+    private fun alreadySetUp(): Boolean =
+        (SessionProvider.manager(this).current()
+            as? com.nexlink.social.core.rust.RustSocialSession)
+            ?.currentState()
+            ?.let { it as? com.nexlink.social.core.session.SessionState.SignedIn }
+            ?.keyBackupHealthy == true
+
     private fun renderIntro() {
         root.removeAllViews()
-        root.addView(text("Your recovery key", 26f, UiR.color.social_text, bold = true))
+        val replacing = alreadySetUp()
         root.addView(text(
-            "Your messages are encrypted. That means if you lose this phone, " +
-            "nobody — including us — can get your history back for you.\n\n" +
-            "A recovery key is the only way back in. We'll show it once. " +
-            "Write it down or save it in a password manager.",
+            if (replacing) "Replace your recovery key" else "Your recovery key",
+            26f, UiR.color.social_text, bold = true))
+        root.addView(text(
+            if (replacing)
+                "You already have a recovery key for this account.\n\n" +
+                "There is no way to show it again — that is the point of it. " +
+                "You can create a NEW one, but the old key stops working the " +
+                "moment you do, and any device or note still holding it becomes " +
+                "useless.\n\n" +
+                "Only do this if you have lost the key you had."
+            else
+                "Your messages are encrypted. That means if you lose this phone, " +
+                "nobody — including us — can get your history back for you.\n\n" +
+                "A recovery key is the only way back in. We'll show it once. " +
+                "Write it down or save it in a password manager.",
             16f, UiR.color.social_text2))
         root.addView(gap(12))
         status?.let { root.addView(text(it, 14f, UiR.color.social_accent)); root.addView(gap(8)) }
@@ -70,7 +99,10 @@ class RecoverySetupActivity : AppCompatActivity() {
         root.addView(text("Confirm your password to continue", 13f, UiR.color.social_muted))
         root.addView(pass)
 
-        root.addView(button("Create my recovery key") {
+        root.addView(button(
+            if (replacing) "Create a new key (the old one stops working)"
+            else "Create my recovery key"
+        ) {
             val p = pass.text.toString()
             if (p.isEmpty()) { status = "Enter your password."; renderIntro(); return@button }
             status = "Setting up…"; renderIntro()
