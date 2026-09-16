@@ -341,3 +341,63 @@ describing a review board that does not exist.
   homeserver's admin; verify where that lands and that it is read.
 - **At what volume does §31.5 break?** §28.7. Probably lower than expected, and
   it is the number that decides how large this service can responsibly get.
+
+---
+
+## 31.5 How the operator actually moderates — `tools/moderate.sh`
+
+§31.3 specifies reporting and blocking from the *user's* side and both work.
+This is the other half: what the operator does when a report arrives.
+
+**There is no admin web UI, and that is deliberate.** `/_synapse/admin/*` is
+denied at the edge by a Cloudflare Access policy (§26.5.2), so the admin API is
+reachable only from inside Willard. The moderation surface is therefore a bearer
+token in a file, inside a container, behind SSH — correct for security and
+useless at 3 a.m., which is exactly when §31 says these tools get used.
+
+So `tools/moderate.sh` wraps it:
+
+```
+tools/moderate.sh reports              what has been reported
+tools/moderate.sh report <id>          one report, in full
+tools/moderate.sh whois <user>         is this account suspended, deactivated, locked
+tools/moderate.sh suspend <user>       reversible — do this first
+tools/moderate.sh unsuspend <user>
+tools/moderate.sh deactivate <user>    NOT reversible; types the user id back to confirm
+tools/moderate.sh invites              every code, LIVE ones first
+tools/moderate.sh revoke <code>
+```
+
+The token is read on the host inside the SSH command, so it never reaches the
+operator's shell history or process list.
+
+### What a report contains, and what it cannot
+
+```
+#2  15 Sep 2026 13:35
+    reported by : @someone:nexlink.thvjq.com.au
+    against     : @someone-else:nexlink.thvjq.com.au
+    reason      : (what the reporter typed)
+    room        : !xEOD…
+```
+
+**No message content, and there is no setting that would add it.** The server
+holds ciphertext (§2.8 #1). A report is who, where, and why — and §31.3.2's
+consent checkbox records permission for the operator to *ask* the reporter for
+a copy, not permission to read one. The tool prints that in its output rather
+than leaving a new operator to infer it from an absence.
+
+This is why moderation acts on **accounts**, not messages: suspension and
+deactivation are the levers that exist. Suspend first — §29.2, and §7.6 for why
+deactivation is the one that cannot be walked back.
+
+### Verified working 2026-09-16
+
+`GET /_synapse/admin/v1/event_reports` answers 200 and returned the report left
+by §31.3.2's end-to-end test. Worth stating because the *first* implementation
+of reporting used `POST /rooms/{id}/report`, which Synapse 1.160 accepts with a
+200 and files nowhere readable — `/_synapse/admin/v1/room_reports` is 404 on
+this version. Reports are only visible because the client was changed to use
+`reportContent`. A moderation tool that lists an endpoint nobody has queried is
+a tool that quietly lists nothing.
+
