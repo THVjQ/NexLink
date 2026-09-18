@@ -976,6 +976,8 @@ class RustSocialSession private constructor(
                     unreadCount = info.notificationCount.toInt(),
                     isGroup = !info.isDirect,
                     isMuted = false,
+                    // The SDK already knows; no need to compare user ids.
+                    lastMessageIsMine = remote?.isOwn == true,
                     lastMessageUndecryptable =
                         (latest as? LatestEventValue.Remote)?.content?.toAppContent()
                             is com.nexlink.social.core.session.TimelineContent.Undecryptable,

@@ -13,7 +13,17 @@ import kotlinx.coroutines.flow.first
  */
 object Resolver {
 
-    data class Resolved(val roomTitle: String, val senderName: String, val body: String)
+    /**
+     * @param senderIsMe §13.4.2 — a push for my own message must not become a
+     *   notification. Carried as a flag rather than an id so the caller cannot
+     *   get the comparison wrong.
+     */
+    data class Resolved(
+        val roomTitle: String,
+        val senderName: String,
+        val body: String,
+        val senderIsMe: Boolean = false,
+    )
 
     /**
      * @return null when the event could not be resolved or decrypted, which the
@@ -43,7 +53,8 @@ object Resolver {
             is TimelineContent.Undecryptable -> return Resolved(
                 roomTitle = summary?.title ?: "NexLink Social",
                 senderName = item.senderDisplayName,
-                body = "New message"
+                body = "New message",
+                senderIsMe = mine(session, item.sender)
             )
             else -> return null
         }
@@ -51,7 +62,19 @@ object Resolver {
         return Resolved(
             roomTitle = summary?.title ?: item.senderDisplayName,
             senderName = item.senderDisplayName,
-            body = body
+            body = body,
+            senderIsMe = mine(session, item.sender)
         )
+    }
+
+    private fun mine(
+        session: com.nexlink.social.core.session.SocialSession,
+        sender: com.nexlink.social.core.session.UserId,
+    ): Boolean {
+        val me = (session as? com.nexlink.social.core.rust.RustSocialSession)
+            ?.currentState()
+            ?.let { it as? com.nexlink.social.core.session.SessionState.SignedIn }
+            ?.userId?.value
+        return me != null && me == sender.value
     }
 }

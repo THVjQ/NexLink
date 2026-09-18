@@ -406,7 +406,7 @@ class ConversationActivity : AppCompatActivity() {
         // §13.4.2 — no notification for the conversation on screen, and clear
         // any that is already showing for it.
         (application as? SocialApplication)?.openRoomId = roomId?.value
-        roomId?.let { Notifications.dismiss(this, it) }
+        roomId?.let { Notifications.dismiss(this, it, roomTitle) }
         val rid = roomId ?: return
         lifecycleScope.launch {
             SessionProvider.manager(this@ConversationActivity).current()?.markRead(rid)

@@ -64,10 +64,38 @@ class SocialApplication : Application() {
         scope.launch {
             sessions.state.collectLatest {
                 val s = sessions.current() ?: return@collectLatest
-                s.rooms().collectLatest { rooms -> rooms.forEach { notifyIfNew(it) } }
+                // A new session means a new baseline.
+                primed = false
+                s.rooms().collectLatest { rooms ->
+                    // §13.4.2 — **the first emission is a baseline, not news.**
+                    //
+                    // `seen` starts empty, so without this every unread room
+                    // notifies again on every process start — including the
+                    // starts caused by push. From the user's side that is a
+                    // notification that will not go away: dismiss it, and the
+                    // next launch brings it straight back.
+                    if (!primed) {
+                        rooms.forEach { seen[it.id.value] = it.unreadCount }
+                        primed = true
+                        return@collectLatest
+                    }
+                    rooms.forEach { notifyIfNew(it) }
+                }
             }
         }
     }
+
+    /** Whether [seen] holds a baseline yet. See the note in the collector. */
+    private var primed = false
+
+    /**
+     * The newest message already notified about, per room.
+     *
+     * Separate from [seen] because they answer different questions: the count
+     * says how much is unread, which fluctuates; this says what we have already
+     * told the user about, which only ever moves forward.
+     */
+    private val notifiedAt = mutableMapOf<String, Long>()
 
     private fun notifyIfNew(room: RoomSummary) {
         val previous = seen[room.id.value] ?: 0
@@ -77,11 +105,38 @@ class SocialApplication : Application() {
         // the count has not risen. A count that FELL means it was read
         // somewhere, so clear rather than notify.
         if (room.unreadCount <= previous) {
-            if (room.unreadCount == 0) Notifications.dismiss(this, room.id)
+            if (room.unreadCount == 0) {
+                Notifications.dismiss(this, room.id, room.title)
+                notifiedAt[room.id.value] = room.lastMessageAt
+            }
             return
         }
-        if (room.id.value == openRoomId) return
         if (room.isMuted) return
+        if (room.id.value == openRoomId) {
+            // Reading it counts as having dealt with it. Recording the message
+            // here is what stops the *next* emission re-notifying about the
+            // very message just read — see below.
+            notifiedAt[room.id.value] = room.lastMessageAt
+            return
+        }
+        // §13.4.2 — never for something I sent. Reported plainly: "I get a
+        // notification when I send a message, don't want that."
+        if (room.lastMessageIsMine) return
+
+        // §13.4.2 — **notify about a MESSAGE, not about a number.**
+        //
+        // The unread count is not a reliable edge. After `markRead` it drops to
+        // zero and a moment later a sync in flight reports the old value again,
+        // so the count rises 0 -> 1 with no new message behind it — and the
+        // notification the user just cleared by opening the conversation comes
+        // straight back. Observed exactly that way: dismissed on open, re-posted
+        // seconds later with the same message and a "2" badge.
+        //
+        // The message timestamp is the honest edge: it only moves when somebody
+        // actually said something.
+        val at = room.lastMessageAt
+        if (at > 0 && at <= (notifiedAt[room.id.value] ?: 0L)) return
+        notifiedAt[room.id.value] = at
 
         Notifications.show(
             context = this,

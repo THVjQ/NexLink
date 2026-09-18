@@ -8,6 +8,7 @@ import android.content.Context
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.nexlink.social.contract.SocialBridgeContract
 import androidx.core.app.Person
 import androidx.core.app.RemoteInput
 import com.nexlink.social.core.session.RoomId
@@ -158,7 +159,29 @@ object Notifications {
      * another device. This is the prohibition that matters most to a
      * multi-device user.
      */
-    fun dismiss(context: Context, roomId: RoomId) {
+    fun dismiss(context: Context, roomId: RoomId, roomTitle: String? = null) {
         runCatching { NotificationManagerCompat.from(context).cancel(roomId.value.hashCode()) }
+
+        // §16.2.2 — and tell NexLink, because the cancel above is very often a
+        // no-op. NexLink's unified inbox cancels Social's notification the
+        // moment it appears and posts its own copy; that copy is the one the
+        // user can see, and only NexLink can remove it.
+        roomTitle?.takeIf { it.isNotBlank() }?.let { title ->
+            runCatching {
+                // **No receiver permission.** `sendBroadcast(intent, permission)`
+                // requires the RECEIVER to hold it, and NexLink deliberately
+                // does not: §2.8 #6 asserts its declared permission set never
+                // changes. Passing it here meant the broadcast was simply never
+                // delivered — silently, because an undelivered broadcast looks
+                // exactly like a delivered one from the sender's side.
+                //
+                // `setPackage` still means only NexLink can receive it.
+                context.sendBroadcast(
+                    android.content.Intent(SocialBridgeContract.ACTION_CONVERSATION_READ)
+                        .setPackage(SocialBridgeContract.NEXLINK_PACKAGE)
+                        .putExtra(SocialBridgeContract.EXTRA_CONVERSATION_TITLE, title)
+                )
+            }
+        }
     }
 }

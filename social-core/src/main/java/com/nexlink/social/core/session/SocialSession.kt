@@ -347,6 +347,14 @@ data class RoomSummary(
     val isMuted: Boolean,
     /** §14.2.3 — a room whose latest event failed to decrypt still lists, with a placeholder. */
     val lastMessageUndecryptable: Boolean = false,
+    /**
+     * §13.4.2 — the latest message is one **I** sent.
+     *
+     * Needed because a notification for your own message is pure noise, and
+     * the unread count alone cannot tell you: it can rise for reasons that
+     * have nothing to do with a new message arriving.
+     */
+    val lastMessageIsMine: Boolean = false,
     /** §14.8 — an invitation is not a conversation yet; the inbox says so. */
     val isInvite: Boolean = false,
     val invitedBy: String? = null

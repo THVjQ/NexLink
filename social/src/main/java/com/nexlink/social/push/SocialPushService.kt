@@ -4,6 +4,7 @@ import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.nexlink.social.Notifications
+import com.nexlink.social.SocialApplication
 import com.nexlink.social.SessionProvider
 import com.nexlink.social.core.session.RoomId
 import com.nexlink.social.core.rust.RustSocialSession
@@ -125,6 +126,23 @@ class SocialPushService : FirebaseMessagingService() {
 
             val resolved = withTimeoutOrNull(RESOLVE_BUDGET_MS) {
                 runCatching { Resolver.resolve(session, RoomId(roomId), eventId) }.getOrNull()
+            }
+
+            // §13.4.2 — two pushes that must never become a notification.
+            //
+            // A message I sent: a push for my own event is noise, and it also
+            // means I have read the room by definition, so anything already
+            // showing for it goes too.
+            //
+            // A message in the room that is open on screen: the in-app watcher
+            // has always respected `openRoomId`, and this path never did — so
+            // a message arriving while you were reading the conversation put a
+            // notification in the shade anyway, and opening the chat did not
+            // make it go away because nothing here was looking.
+            val open = (application as? SocialApplication)?.openRoomId
+            if (resolved?.senderIsMe == true || roomId == open) {
+                Notifications.dismiss(applicationContext, RoomId(roomId))
+                return@runBlocking
             }
 
             Notifications.show(

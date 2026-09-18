@@ -5,6 +5,10 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.util.Log
+import androidx.core.content.ContextCompat
+import android.content.IntentFilter
+import android.content.BroadcastReceiver
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -45,7 +49,18 @@ class NexLinkNotificationListener : NotificationListenerService() {
         // Notification keys we canceled ourselves for source-suppression. The resulting
         // onNotificationRemoved must NOT discard the cached intent or mark the message read —
         // only the source app dismissing its own notification means "read in the app".
+        private const val TAG = "NexLinkListener"
         private val selfSuppressed = mutableSetOf<String>()
+
+        /**
+         * Copied from `SocialBridgeContract` in :social-contract, which :app
+         * deliberately does not depend on (§2.8 #6 — taking that module's
+         * manifest would add a permission to NexLink). Change one, change both.
+         */
+        private const val ACTION_CONVERSATION_READ =
+            "com.thvjq.nexlink.social.action.CONVERSATION_READ"
+        private const val EXTRA_CONVERSATION_TITLE = "conversation_title"
+        private const val SOCIAL_PKG = "com.thvjq.nexlink.social"
 
         fun cacheContentIntent(key: String, pi: android.app.PendingIntent) =
             synchronized(cacheLock) { contentIntents[key] = pi }
@@ -156,6 +171,67 @@ class NexLinkNotificationListener : NotificationListenerService() {
         val title = extras.getCharSequence("android.title")?.toString()?.lowercase() ?: ""
         return text.contains("missed call") || text.contains("incoming call") ||
                title.contains("missed call") || text.contains("calling")
+    }
+
+    /**
+     * §16.2.2 — NexLink Social telling us a conversation has been read.
+     *
+     * This exists because of a bug at the seam between the two apps, not inside
+     * either one. [onNotificationPosted] cancels Social's notification and
+     * posts NexLink's own copy — that is what makes one inbox out of two apps.
+     * The side effect is that Social can no longer clear it: when the user
+     * opens the conversation, Social cancels a notification that NexLink
+     * removed long ago, and **NexLink's copy stays in the shade forever.**
+     * Reported as "notifications are not disappearing when the chat is opened".
+     *
+     * Only NexLink can remove NexLink's notification, so Social has to say so.
+     *
+     * Registered at runtime rather than in the manifest, deliberately: §2.8 #6
+     * asserts NexLink's declared permission set never changes, and a manifest
+     * receiver for a permission-guarded broadcast would have meant NexLink
+     * declaring Social's bridge permission. The trade is that this accepts the
+     * broadcast without verifying the sender — the worst a forged one can do is
+     * dismiss a notification early.
+     */
+    private val conversationRead = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val title = intent?.getStringExtra(EXTRA_CONVERSATION_TITLE)
+                ?.takeIf { it.isNotBlank() } ?: return
+            Log.i(TAG, "conversation read -> clearing the mirrored notification")
+            val nm = getSystemService(NotificationManager::class.java) ?: return
+            // Matched on the title we built the mirror from, because the id is
+            // derived from the SOURCE notification's key, which Social has no
+            // way of knowing.
+            nm.activeNotifications
+                .filter { sbn ->
+                    val t = sbn.notification?.extras
+                        ?.getCharSequence("android.title")?.toString().orEmpty()
+                    t.endsWith(" · $title") || t == title
+                }
+                .forEach { runCatching { nm.cancel(it.id) } }
+            runCatching {
+                NotificationStore.markRead(NotificationStore.platform(SOCIAL_PKG), title)
+            }
+        }
+    }
+
+    // onCreate, not onListenerConnected: the latter fires when the system binds
+    // the listener, which does not happen again for a service that is already
+    // bound — so after an app update the receiver silently never registered.
+    override fun onCreate() {
+        super.onCreate()
+        runCatching {
+            ContextCompat.registerReceiver(
+                this, conversationRead, IntentFilter(ACTION_CONVERSATION_READ),
+                ContextCompat.RECEIVER_EXPORTED,
+            )
+            Log.i(TAG, "conversation-read receiver registered")
+        }.onFailure { Log.w(TAG, "could not register: " + it::class.simpleName) }
+    }
+
+    override fun onDestroy() {
+        runCatching { unregisterReceiver(conversationRead) }
+        super.onDestroy()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
