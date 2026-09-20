@@ -1,6 +1,8 @@
-# Privacy Policy — NexLink Social
+# Privacy Policy — NexLink
 
-**Version 0.2.0-draft** · Not yet published · §4.7, §32
+**Version 0.3.0-draft** · Applies to all NexLink Products · Not yet published · §4.7, §32
+
+> **Draft.** Not reviewed by a lawyer. See `docs/legal/README.md`.
 
 *A plain-language summary is in the Transparency Note. Where the two differ this
 document governs — but they are written to agree, and a discrepancy is a bug
@@ -11,27 +13,46 @@ worth reporting.*
 ## 1. Who is responsible, and the honest framing
 
 ### 1.1 The Operator
-NexLink Social is operated by an individual in New South Wales, Australia. There
-is no company, no data protection officer, and no privacy team. One person makes
-these decisions and answers these requests.
+The NexLink Products are published by an individual in New South Wales,
+Australia. There is no company, no data protection officer, and no privacy team.
+One person makes these decisions and answers these requests.
 
 ### 1.2 Contact
-The Operator, at **google.alumni829@passmail.net**.
+The Operator, at the postal and electronic address published on the **Contact
+Page**: `https://thvjq.com.au/nexlink/contact`
 
-### 1.3 Whether the Privacy Act applies
+The address is published there rather than written into this document so that it
+stays current. An address baked into an installed application cannot be
+corrected on a device that never updates.
+
+### 1.3 Which privacy law applies to you
+The Service is offered only in Switzerland and Australia (Terms §3.7), and this
+policy is written to satisfy both.
+
+- **If you are in Switzerland**, the *Federal Act on Data Protection* (FADP)
+  applies. Your supervisory authority is the **FDPIC**.
+- **If you are in Australia**, the *Privacy Act 1988* (Cth) and the Australian
+  Privacy Principles apply. Your supervisory authority is the **OAIC**.
+
+**Where the two laws differ, this policy applies the stricter rule to everyone.**
+Operating two standards would mean quietly giving some users less, and the
+difference is not large enough to be worth that.
+
 The Operator is an individual, not a business with a turnover that would
 ordinarily bring them within the Australian Privacy Principles. **This policy is
-written as though the Australian Privacy Principles apply regardless**, because
-the alternative is to claim an exemption as a reason to handle your data less
-carefully, and that is not a defensible position for a service whose entire
-proposition is privacy.
+written as though they apply regardless**, because the alternative is to claim
+an exemption as a reason to handle your data less carefully, and that is not a
+defensible position for a service whose entire proposition is privacy.
+
+### 1.4 Definitions
+Defined terms are set out in **Appendix A** at the end of this document.
 
 ---
 
 ## 2. The central point
 
-Message and call **content** is end-to-end encrypted. The server stores
-ciphertext and has never held the keys.
+Message and call **content** in NexLink Social is end-to-end encrypted. The
+server stores ciphertext and has never held the keys.
 
 This is a property of the system's design rather than a promise about our
 conduct. It means the Operator **cannot** produce your message content in
@@ -43,9 +64,38 @@ more than it delivers.
 
 ---
 
-## 3. What we collect and hold
+## 3. Which Product holds what
 
-### 3.1 Information you provide
+The Products differ enormously in what they touch. Read the section for the
+Product you use.
+
+### 3.0 NexLink (SMS, dialler, unified inbox)
+
+**Used on its own, NexLink sends nothing to the Operator.** It has no account, no
+telemetry, no analytics, and no server of the Operator's to talk to. Everything
+below stays on your device.
+
+| Data | Where it goes | Why |
+|---|---|---|
+| Your SMS and MMS messages | Your device only | It is your SMS app |
+| Your contacts | Your device only | To show names instead of numbers |
+| Your call log | Your device only | To show recent calls |
+| Notifications from other messaging apps | Your device only | The unified inbox reads them to build one list |
+| Photos, audio and video you attach | Your device, then your carrier | MMS |
+
+**The unified inbox reads notifications from other apps** (Signal, WhatsApp,
+Telegram, Messenger, Discord, Instagram, Steam and NexLink Social) using
+Android's notification access permission, which you must grant explicitly. That
+content is read on your device, shown in your inbox, and **never transmitted
+anywhere**.
+
+**The Computer Bridge is the one exception, and it is opt-in.** If you enable it,
+your messages are sent to a **server you host yourself**, at an address you type
+in. NexLink has no default server, no hardcoded key and no identity of the
+Operator's; the Operator receives nothing and can see nothing. Messages are
+encrypted to your own browser's public key before they leave the phone.
+
+### 3.1 NexLink Social — information you provide
 
 | Data | Purpose | Lawful basis | Retention |
 |---|---|---|---|
@@ -58,9 +108,9 @@ more than it delivers.
 | Terms acceptance record | Evidence of consent | Legal obligation | Account life + limitation period |
 
 **We do not collect your date of birth.** Only whether you confirmed you met the
-minimum age.
+minimum age of 16.
 
-### 3.2 Information created by using the Service
+### 3.2 NexLink Social — information created by using it
 
 | Data | Purpose | Lawful basis | Retention |
 |---|---|---|---|
@@ -101,19 +151,43 @@ minimum age.
 user explicitly agreed to include it**, ticking an unticked box at the time.
 There is no other path, and no operator key that can read a conversation.
 
-### 3.6 What we never collect
-- Your contacts or address book.
-- Your location, beyond what an IP address implies.
+### 3.6 Donations — what happens if you use the donation page
+
+The Products are free (Terms §2.7). A **voluntary donation page** is linked from
+inside them, hosted by a third party (Buy Me a Coffee).
+
+| Data | Who holds it | What the Operator sees |
+|---|---|---|
+| Your card or bank details | The donation provider, never the Operator | **Nothing** |
+| Your name or chosen handle, and any message you write | The donation provider | Whatever you chose to put there |
+| The amount and date | The donation provider | The amount and date |
+| Your email address, if the provider passes it on | The donation provider | Possibly, depending on their settings |
+
+- **The Operator never receives, sees or stores your payment details.** They do
+  not pass through any NexLink system.
+- **Donating is not linked to your Account.** The Operator does not connect a
+  donation to a NexLink username, and does not ask you to identify your Account
+  when donating. If you volunteer that connection in a donation message, you
+  have made it yourself.
+- **The donation provider is a separate controller** operating under its own
+  privacy policy and its own jurisdiction. Read it before donating; the Operator
+  does not control it.
+- Donating confers no benefit and not donating has no consequence (Terms §2.7).
+
+### 3.7 What we never collect
+- Your contacts or address book, on any server.
+- Your location. No NexLink Product requests a location permission.
 - Advertising or tracking identifiers.
 - Behavioural analytics.
 - Your date of birth.
-- Payment details — there are no payments.
+- **Your payment details** — see §3.6. Donations are handled entirely by a
+  third party and no payment data reaches the Operator.
 
 ---
 
 ## 4. What we cannot see, stated precisely
 
-The Operator cannot read:
+For NexLink Social, the Operator cannot read:
 - The text of your messages.
 - The audio or video of your calls.
 - Your photos, videos or files.
@@ -128,11 +202,12 @@ The Operator **can** see:
   unencrypted; the message itself stays encrypted. We disclose this because it
   is true and because being caught not disclosing it would be worse.
 
+For NexLink, the Operator can see **nothing at all**, because there is no server
+to see it with.
+
 ---
 
 ## 5. Third parties
-
-The Service depends on three. None can read your message content.
 
 ### 5.1 Cloudflare
 Carries network traffic between you and the server, which has no public address
@@ -154,15 +229,43 @@ call, when, and for how long. Call media is end-to-end encrypted and LiveKit
 cannot hear or see it. **The conversation a call belongs to is not disclosed to
 LiveKit** — the room is identified to it by a one-way hash.
 
-### 5.4 International transfers
-Cloudflare and Google operate globally, and your data may be processed outside
-Australia. LiveKit's servers for this Service are in Sydney. Where data leaves
-Australia it is protected in transit by encryption, and content is encrypted
-end-to-end regardless of where it travels.
+### 5.4 Buy Me a Coffee — donations only
+Processes voluntary donations if you choose to make one. It never touches
+message data, account data or any Product function. See §3.6. **If you never
+open the donation page, this third party receives nothing about you.**
 
-### 5.5 No others
+### 5.5 Google Play
+Distributes the Android applications and tells the Operator aggregate,
+non-identifying install and crash counts. This is Play's own function; the
+Operator cannot switch it off and does not receive your identity through it.
+
+### 5.6 No others
 We do not use analytics providers, advertising networks, crash reporting that
 transmits personal data, or any service that profiles you.
+
+### 5.7 International transfers, and the planned move to Switzerland
+
+The Service's servers are **currently in Australia**. Cloudflare and Google
+operate globally, so traffic metadata may be processed outside both Permitted
+Territories. Content is end-to-end encrypted regardless of where it travels.
+
+**The Operator intends to operate servers in Switzerland.** When that happens:
+
+- Personal Data of Australian users will be transferred to Switzerland.
+  Switzerland is recognised by the OAIC as having a comparable privacy regime,
+  and the transfer will be made under APP 8.
+- Personal Data of Swiss users will be held in Switzerland, and any transfer to
+  Australia will be made under the FADP's rules for transfers abroad —
+  Article 16 FADP, relying on adequacy where the Federal Council has recognised
+  it, and on contractual safeguards otherwise.
+- **You will be told before the move**, because it changes which authority
+  supervises your data. This policy will be updated and re-acceptance sought if
+  the change is material.
+
+> ⚠️ **Review flag.** Whether Australia appears on the Swiss Federal Council's
+> list of states with adequate data protection must be confirmed before any
+> transfer is made, and the safeguard chosen accordingly. Do not rely on this
+> paragraph's summary.
 
 ---
 
@@ -193,9 +296,16 @@ transmits personal data, or any service that profiles you.
 
 ### 6.3 Data breach notification
 If a breach occurs that is likely to result in serious harm, affected users will
-be notified directly and promptly, and the Office of the Australian Information
-Commissioner will be notified where required. A notification will state what
-happened, what data was involved, what has been done, and what you should do.
+be notified directly and promptly.
+
+- **Australia:** the OAIC will be notified where the Notifiable Data Breaches
+  scheme requires it.
+- **Switzerland:** the FDPIC will be notified as soon as possible where Article
+  24 FADP requires it, and affected users informed where necessary for their
+  protection or where the FDPIC requires it.
+
+A notification will state what happened, what data was involved, what has been
+done, and what you should do.
 
 Because content is end-to-end encrypted, a server breach would expose metadata
 rather than messages. That distinction will be stated accurately rather than
@@ -242,12 +352,19 @@ See the separate Data Retention Schedule document.
 ## 8. Your rights
 
 ### 8.1 What you can ask for
+These rights exist under both the FADP and the Privacy Act. Where the two give
+different scope, the wider is applied.
+
 - **Access** — a copy of the personal information we hold about you.
 - **Correction** — of anything inaccurate.
 - **Erasure** — deletion of your Account, subject to §7.2.
-- **Portability** — your data in a usable format.
+- **Portability** — your data in a common electronic format (Article 28 FADP).
 - **Objection** — to processing based on legitimate interests.
 - **Restriction** — of processing while a dispute is resolved.
+- **Information about a disclosure abroad** — which country, and on what
+  safeguard (Article 19 FADP).
+- **Not to be subject to an automated individual decision** — see §10; there are
+  none.
 
 ### 8.2 What is self-service
 - **Erasure**: in the app, or at the deletion page.
@@ -258,8 +375,13 @@ See the separate Data Retention Schedule document.
 
 ### 8.3 What to ask the Operator for
 Access to server-side records, objection, restriction, or anything the app does
-not expose. Contact the Operator. Expect a response within 30 days; a solo
-operator may take the full period.
+not expose. Contact the Operator through the Contact Page.
+
+Expect a response **within 30 days**. The FADP allows an extension where a
+request is complex; if one is needed you will be told within the 30 days, with
+the reason. A solo operator may take the full period.
+
+**Access requests are free**, as both laws require.
 
 ### 8.4 Identity verification
 Before acting on a request about an Account we will verify you control it,
@@ -274,15 +396,23 @@ refusal; there is nothing to produce. Your Device holds it, and the export tool
 is how you get it.
 
 ### 8.6 Complaints
-Contact the Operator first. You may also complain to the Office of the
-Australian Information Commissioner (oaic.gov.au).
+Contact the Operator first, through the Contact Page.
+
+- **Switzerland:** you may report the matter to the Federal Data Protection and
+  Information Commissioner (edoeb.admin.ch), and you may bring a civil claim
+  under Articles 32 and 41 FADP.
+- **Australia:** you may complain to the Office of the Australian Information
+  Commissioner (oaic.gov.au).
+
+You do not have to complain to the Operator first, and nothing in this policy
+requires you to.
 
 ---
 
 ## 9. Children
-The Service is not offered to anyone below the minimum age stated at sign-up.
-We do not knowingly hold information about anyone below it, and an Account found
-to belong to such a person is removed.
+The Service is not offered to anyone under **16** (Terms §3.1). We do not
+knowingly hold information about anyone below that age, and an Account found to
+belong to such a person is removed.
 
 ---
 
@@ -293,9 +423,9 @@ person makes every moderation decision.
 ---
 
 ## 11. Cookies and local storage
-The web pages — Element Web and the deletion page — use browser local storage
-for session and settings only. There are no tracking cookies, no third-party
-cookies and no advertising identifiers.
+The web pages — Element Web, the deletion page and the Contact Page — use
+browser local storage for session and settings only. There are no tracking
+cookies, no third-party cookies and no advertising identifiers.
 
 ---
 
@@ -303,3 +433,5 @@ cookies and no advertising identifiers.
 This policy is versioned. A material change requires re-acceptance in the app,
 so you cannot be moved onto different terms silently. The version history is
 available on request.
+
+---

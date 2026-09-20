@@ -1,6 +1,10 @@
-# Law Enforcement Guidelines — NexLink Social
+# Law Enforcement Guidelines — NexLink
 
-**Version 0.2.0-draft** · Not yet published · §30.5
+**Version 0.3.0-draft** · Not yet published · §30.5
+
+> **Scope.** Applies to all NexLink Products. Only NexLink Social has server-side data.
+>
+> **Draft.** Not reviewed by a lawyer. See `docs/legal/README.md`.
 
 For law enforcement and legal practitioners. This document describes what data
 exists and how requests are handled. **It is not legal advice and does not waive
@@ -11,7 +15,8 @@ any right of the Operator or of any user.**
 ## 1. What this Service is
 
 A private, invite-only, end-to-end encrypted messaging and calling service
-operated by an individual in New South Wales, Australia. It does not federate
+operated by an individual in New South Wales, Australia, and offered only to
+users in Switzerland and Australia. It does not federate
 with other servers. It has no corporate entity, no legal department, and no
 dedicated point of contact beyond the Operator.
 
@@ -58,7 +63,7 @@ database backups, which expire after 14 days.
 
 ## 4. How to make a request
 
-1. Serve the request on the Operator at **google.alumni829@passmail.net**, or using the address in
+1. Serve the request on the Operator at the address published on the **Contact Page**, `https://thvjq.com.au/nexlink/contact`, or using the address in
    the service website.
 2. Include the legal basis, the specific data sought, and the relevant time
    period.

@@ -47,9 +47,10 @@ class PolicyActivity : AppCompatActivity() {
         )
         setContentView(page.root)
 
-        val text = runCatching {
-            assets.open("legal/$which").bufferedReader().use { it.readText() }
-        }.getOrNull()
+        // §A.5 — the English version prevails, so English is the fallback rather
+        // than an error state. A reader whose device is set to a language we do
+        // not publish gets the governing text, not an empty page.
+        val text = readDoc(localeDir(), which) ?: readDoc("en", which)
 
         if (text == null) {
             // Never silently show an empty page where a legal document belongs.
@@ -61,6 +62,17 @@ class PolicyActivity : AppCompatActivity() {
         }
         Markdown(this, chrome).render(text).forEach { page.content.addView(it) }
     }
+
+    /** The published language matching this device, or English. */
+    private fun localeDir(): String {
+        val lang = androidx.core.os.ConfigurationCompat
+            .getLocales(resources.configuration)[0]?.language ?: "en"
+        return if (lang == "de") "de" else "en"
+    }
+
+    private fun readDoc(lang: String, which: String): String? = runCatching {
+        assets.open("legal/$lang/$which").bufferedReader().use { it.readText() }
+    }.getOrNull()
 
     companion object {
         private const val EXTRA_DOC = "doc"

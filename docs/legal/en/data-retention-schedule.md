@@ -1,6 +1,12 @@
-# Data Retention Schedule — NexLink Social
+# Data Retention Schedule — NexLink
 
-**Version 0.2.0-draft** · Not yet published · §32.7
+**Version 0.3.0-draft** · Not yet published · §32.7
+
+> **Scope.** Applies to data held on the Operator's servers, which today means NexLink
+Social only. NexLink, Wear OS and the web client store their data on your own
+device or your own server.
+>
+> **Draft.** Not reviewed by a lawyer. See `docs/legal/README.md`.
 
 Forms part of the Privacy Policy. Every category the Service holds, how long it
 is kept, and what causes it to go.
@@ -89,6 +95,10 @@ and are used only to restore the Service after failure.
 
 Contacts, address book, location beyond IP inference, advertising identifiers,
 behavioural analytics, date of birth, payment details, biometrics.
+
+**Payment details** remain on this list even though a donation page now exists.
+Donations are processed entirely by a third party and no payment data reaches
+the Operator or any NexLink system — see Privacy Policy §3.6.
 
 ## 9. Triggers for review
 

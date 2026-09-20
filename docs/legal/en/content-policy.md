@@ -1,6 +1,11 @@
-# Content and Community Policy — NexLink Social
+# Content and Community Policy — NexLink
 
-**Version 0.2.0-draft** · Not yet published · §4.7, §31
+**Version 0.3.0-draft** · Not yet published · §4.7, §31
+
+> **Scope.** Applies to NexLink Social. The other NexLink Products carry no user-generated
+content on the Operator's servers and nothing here applies to them.
+>
+> **Draft.** Not reviewed by a lawyer. See `docs/legal/README.md`.
 
 Required by Google Play's user-generated content policy, and the basis for any
 moderation action taken.
@@ -45,8 +50,28 @@ Sharing intimate images or video of a person without their consent is
 prohibited, including images that were originally shared consensually in private.
 
 ### 3.3 Terrorism and violent extremism
-Content that promotes, incites, instructs or celebrates terrorism or violent
-extremism, or that is produced by a proscribed organisation.
+Content that promotes, incites, instructs in, or solicits participation in
+**Terrorism** or **Violent Extremism**, or that is produced by a **Proscribed
+Organisation**.
+
+**All three terms are defined in Appendix A**, and the definitions are narrow
+and statute-anchored on purpose. Read them before reporting under this section
+or assuming you have breached it.
+
+**What this section does not prohibit**, restating Appendix A because this is
+the section most often misread:
+
+- Reporting on, condemning, analysing, satirising or educating about terrorism
+  or violent extremism. Describing an event is not promoting it.
+- Advocacy, protest, dissent, journalism, academic research, historical
+  documentation, artistic depiction and industrial action.
+- Holding or expressing an unpopular, offensive or radical political or
+  religious opinion.
+- Membership of, or descent from, any nationality, ethnicity or faith.
+
+The prohibition attaches to the **intentional incitement of unlawful violence**
+and to nothing else. Where a report under this section turns out to concern
+protected expression, no action is taken and the reporting user is told why.
 
 ### 3.4 Incitement to violence
 Threats of violence against a person or group, or content encouraging others to
@@ -58,8 +83,12 @@ Discussing your own experience, seeking help, or supporting someone is **not**
 prohibited and should not be reported as such.
 
 ### 3.6 Other unlawful content
-Anything unlawful under Australian law, including material infringing copyright
-where you have no right to share it.
+Anything **Unlawful** as defined in Appendix A — that is, unlawful under the law
+of your own Permitted Territory, Switzerland or Australia — including material
+infringing copyright where you have no right to share it.
+
+Conduct lawful where you are does not breach this section merely because it is
+unlawful in some other country.
 
 ### 3.7 Malware and fraud
 Malicious software, phishing, scams, or content designed to obtain credentials

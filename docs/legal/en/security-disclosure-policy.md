@@ -1,6 +1,10 @@
-# Security and Vulnerability Disclosure Policy — NexLink Social
+# Security and Vulnerability Disclosure Policy — NexLink
 
-**Version 0.2.0-draft** · Not yet published · §30
+**Version 0.3.0-draft** · Not yet published · §30
+
+> **Scope.** Applies to all NexLink Products and the servers supporting them.
+>
+> **Draft.** Not reviewed by a lawyer. See `docs/legal/README.md`.
 
 ---
 
@@ -32,7 +36,7 @@ That is stated so nobody wastes effort expecting a corporate process.
 
 ## 3. How to report
 
-Contact the Operator at **google.alumni829@passmail.net**,
+Contact the Operator at the address published on the **Contact Page**, `https://thvjq.com.au/nexlink/contact`,
 with:
 
 - What you found, and where.
@@ -104,7 +108,8 @@ Availability is not the highest value here. Confidentiality is.
 ## 8. If a breach occurs
 
 The Operator will notify affected users directly and promptly, and will notify
-the Office of the Australian Information Commissioner where required.
+the Office of the Australian Information Commissioner, or the Swiss Federal
+Data Protection and Information Commissioner, where required.
 
 A notification will state what happened, what data was involved, what has been
 done about it, and what the user should do. Because content is end-to-end

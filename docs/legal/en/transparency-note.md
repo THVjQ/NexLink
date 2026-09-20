@@ -1,6 +1,10 @@
-# What we can and cannot see — NexLink Social
+# What we can and cannot see — NexLink
 
-**Version 0.2.0-draft** · Not yet published · §3.7, §4.7
+**Version 0.3.0-draft** · Not yet published · §3.7, §4.7
+
+> **Scope.** Applies to all NexLink Products.
+>
+> **Draft.** Not reviewed by a lawyer. See `docs/legal/README.md`.
 
 This is the plain-language version. The Privacy Policy is the formal one; where
 they differ that one governs — but they are written to agree, and a discrepancy

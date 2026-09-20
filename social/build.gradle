@@ -30,10 +30,36 @@ if (keystorePropertiesFile.exists()) {
  * policy. Generated into the build directory and added as an asset source, so
  * the only editable copy stays docs/social/legal/.
  */
+// The legal pack is assembled by tools/legal/build-legal.py, which appends the
+// shared definitions appendix to every document. Copy from dist/, never from the
+// hand-edited sources — a document without Appendix A defines none of the terms
+// it uses, and "Terrorism" is one of them (§A.3).
+//
+// Both languages ship. PolicyActivity picks by device locale and falls back to
+// English, so a missing German file degrades rather than breaks.
 tasks.register('copyLegalDocs', Copy) {
-    from rootProject.file('docs/social/legal')
-    include 'terms-of-service.md', 'privacy-policy.md'
+    from(rootProject.file('docs/legal/dist/en')) {
+        include 'terms-of-service.md', 'privacy-policy.md', 'content-policy.md'
+        into 'en'
+    }
+    from(rootProject.file('docs/legal/dist/de')) {
+        include 'terms-of-service.md', 'privacy-policy.md', 'content-policy.md'
+        into 'de'
+    }
     into layout.buildDirectory.dir('generated/legalAssets/legal')
+    // Clear the destination first. A Copy task only adds, so the previous
+    // layout's terms-of-service.md survived at the old path and the APK shipped
+    // TWO Terms of Service — the current one under en/, a superseded one beside
+    // it. Caught by unzipping the APK; nothing in the build said a word.
+    doFirst {
+        delete layout.buildDirectory.dir('generated/legalAssets/legal')
+        def dist = rootProject.file('docs/legal/dist/en/terms-of-service.md')
+        if (!dist.exists()) {
+            throw new GradleException(
+                'docs/legal/dist is missing — run tools/legal/build-legal.py.\n' +
+                '  The apps ship the ASSEMBLED documents, not the sources.')
+        }
+    }
 }
 tasks.named('preBuild') { dependsOn 'copyLegalDocs' }
 
