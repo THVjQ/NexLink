@@ -57,8 +57,11 @@ with end-to-end encryption. It requires an Account and an Invite.
 ### 2.3 NexLink for Wear OS
 A companion to NexLink for smartwatches. It holds no account of its own.
 
-### 2.4 NexLink web client
-A browser interface to the NexLink SMS bridge.
+### 2.4 NexLink Bridge
+The Computer Bridge built into NexLink, together with its browser client. It
+sends your messages to **a server you host yourself**, at an address you enter.
+There is no default server and no server of the Operator's involved — see
+Privacy Policy §3.0.
 
 ### 2.5 The Products are independent
 Installing or using one Product does not require another, and deleting one does

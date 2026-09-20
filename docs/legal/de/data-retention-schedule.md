@@ -3,7 +3,7 @@
 **Version 0.3.0-draft** · Noch nicht veröffentlicht · §32.7
 
 > **Geltungsbereich.** Gilt für Daten auf den Servern des Betreibers, heute also nur für
-NexLink Social. NexLink, Wear OS und der Webclient speichern ihre Daten auf Ihrem
+NexLink Social. NexLink, Wear OS und NexLink Bridge speichern ihre Daten auf Ihrem
 eigenen Gerät oder Ihrem eigenen Server.
 >
 > **Entwurf.** Nicht juristisch geprüft. **Massgeblich ist die englische Fassung.**

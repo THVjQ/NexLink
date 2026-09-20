@@ -3,7 +3,7 @@
 **Version 0.3.0-draft** · Not yet published · §32.7
 
 > **Scope.** Applies to data held on the Operator's servers, which today means NexLink
-Social only. NexLink, Wear OS and the web client store their data on your own
+Social only. NexLink, Wear OS and NexLink Bridge store their data on your own
 device or your own server.
 >
 > **Draft.** Not reviewed by a lawyer. See `docs/legal/README.md`.

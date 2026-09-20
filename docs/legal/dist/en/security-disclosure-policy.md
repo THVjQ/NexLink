@@ -14,7 +14,7 @@
 ## 1. Scope
 
 This policy covers the NexLink Social Android application, its homeserver at
-`nexlink.thvjq.com.au`, the web client, the account deletion page, and the
+`nexlink.thvjq.com.au`, NexLink Bridge and its web client, the account deletion page, and the
 supporting services operated for it.
 
 It does **not** cover third-party services the Service depends on — Cloudflare,
@@ -136,7 +136,7 @@ this summary differ, **the statute prevails**.
 
 | Term | Meaning |
 |---|---|
-| **NexLink Products** | All software published by the Operator under the NexLink name. At the date of this version: **NexLink** (SMS, dialler and unified inbox for Android), **NexLink Social** (encrypted messenger for Android), **NexLink for Wear OS**, and the **NexLink web client**. A product added later is covered from the date it is published. |
+| **NexLink Products** | All software published by the Operator under the NexLink name. At the date of this version: **NexLink** (SMS, dialler and unified inbox for Android), **NexLink Social** (encrypted messenger for Android), **NexLink for Wear OS**, and **NexLink Bridge** (the Computer Bridge in NexLink together with its web client). A product added later is covered from the date it is published. |
 | **Service** | Whichever NexLink Products you use, and the server infrastructure that supports them. |
 | **Operator** | The individual who publishes the NexLink Products and runs the Service. Contact details are published at the Contact Page. |
 | **Contact Page** | `https://thvjq.com.au/nexlink/contact` — the single published source for the Operator's postal and electronic contact details, kept current so that a notice address embedded in an installed application can never go stale. |

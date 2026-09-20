@@ -11,7 +11,7 @@
 ## 1. Scope
 
 This policy covers the NexLink Social Android application, its homeserver at
-`nexlink.thvjq.com.au`, the web client, the account deletion page, and the
+`nexlink.thvjq.com.au`, NexLink Bridge and its web client, the account deletion page, and the
 supporting services operated for it.
 
 It does **not** cover third-party services the Service depends on — Cloudflare,

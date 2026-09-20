@@ -6,7 +6,7 @@
 **Version 0.3.0-draft** · Not yet published · §32.7
 
 > **Scope.** Applies to data held on the Operator's servers, which today means NexLink
-Social only. NexLink, Wear OS and the web client store their data on your own
+Social only. NexLink, Wear OS and NexLink Bridge store their data on your own
 device or your own server.
 >
 > **Draft.** Not reviewed by a lawyer. See `docs/legal/README.md`.
@@ -124,7 +124,7 @@ this summary differ, **the statute prevails**.
 
 | Term | Meaning |
 |---|---|
-| **NexLink Products** | All software published by the Operator under the NexLink name. At the date of this version: **NexLink** (SMS, dialler and unified inbox for Android), **NexLink Social** (encrypted messenger for Android), **NexLink for Wear OS**, and the **NexLink web client**. A product added later is covered from the date it is published. |
+| **NexLink Products** | All software published by the Operator under the NexLink name. At the date of this version: **NexLink** (SMS, dialler and unified inbox for Android), **NexLink Social** (encrypted messenger for Android), **NexLink for Wear OS**, and **NexLink Bridge** (the Computer Bridge in NexLink together with its web client). A product added later is covered from the date it is published. |
 | **Service** | Whichever NexLink Products you use, and the server infrastructure that supports them. |
 | **Operator** | The individual who publishes the NexLink Products and runs the Service. Contact details are published at the Contact Page. |
 | **Contact Page** | `https://thvjq.com.au/nexlink/contact` — the single published source for the Operator's postal and electronic contact details, kept current so that a notice address embedded in an installed application can never go stale. |

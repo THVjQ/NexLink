@@ -205,7 +205,7 @@ The Operator **can** see:
   unencrypted; the message itself stays encrypted. We disclose this because it
   is true and because being caught not disclosing it would be worse.
 
-For NexLink, the Operator can see **nothing at all**, because there is no server
+For NexLink and NexLink Bridge, the Operator can see **nothing at all**, because there is no server
 to see it with.
 
 ---
@@ -453,7 +453,7 @@ this summary differ, **the statute prevails**.
 
 | Term | Meaning |
 |---|---|
-| **NexLink Products** | All software published by the Operator under the NexLink name. At the date of this version: **NexLink** (SMS, dialler and unified inbox for Android), **NexLink Social** (encrypted messenger for Android), **NexLink for Wear OS**, and the **NexLink web client**. A product added later is covered from the date it is published. |
+| **NexLink Products** | All software published by the Operator under the NexLink name. At the date of this version: **NexLink** (SMS, dialler and unified inbox for Android), **NexLink Social** (encrypted messenger for Android), **NexLink for Wear OS**, and **NexLink Bridge** (the Computer Bridge in NexLink together with its web client). A product added later is covered from the date it is published. |
 | **Service** | Whichever NexLink Products you use, and the server infrastructure that supports them. |
 | **Operator** | The individual who publishes the NexLink Products and runs the Service. Contact details are published at the Contact Page. |
 | **Contact Page** | `https://thvjq.com.au/nexlink/contact` — the single published source for the Operator's postal and electronic contact details, kept current so that a notice address embedded in an installed application can never go stale. |

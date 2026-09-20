@@ -202,7 +202,7 @@ The Operator **can** see:
   unencrypted; the message itself stays encrypted. We disclose this because it
   is true and because being caught not disclosing it would be worse.
 
-For NexLink, the Operator can see **nothing at all**, because there is no server
+For NexLink and NexLink Bridge, the Operator can see **nothing at all**, because there is no server
 to see it with.
 
 ---

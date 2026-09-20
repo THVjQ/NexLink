@@ -14,7 +14,7 @@
 ## 1. Geltungsbereich
 
 Diese Richtlinie erfasst die Android-Anwendung NexLink Social, deren Heimserver
-unter `nexlink.thvjq.com.au`, den Webclient, die Seite zur Kontolöschung und die
+unter `nexlink.thvjq.com.au`, NexLink Bridge samt Webclient, die Seite zur Kontolöschung und die
 dafür betriebenen Hilfsdienste.
 
 Sie erfasst **nicht** die Drittdienste, auf die der Dienst angewiesen ist —
@@ -141,7 +141,7 @@ Bei Abweichungen **geht das Gesetz vor**.
 
 | Begriff | Bedeutung |
 |---|---|
-| **NexLink-Produkte** | Sämtliche vom Betreiber unter dem Namen NexLink veröffentlichte Software. Zum Zeitpunkt dieser Fassung: **NexLink** (SMS, Telefon und vereinheitlichter Posteingang für Android), **NexLink Social** (verschlüsselter Messenger für Android), **NexLink für Wear OS** und der **NexLink-Webclient**. Ein später hinzukommendes Produkt ist ab seiner Veröffentlichung erfasst. |
+| **NexLink-Produkte** | Sämtliche vom Betreiber unter dem Namen NexLink veröffentlichte Software. Zum Zeitpunkt dieser Fassung: **NexLink** (SMS, Telefon und vereinheitlichter Posteingang für Android), **NexLink Social** (verschlüsselter Messenger für Android), **NexLink für Wear OS** und **NexLink Bridge** (die Computer-Brücke in NexLink samt Webclient). Ein später hinzukommendes Produkt ist ab seiner Veröffentlichung erfasst. |
 | **Dienst** | Die von Ihnen genutzten NexLink-Produkte sowie die sie tragende Serverinfrastruktur. |
 | **Betreiber** | Die natürliche Person, welche die NexLink-Produkte veröffentlicht und den Dienst betreibt. Die Kontaktangaben sind auf der Kontaktseite veröffentlicht. |
 | **Kontaktseite** | `https://thvjq.com.au/nexlink/contact` — die einzige veröffentlichte Quelle für die Post- und die elektronische Adresse des Betreibers. Sie wird aktuell gehalten, damit eine in einer installierten Anwendung eingebettete Zustelladresse nicht veralten kann. |

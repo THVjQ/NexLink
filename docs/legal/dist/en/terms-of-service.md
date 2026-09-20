@@ -60,8 +60,11 @@ with end-to-end encryption. It requires an Account and an Invite.
 ### 2.3 NexLink for Wear OS
 A companion to NexLink for smartwatches. It holds no account of its own.
 
-### 2.4 NexLink web client
-A browser interface to the NexLink SMS bridge.
+### 2.4 NexLink Bridge
+The Computer Bridge built into NexLink, together with its browser client. It
+sends your messages to **a server you host yourself**, at an address you enter.
+There is no default server and no server of the Operator's involved — see
+Privacy Policy §3.0.
 
 ### 2.5 The Products are independent
 Installing or using one Product does not require another, and deleting one does
@@ -510,7 +513,7 @@ this summary differ, **the statute prevails**.
 
 | Term | Meaning |
 |---|---|
-| **NexLink Products** | All software published by the Operator under the NexLink name. At the date of this version: **NexLink** (SMS, dialler and unified inbox for Android), **NexLink Social** (encrypted messenger for Android), **NexLink for Wear OS**, and the **NexLink web client**. A product added later is covered from the date it is published. |
+| **NexLink Products** | All software published by the Operator under the NexLink name. At the date of this version: **NexLink** (SMS, dialler and unified inbox for Android), **NexLink Social** (encrypted messenger for Android), **NexLink for Wear OS**, and **NexLink Bridge** (the Computer Bridge in NexLink together with its web client). A product added later is covered from the date it is published. |
 | **Service** | Whichever NexLink Products you use, and the server infrastructure that supports them. |
 | **Operator** | The individual who publishes the NexLink Products and runs the Service. Contact details are published at the Contact Page. |
 | **Contact Page** | `https://thvjq.com.au/nexlink/contact` — the single published source for the Operator's postal and electronic contact details, kept current so that a notice address embedded in an installed application can never go stale. |

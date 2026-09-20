@@ -11,7 +11,7 @@
 ## 1. Geltungsbereich
 
 Diese Richtlinie erfasst die Android-Anwendung NexLink Social, deren Heimserver
-unter `nexlink.thvjq.com.au`, den Webclient, die Seite zur Kontolöschung und die
+unter `nexlink.thvjq.com.au`, NexLink Bridge samt Webclient, die Seite zur Kontolöschung und die
 dafür betriebenen Hilfsdienste.
 
 Sie erfasst **nicht** die Drittdienste, auf die der Dienst angewiesen ist —

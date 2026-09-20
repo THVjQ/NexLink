@@ -62,8 +62,11 @@ Konto und eine Einladung.
 ### 2.3 NexLink für Wear OS
 Eine Begleitanwendung zu NexLink für Smartwatches. Sie führt kein eigenes Konto.
 
-### 2.4 NexLink-Webclient
-Eine Browser-Oberfläche zur NexLink-SMS-Brücke.
+### 2.4 NexLink Bridge
+Die in NexLink eingebaute Computer-Brücke samt Browser-Client. Sie sendet Ihre
+Nachrichten an **einen von Ihnen selbst betriebenen Server** unter einer von
+Ihnen eingegebenen Adresse. Es gibt keinen voreingestellten Server und keinen
+Server des Betreibers — siehe Datenschutzerklärung §3.0.
 
 ### 2.5 Die Produkte sind voneinander unabhängig
 Die Installation oder Nutzung eines Produkts setzt kein anderes voraus, und die

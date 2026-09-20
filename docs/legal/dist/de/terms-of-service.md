@@ -65,8 +65,11 @@ Konto und eine Einladung.
 ### 2.3 NexLink für Wear OS
 Eine Begleitanwendung zu NexLink für Smartwatches. Sie führt kein eigenes Konto.
 
-### 2.4 NexLink-Webclient
-Eine Browser-Oberfläche zur NexLink-SMS-Brücke.
+### 2.4 NexLink Bridge
+Die in NexLink eingebaute Computer-Brücke samt Browser-Client. Sie sendet Ihre
+Nachrichten an **einen von Ihnen selbst betriebenen Server** unter einer von
+Ihnen eingegebenen Adresse. Es gibt keinen voreingestellten Server und keinen
+Server des Betreibers — siehe Datenschutzerklärung §3.0.
 
 ### 2.5 Die Produkte sind voneinander unabhängig
 Die Installation oder Nutzung eines Produkts setzt kein anderes voraus, und die
@@ -540,7 +543,7 @@ Bei Abweichungen **geht das Gesetz vor**.
 
 | Begriff | Bedeutung |
 |---|---|
-| **NexLink-Produkte** | Sämtliche vom Betreiber unter dem Namen NexLink veröffentlichte Software. Zum Zeitpunkt dieser Fassung: **NexLink** (SMS, Telefon und vereinheitlichter Posteingang für Android), **NexLink Social** (verschlüsselter Messenger für Android), **NexLink für Wear OS** und der **NexLink-Webclient**. Ein später hinzukommendes Produkt ist ab seiner Veröffentlichung erfasst. |
+| **NexLink-Produkte** | Sämtliche vom Betreiber unter dem Namen NexLink veröffentlichte Software. Zum Zeitpunkt dieser Fassung: **NexLink** (SMS, Telefon und vereinheitlichter Posteingang für Android), **NexLink Social** (verschlüsselter Messenger für Android), **NexLink für Wear OS** und **NexLink Bridge** (die Computer-Brücke in NexLink samt Webclient). Ein später hinzukommendes Produkt ist ab seiner Veröffentlichung erfasst. |
 | **Dienst** | Die von Ihnen genutzten NexLink-Produkte sowie die sie tragende Serverinfrastruktur. |
 | **Betreiber** | Die natürliche Person, welche die NexLink-Produkte veröffentlicht und den Dienst betreibt. Die Kontaktangaben sind auf der Kontaktseite veröffentlicht. |
 | **Kontaktseite** | `https://thvjq.com.au/nexlink/contact` — die einzige veröffentlichte Quelle für die Post- und die elektronische Adresse des Betreibers. Sie wird aktuell gehalten, damit eine in einer installierten Anwendung eingebettete Zustelladresse nicht veralten kann. |

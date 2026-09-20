@@ -215,7 +215,7 @@ Der Betreiber **kann** sehen:
   dies offen, weil es zutrifft und weil es schlimmer wäre, dabei ertappt zu
   werden, es verschwiegen zu haben.
 
-Bei NexLink kann der Betreiber **überhaupt nichts** sehen, weil kein Server
+Bei NexLink und NexLink Bridge kann der Betreiber **überhaupt nichts** sehen, weil kein Server
 existiert, mit dem er es könnte.
 
 ---
