@@ -18,8 +18,7 @@ Australia. There is no company, no data protection officer, and no privacy team.
 One person makes these decisions and answers these requests.
 
 ### 1.2 Contact
-The Operator, at the postal and electronic address published on the **Contact
-Page**: `https://thvjq.com.au/nexlink/contact`
+The Operator, at the address published on the **Contact Page**: `https://thvjq.com.au/nexlink/contact`
 
 The address is published there rather than written into this document so that it
 stays current. An address baked into an installed application cannot be

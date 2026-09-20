@@ -85,14 +85,24 @@ accurate, and users may rely on them as descriptions of behaviour.
 
 **Blocking:**
 
-1. **A postal address.** `web/contact/index.html` carries a visible placeholder.
-   APP 1.4 and FADP Art. 13 both expect a controller a person can actually
-   reach, and an email address alone does not satisfy a formal notice, a
-   data-subject request, or service of legal process. **Do not publish until
-   this is filled in** — every document points at that page and has no other
-   address.
-2. **Deploy the Contact Page** to `https://thvjq.com.au/nexlink/contact`. Until
-   it resolves, every document cites a dead URL.
+1. **Deploy the Contact Page** to `https://thvjq.com.au/nexlink/contact`. Until it
+   resolves, every document cites a dead URL and the operator has no published
+   address at all. The file is `web/contact/index.html`.
+
+**Settled 2026-09-20 — the contact address:**
+
+`google.alumni829@passmail.net` is the published address. A residential address
+is **not** published, because the operator is a private individual and the
+service runs from a home; it is supplied on request and to any regulator, court
+or party effecting formal service. Appendix A and Privacy Policy §1.2 were
+reworded so they no longer promise a postal address the page does not print.
+
+> ⚠️ **Google Play requires a physical address separately**, and displays it on
+> the public store listing for a personal developer account. That requirement is
+> not satisfied by this page and is not avoided by it. If the Play address is
+> already public, publishing the same one here costs nothing further; if it is
+> not, the two should at least not contradict each other. Worth checking before
+> the first public release.
 
 **Review needed by someone qualified:**
 

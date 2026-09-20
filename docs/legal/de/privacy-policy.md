@@ -21,8 +21,7 @@ Datenschutzbeauftragten und kein Datenschutzteam. Eine Person trifft diese
 Entscheidungen und beantwortet diese Anfragen.
 
 ### 1.2 Kontakt
-Der Betreiber, unter der auf der **Kontaktseite** veröffentlichten Post- und
-elektronischen Adresse: `https://thvjq.com.au/nexlink/contact`
+Der Betreiber, unter der auf der **Kontaktseite** veröffentlichten Adresse: `https://thvjq.com.au/nexlink/contact`
 
 Die Adresse wird dort veröffentlicht und nicht in dieses Dokument geschrieben,
 damit sie aktuell bleibt. Eine in einer installierten Anwendung eingebettete

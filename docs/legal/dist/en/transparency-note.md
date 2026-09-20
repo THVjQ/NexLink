@@ -162,7 +162,7 @@ this summary differ, **the statute prevails**.
 | **NexLink Products** | All software published by the Operator under the NexLink name. At the date of this version: **NexLink** (SMS, dialler and unified inbox for Android), **NexLink Social** (encrypted messenger for Android), **NexLink for Wear OS**, and **NexLink Bridge** (the Computer Bridge in NexLink together with its web client). A product added later is covered from the date it is published. |
 | **Service** | Whichever NexLink Products you use, and the server infrastructure that supports them. |
 | **Operator** | The individual who publishes the NexLink Products and runs the Service. Contact details are published at the Contact Page. |
-| **Contact Page** | `https://thvjq.com.au/nexlink/contact` — the single published source for the Operator's postal and electronic contact details, kept current so that a notice address embedded in an installed application can never go stale. |
+| **Contact Page** | `https://thvjq.com.au/nexlink/contact` — the single published source for the Operator's contact details, kept current so that a notice address embedded in an installed application can never go stale. It publishes an email address; a postal address is supplied on request and to any authority or party entitled to it. |
 | **You**, **User** | The natural person who has accepted these documents and uses the Service. |
 | **Account** | Your identity on a NexLink Product that requires registration. |
 | **Device** | A phone, tablet, watch or computer signed in to your Account or running a NexLink Product. |
