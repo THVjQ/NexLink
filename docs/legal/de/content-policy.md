@@ -242,6 +242,13 @@ werden.
 
 Massnahmen nach §3.1 sind der Beschwerde nicht zugänglich.
 
+**Eine Entfernung ist nicht auf dieses Verfahren beschränkt.** Ziffer 8.2a der
+Nutzungsbedingungen erlaubt dem Betreiber, ein Konto nach Ermessen, ohne Grund
+und ohne Begründung zu entfernen. Geschieht dies, ist die Beschwerde nach diesem
+Abschnitt eine Praxis des Betreibers und kein Anspruch — siehe Ziffer 8.3 der
+Nutzungsbedingungen. Dies steht hier, damit dieses Dokument nicht als Zusicherung
+gelesen wird, welche die Nutzungsbedingungen nicht geben.
+
 ---
 
 ## 9. Strafverfolgung

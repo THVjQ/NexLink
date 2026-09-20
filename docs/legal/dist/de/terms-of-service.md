@@ -354,18 +354,73 @@ Sie können Ihr Konto jederzeit löschen:
 
 Eine Begründung ist nicht erforderlich und eine Genehmigung nicht nötig.
 
-### 8.2 Durch den Betreiber
+### 8.2 Durch den Betreiber — aus wichtigem Grund
 Ihr Konto kann suspendiert oder entfernt werden, wenn:
 - Sie gegen diese Bedingungen oder die Inhaltsrichtlinien verstossen;
 - Sie den Dienst rechtswidrig nutzen;
 - die weitere Bereitstellung an Sie andere Nutzer gefährden würde;
 - mehrere glaubhafte Meldungen gegen Sie vorliegen.
 
-### 8.3 Verfahren
-Soweit praktisch möglich werden Ihnen Anlass und Grund mitgeteilt, und Sie können
-über die Kontaktseite Beschwerde erheben. Betrifft der Verstoss rechtswidriges
-Material oder eine unmittelbare Gefahr für eine andere Person, kann die
-Entfernung sofort und ohne Ankündigung erfolgen.
+### 8.2a Durch den Betreiber — nach Ermessen, ohne Grund
+
+**Der Betreiber kann Ihr Konto jederzeit suspendieren oder entfernen oder Ihnen
+den Zugang zu einem NexLink-Produkt entziehen, aus beliebigem Grund oder ohne
+Grund, mit oder ohne Ankündigung, und ohne einen Grund nennen zu müssen.**
+Dieses Recht steht dem Betreiber zu, jeder für ihn handelnden Person sowie
+jeder Person, auf die der Dienst nach Ziffer 10.2 übertragen wird.
+
+Es ist nicht auf die Gründe nach Ziffer 8.2 beschränkt, und der Betreiber muss
+nicht darlegen, dass einer davon vorliegt.
+
+**Weshalb dem Betreiber dieses Recht zusteht und weshalb dies angemessen ist:**
+
+- **Ihnen steht genau dasselbe Recht zu.** Nach Ziffer 8.1 können Sie Ihr Konto
+  jederzeit löschen, aus beliebigem Grund oder ohne, ohne Ankündigung, ohne
+  Begründung und ohne Genehmigung. Keine Partei ist an die andere gebunden, und
+  keine muss ihr Gehen rechtfertigen.
+- **Es wurde nichts bezahlt.** Der Dienst ist unentgeltlich (Ziffer 2.7). Es geht
+  keine Gebühr, kein Abonnement und kein Kauf verloren, und eine Spende erwirbt
+  nichts und verliert daher nichts.
+- **Ihre Inhalte bleiben Ihre.** Ihr Nachrichtenverlauf liegt auf Ihren Geräten,
+  nicht in lesbarer Form auf dem Server des Betreibers, und das Export-Werkzeug
+  steht Ihnen offen (Ziffer 6.4). Die Entfernung beendet Ihren Zugang zum
+  Dienst; sie nimmt Ihnen Ihre Nachrichten nicht weg.
+- **Hier betreibt eine Person einen Dienst von zu Hause aus.** Die Alternative zu
+  einem solchen Ermessen wäre die Pflicht, jemanden weiter zu bedienen, bei dem
+  der Betreiber einen Grund hat — möglicherweise einen, den er nicht gefahrlos
+  nennen kann — es nicht zu tun.
+
+**Was dieses Recht nicht bewirkt:**
+
+- Es setzt Ziffer 9.1 **nicht** ausser Kraft. Jede Garantie, jedes Recht und
+  jeder Rechtsbehelf, deren Ausschluss das Gesetz nicht zulässt, bleiben
+  unberührt, einschliesslich der Konsumentengarantien für Nutzer in Australien
+  und der zwingenden Bestimmungen des schweizerischen Rechts für Konsumenten in
+  der Schweiz.
+- Es erlaubt dem Betreiber **nicht**, rechtswidrig zu handeln. Es ist kein Recht,
+  Sie aus einem Grund zu entfernen, den das Recht Ihres Zugelassenen Gebiets
+  verbietet, namentlich aus einem diskriminierenden Grund.
+- Es berührt **nicht** die Daten, auf die Sie Anspruch haben. Die Löschung
+  richtet sich in beiden Fällen nach Ziffer 8.5 und der Datenschutzerklärung,
+  und Ihre Auskunfts- und Herausgaberechte überdauern die Entfernung.
+
+### 8.3 Verfahren, und was Praxis statt Anspruch ist
+**Handelt der Betreiber nach Ziffer 8.2, werden Ihnen, soweit praktisch möglich,
+Anlass und Grund mitgeteilt, und Sie können Beschwerde erheben**, indem Sie sich
+über die Kontaktseite an den Betreiber wenden. Betrifft der Verstoss
+rechtswidriges Material oder eine unmittelbare Gefahr für eine andere Person,
+kann die Entfernung sofort und ohne Ankündigung erfolgen.
+
+**Handelt der Betreiber nach Ziffer 8.2a, wird Ihnen kein Grund geschuldet.** Es
+bleibt die übliche Praxis des Betreibers, gleichwohl zu erklären und eine
+Beschwerde entgegenzunehmen, denn einem Dienst, der Menschen stillschweigend
+entfernt, sollte niemand vertrauen — doch ist dies eine Praxis, der der
+Betreiber folgt, und kein Recht, das Sie haben; Ziffer 8.2a hängt nicht davon ab.
+
+Diese Unterscheidung wird offen getroffen, statt zwei Bestimmungen einander
+widersprechen zu lassen. Ein Dokument, das an einer Stelle eine Erklärung
+verspricht und an anderer ein unbegründetes Ermessen vorbehält, hat Ihnen nicht
+gesagt, was Sie erhalten werden.
 
 ### 8.4 Verantwortung für Einladungen
 Einladungen bilden einen Baum, der festhält, wer wen eingeladen hat. Ein Konto,

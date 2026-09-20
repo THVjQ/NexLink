@@ -328,18 +328,69 @@ You may delete your Account at any time:
 
 No reason is required and no approval is needed.
 
-### 8.2 By the Operator
+### 8.2 By the Operator — for cause
 Your Account may be suspended or removed if:
 - You breach these Terms or the Content Policy.
 - You use the Service unlawfully.
 - Continuing to provide the Service to you would put other users at risk.
 - You are the subject of multiple credible reports.
 
-### 8.3 Process
-Where practical you will be told what happened and why, and may appeal by
-contacting the Operator through the Contact Page. Where the breach involves
-illegal material or an immediate risk to another person, removal may be
-immediate and without notice.
+### 8.2a By the Operator — at discretion, without cause
+
+**The Operator may suspend or remove your Account, or withdraw your access to
+any NexLink Product, at any time, for any reason or for no reason, with or
+without notice, and without being required to give a reason.** This right
+belongs to the Operator, to anyone acting on the Operator's behalf, and to
+anyone to whom the Service is transferred under clause 10.2.
+
+It is not limited to the grounds in clause 8.2, and the Operator does not have
+to show that any of them applies.
+
+**Why the Operator has this right, and why it is fair that they do:**
+
+- **You have exactly the same right.** Clause 8.1 lets you delete your Account
+  at any time, for any reason or none, with no notice, no explanation and no
+  approval. Neither party is tied to the other, and neither has to justify
+  leaving.
+- **Nothing has been paid.** The Service is free (clause 2.7). No fee, no
+  subscription and no purchase is lost, and a donation buys nothing and
+  therefore loses nothing.
+- **Your content stays yours.** Your message history lives on your Devices, not
+  on the Operator's server in readable form, and the export tool is yours to use
+  (clause 6.4). Removal ends your access to the Service; it does not take your
+  messages from you.
+- **This is one person running a service from home.** The alternative to a
+  discretion like this is an obligation to keep serving someone the Operator has
+  a reason — possibly a reason they cannot safely explain — not to serve.
+
+**What this right does not do:**
+
+- It does **not** override clause 9.1. Any guarantee, right or remedy that the
+  law does not permit to be excluded is unaffected, including the Consumer
+  Guarantees for a user in Australia and the mandatory provisions of Swiss law
+  for a consumer in Switzerland.
+- It does **not** permit the Operator to act unlawfully. It is not a right to
+  remove you on a ground that the law of your Permitted Territory prohibits,
+  including a ground of discrimination.
+- It does **not** affect the data you are entitled to. Deletion follows clause
+  8.5 and the Privacy Policy either way, and your rights of access and
+  portability survive removal.
+
+### 8.3 Process, and what is practice rather than entitlement
+**Where the Operator acts under clause 8.2, you will where practical be told
+what happened and why, and may appeal** by contacting the Operator through the
+Contact Page. Where the breach involves illegal material or an immediate risk to
+another person, removal may be immediate and without notice.
+
+**Where the Operator acts under clause 8.2a, no reason is owed to you.** The
+Operator's usual practice is still to explain and to accept an appeal, because a
+service that removes people silently is one nobody should trust — but that is a
+practice the Operator follows, not a right you hold, and clause 8.2a is not
+conditional on it.
+
+This distinction is drawn openly instead of leaving two clauses to contradict
+each other. A document that promises an explanation in one place and reserves an
+unexplained discretion in another has told you nothing about which you will get.
 
 ### 8.4 Invite accountability
 Invites form a tree that records who invited whom. An Account that repeatedly

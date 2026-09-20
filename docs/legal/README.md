@@ -162,6 +162,27 @@ reworded so they no longer promise a postal address the page does not print.
 - **Whether taking donations changes the consumer-law analysis.** ToS §2.7 says
   donations are a gift conferring nothing, which is intended to keep the service
   gratuitous. That reasoning should be checked.
+- **⚠️ ToS §8.2a — removal at discretion. This is the term most likely to be
+  challenged in the whole pack, in both jurisdictions.** It is drafted to
+  survive, not merely to sound strong:
+
+  - **ACL s 25 lists "a term that permits one party but not the other to
+    terminate" as an example of an unfair term** in a standard-form consumer
+    contract, and since 2023 the unfair-contract-terms regime carries penalties.
+    The defence built into the clause is **reciprocity** — §8.1 gives the user
+    the identical right — plus the facts that nothing was paid and the user's
+    content is on their own devices and exportable. Whether that is enough is a
+    lawyer's call.
+  - **Swiss UCA Art. 8** voids a GTC term causing a significant and unjustified
+    imbalance to a consumer's detriment. Same defence, same uncertainty.
+  - **An unqualified version would be weaker, not stronger.** The carve-outs —
+    mandatory rights preserved, no unlawful or discriminatory ground, data rights
+    survive — are what make it defensible. Deleting them to make it read more
+    absolute would raise the chance a court strikes the whole clause.
+  - **§8.3 now separates practice from entitlement**, so §8.2a does not
+    contradict the Content Policy's appeals section. Confirm a reviewer is happy
+    with that split rather than with removing one side of it.
+
 - **The Australian Consumer Law section** (ToS §9.2) and the **indemnity**
   (§9.6). Consumer guarantees cannot be excluded however the document is worded.
 - **Whether the Privacy Act applies at this size.** The draft assumes it does,

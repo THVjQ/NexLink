@@ -223,6 +223,12 @@ stated rather than dressed up as an independent process.
 
 Actions taken under §3.1 are not subject to appeal.
 
+**Removal is not limited to this process.** Terms of Service §8.2a lets the
+Operator remove an Account at discretion, without cause and without giving a
+reason. Where that happens, this section's appeal is a practice the Operator
+follows, not an entitlement — see Terms §8.3. It is said here so this document
+does not read as a guarantee the Terms do not give.
+
 ---
 
 ## 9. Law enforcement
