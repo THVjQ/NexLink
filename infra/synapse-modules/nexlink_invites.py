@@ -30,6 +30,14 @@ checked once at startup and refuses to load if it has moved, rather than failing
 per-request in production. See `_assert_schema`.
 """
 
+# DEPLOYMENT: this file is auto-synced onto the homeserver by the
+# social-sync sidecar, which pulls feat/social-foundations every 120s and
+# copies it into /data. Editing the copy on Willard is pointless — the next
+# tick overwrites it. Synapse must still be RESTARTED to load a change;
+# the sidecar writes /data/.modules-pending-restart and will not restart it
+# for you, because a module that fails to mount puts Synapse in a restart
+# loop (§31.6) and this runs unattended.
+
 import json
 import logging
 import os
