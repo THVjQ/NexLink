@@ -26,6 +26,9 @@ admin token every endpoint answers 403. The login form posts to Synapse's own
 `/login`, which has Synapse's own rate limiting in front of it.
 """
 
+# DEPLOYMENT: auto-synced by the social-sync sidecar every 120s. Edit here,
+# not on Willard. Synapse must be RESTARTED to load a change.
+
 import json
 import logging
 import os
