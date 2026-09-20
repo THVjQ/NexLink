@@ -42,7 +42,9 @@ als wäre es anders.
   kennt daher die beteiligten Konten und die Zeitpunkte.
 - **Wie oft Sie Nachrichten senden und ungefähr wie gross sie sind.**
 - **Ihre IP-Adresse**, die Ihren Standort annähert und Ihren Internetanbieter
-  benennt. 28 Tage aufbewahrt.
+  benennt. 28 Tage aufbewahrt — **sechs Monate, falls der Dienst in die Schweiz
+  verlegt wird**, weil das schweizerische Überwachungsrecht diese Frist setzt.
+  §3.3a der Datenschutzerklärung erklärt dies samt Folgen für die Löschung.
 - **Welche Geräte Sie nutzen** und wann sich jedes zuletzt verbunden hat.
 - **Mit welchem Emoji Sie auf wessen Nachricht reagieren.** Matrix überträgt
   Reaktionen unverschlüsselt. Die Nachricht, auf die reagiert wird, bleibt

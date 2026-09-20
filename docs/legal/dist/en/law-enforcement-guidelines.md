@@ -54,11 +54,16 @@ something that does not exist in that form.
 | Device list, last seen times | Yes | Until Device removed |
 | Which Accounts share a conversation, and when messages were sent | Yes | Until deletion |
 | Approximate message sizes | Yes | Until deletion |
-| IP addresses and user agents | Yes | **28 days only** |
+| IP addresses and user agents | Yes | **28 days only** — six months under Swiss operation |
 | The Invite record, including who issued the Invite | Yes | Retained after deletion |
 | Reports made about an Account | Yes | 2 years |
 
-**Note the 28-day limit on IP records.** A request received after that window
+**Note the 28-day limit on IP records**, which becomes **six months while the
+Service is operated from Switzerland**, matching the period set by BÜPF
+(Privacy Policy §3.3a). Under Swiss operation that period survives Account
+deletion; under Australian operation it does not.
+
+**Adopting the period is not a claim to have been classified under BÜPF.** A request received after that window
 cannot be satisfied for that period, and no copy is retained elsewhere except in
 database backups, which expire after 14 days.
 

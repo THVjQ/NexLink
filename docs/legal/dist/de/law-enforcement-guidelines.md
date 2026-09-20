@@ -58,11 +58,16 @@ das in dieser Form nicht existiert.
 | Geräteliste, letzte Verbindungszeiten | Ja | Bis zur Entfernung des Geräts |
 | Welche Konten eine Unterhaltung teilen und wann gesendet wurde | Ja | Bis zur Löschung |
 | Ungefähre Nachrichtengrössen | Ja | Bis zur Löschung |
-| IP-Adressen und User-Agents | Ja | **Nur 28 Tage** |
+| IP-Adressen und User-Agents | Ja | **Nur 28 Tage** — sechs Monate bei Betrieb aus der Schweiz |
 | Einladungsdatensatz, einschliesslich ausstellender Person | Ja | Bleibt nach Löschung erhalten |
 | Meldungen über ein Konto | Ja | 2 Jahre |
 
-**Beachten Sie die Frist von 28 Tagen für IP-Aufzeichnungen.** Ein später
+**Beachten Sie die Frist von 28 Tagen für IP-Aufzeichnungen**, die **sechs
+Monate beträgt, solange der Dienst aus der Schweiz betrieben wird**, entsprechend
+der Frist des BÜPF (Datenschutzerklärung §3.3a). Bei Betrieb aus der Schweiz
+überdauert diese Frist die Kontolöschung, bei Betrieb aus Australien nicht.
+
+**Die Übernahme der Frist ist keine Behauptung einer Einstufung nach BÜPF.** Ein später
 eingehendes Ersuchen kann für diesen Zeitraum nicht erfüllt werden; eine Kopie
 wird ausser in Datenbank-Backups, die nach 14 Tagen verfallen, nirgends
 aufbewahrt.

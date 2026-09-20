@@ -133,6 +133,70 @@ minimum age of 16.
 | User agent / client version | Diagnostics, compatibility | Legitimate interest | 28 days |
 | Connection timestamps | Security and diagnostics | Legitimate interest | 28 days |
 
+**These periods become six months while the Service is operated from Switzerland — see §3.3a.**
+
+### 3.3a Connection metadata under Swiss operation — six months
+
+**While the Service is operated from Switzerland, IP addresses, user-agent
+strings, connection timestamps and server logs are retained for six months
+rather than 28 days.** No additional category is collected, and nothing else in
+this policy changes.
+
+**Why six months**
+
+Switzerland's Federal Act on the Surveillance of Post and Telecommunications
+(BÜPF), and the ordinance under it (VÜPF), can require a *provider of derived
+communication services* to retain connection metadata for **six months** and to
+cooperate with a lawful order. Six months is that statutory period. It is not a
+number the Operator chose for convenience.
+
+Whether those duties reach a service of this size and character has not been
+determined, and the Operator does not claim it has. The period is adopted in
+advance rather than after a classification, for a practical reason: a 28-day
+window can expire before a lawful Swiss request is even served. That is the
+worst outcome available — the Operator is obliged to answer, the data is already
+gone, and the user gains nothing from its absence, because the request was made
+regardless.
+
+**Adopting the period is not a claim to have been classified**, and this clause
+should not be read as one.
+
+**If the obligation is determined not to apply, the period returns to 28 days.**
+Retaining data longer than necessary is itself a privacy cost, not a neutral
+precaution, and a longer period will not be kept simply because it was once
+adopted.
+
+**Why this is keyed to where the Service runs, not to where you live**
+
+The Operator does not verify your location and collects no location data (Terms
+§3.7, and §3.7 of this policy). "Users in Switzerland" is therefore not a group
+the server can identify, and identifying it would mean processing location data
+this policy says is not processed — a worse trade than a longer retention
+period.
+
+The trigger is the Service's own location, which is knowable and is what Swiss
+law attaches to. **The consequence, stated plainly: while the Service is operated
+from Switzerland, the six-month period applies to every user, including users in
+Australia.** It is disclosed here rather than left to be discovered, and it is
+why the decision to move the server is one you are told about in advance
+(Terms §7.5).
+
+**What this does to deletion**
+
+Elsewhere this policy says your IP and user-agent records are purged when you
+delete your Account. **Where a statutory retention obligation applies, that
+promise cannot be kept for connection metadata**, and it is corrected here
+rather than left to contradict itself:
+
+- Under Swiss operation, connection metadata is retained for the six-month
+  period **even after Account deletion**, and is then destroyed.
+- Everything else listed in §7.1 is still removed at deletion, immediately.
+- Under Australian operation, connection metadata continues to be purged at
+  deletion, as §7.1 says.
+
+**Today the Service is operated from Australia, the period is 28 days, and
+connection metadata is purged at Account deletion.**
+
 ### 3.4 Invitations
 
 | Data | Purpose | Lawful basis | Retention |
@@ -198,7 +262,7 @@ For NexLink Social, the Operator cannot read:
 The Operator **can** see:
 - Which Accounts are in a conversation, and when each message was sent.
 - Approximate message sizes.
-- Your IP address, for 28 days.
+- Your IP address, for 28 days — six months under Swiss operation (§3.3a).
 - Which Devices you use and when each last connected.
 - **Which emoji you reacted with, and to whose message.** Matrix sends reactions
   unencrypted; the message itself stays encrypted. We disclose this because it
@@ -324,6 +388,9 @@ You may delete your Account at any time, in the app or at
 Deletion removes: the Account and all sessions, your display name and picture,
 your uploaded files, your encrypted key backup, your email address if given, and
 your IP and user-agent records.
+
+**Under Swiss operation, connection metadata is the one exception** — it is held
+for the statutory six-month period and then destroyed. See §3.3a.
 
 ### 7.2 What is kept after deletion, and why
 

@@ -106,20 +106,31 @@ reworded so they no longer promise a postal address the page does not print.
 
 **Review needed by someone qualified:**
 
-- **⚠️ BÜPF / VÜPF — the largest unexamined risk, and it grows the day the server
-  moves.** Switzerland's Federal Act on the Surveillance of Post and
-  Telecommunications imposes obligations on "providers of derived communication
-  services", which can include retaining certain metadata for **six months** and
-  cooperating with lawful interception. Threema was litigated into the
-  reduced-obligation category as a small provider; that outcome is not automatic
-  and turns on facts about size and commercial character.
+- **⚠️ BÜPF / VÜPF — the six-month period is adopted, the classification is
+  not.** Privacy Policy §3.3a now retains connection metadata for six months
+  while the Service is operated from Switzerland, matching the period BÜPF sets
+  for a provider of derived communication services. That removes the earlier
+  conflict, where the policy promised 28 days that Swiss law could override.
 
-  This matters concretely, not abstractly: **the Privacy Policy currently
-  promises 28-day IP retention and no data-retention obligation.** If BÜPF
-  applies to a Swiss-hosted NexLink Social, that promise becomes one the operator
-  cannot keep, and a privacy policy that promises a retention period the law
-  overrides is worse than one that never promised it. **Determine this before
-  moving the server, not after.**
+  **What still needs a Swiss lawyer:** whether BÜPF reaches a service of this
+  size and character at all. Threema was litigated into the reduced-obligation
+  category; that outcome is not automatic. The clause is written as a voluntary
+  adoption of the statutory period and says explicitly that it is not a claim to
+  have been classified — check that wording is one a Swiss adviser is happy with,
+  because claiming a classification you do not hold is its own problem.
+
+  **Two consequences worth confirming are acceptable:**
+  - The period is keyed to the **server's** location, not the user's, because
+    residence is not verified and identifying "Swiss users" would mean processing
+    location data the policy says is not processed. So while the server is in
+    Switzerland, **Australian users also get six months**. APP 11.2 requires
+    destroying personal information when it is no longer needed — retaining an
+    Australian user's data for six months under a foreign obligation is
+    defensible but is exactly the kind of thing to have checked.
+  - Six months **survives account deletion** for connection metadata. The
+    deletion clauses in Privacy Policy §7.1, the Retention Schedule and the
+    Transparency Note were all amended to say so, because the promise to purge
+    at deletion cannot hold against a statutory period.
 
 - **The Law Enforcement Guidelines describe an Australian posture only.** §1 says
   the service is offered in both territories, but nothing in the document says

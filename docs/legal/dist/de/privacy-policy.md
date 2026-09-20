@@ -142,6 +142,73 @@ Jahren bestätigt haben.
 | User-Agent / Client-Version | Diagnose, Kompatibilität | Berechtigtes Interesse | 28 Tage |
 | Verbindungszeitstempel | Sicherheit und Diagnose | Berechtigtes Interesse | 28 Tage |
 
+**Diese Fristen betragen sechs Monate, solange der Dienst aus der Schweiz betrieben wird — siehe §3.3a.**
+
+### 3.3a Verbindungsmetadaten bei Betrieb aus der Schweiz — sechs Monate
+
+**Solange der Dienst aus der Schweiz betrieben wird, werden IP-Adressen,
+User-Agent-Zeichenfolgen, Verbindungszeitstempel und Serverprotokolle sechs
+Monate statt 28 Tage aufbewahrt.** Es wird keine zusätzliche Kategorie erhoben,
+und im Übrigen ändert sich nichts an dieser Erklärung.
+
+**Weshalb sechs Monate**
+
+Das schweizerische Bundesgesetz betreffend die Überwachung des Post- und
+Fernmeldeverkehrs (BÜPF) und die zugehörige Verordnung (VÜPF) können eine
+*Anbieterin abgeleiteter Kommunikationsdienste* verpflichten,
+Verbindungsmetadaten **sechs Monate** aufzubewahren und bei einer rechtmässigen
+Anordnung mitzuwirken. Sechs Monate ist diese gesetzliche Frist. Es ist keine
+vom Betreiber aus Bequemlichkeit gewählte Zahl.
+
+Ob diese Pflichten einen Dienst dieser Grösse und Ausrichtung erfassen, ist
+nicht entschieden, und der Betreiber behauptet nicht, dass es entschieden wäre.
+Die Frist wird vorsorglich übernommen, aus einem praktischen Grund: Eine Frist
+von 28 Tagen kann ablaufen, bevor ein rechtmässiges schweizerisches Ersuchen
+überhaupt zugestellt ist. Das ist das schlechteste mögliche Ergebnis — der
+Betreiber ist zur Antwort verpflichtet, die Daten sind bereits weg, und der
+Nutzer gewinnt durch ihr Fehlen nichts, weil das Ersuchen ohnehin gestellt wurde.
+
+**Die Übernahme der Frist ist keine Behauptung, entsprechend eingestuft worden
+zu sein**, und diese Bestimmung darf nicht so gelesen werden.
+
+**Wird die Pflicht als nicht anwendbar beurteilt, kehrt die Frist auf 28 Tage
+zurück.** Daten länger als nötig aufzubewahren ist selbst ein
+Datenschutzpreis und keine neutrale Vorsichtsmassnahme; eine längere Frist wird
+nicht beibehalten, bloss weil sie einmal übernommen wurde.
+
+**Weshalb dies an den Betriebsort und nicht an Ihren Wohnsitz anknüpft**
+
+Der Betreiber überprüft Ihren Aufenthaltsort nicht und erhebt keine Standortdaten
+(Nutzungsbedingungen Ziff. 3.7 und §3.7 dieser Erklärung). «Nutzer in der
+Schweiz» ist daher keine Gruppe, die der Server bestimmen könnte; sie zu
+bestimmen hiesse, Standortdaten zu bearbeiten, von denen diese Erklärung sagt,
+dass sie nicht bearbeitet werden — ein schlechteres Geschäft als eine längere
+Aufbewahrungsfrist.
+
+Angeknüpft wird an den Standort des Dienstes, der bekannt ist und an den das
+schweizerische Recht tatsächlich anknüpft. **Die Folge, klar benannt: Solange
+der Dienst aus der Schweiz betrieben wird, gilt die Frist von sechs Monaten für
+alle Nutzer, auch für Nutzer in Australien.** Dies wird hier offengelegt, statt
+der Entdeckung überlassen, und ist der Grund, weshalb Ihnen die Entscheidung zur
+Verlegung des Servers vorab mitgeteilt wird (Nutzungsbedingungen Ziff. 7.5).
+
+**Was dies für die Löschung bedeutet**
+
+An anderer Stelle sagt diese Erklärung, dass Ihre IP- und
+User-Agent-Aufzeichnungen bei der Löschung Ihres Kontos entfernt werden.
+**Besteht eine gesetzliche Aufbewahrungspflicht, kann dieses Versprechen für
+Verbindungsmetadaten nicht gehalten werden**; es wird hier berichtigt, statt sich
+selbst zu widersprechen:
+
+- Bei Betrieb aus der Schweiz werden Verbindungsmetadaten für die sechsmonatige
+  Frist **auch nach der Kontolöschung** aufbewahrt und danach vernichtet.
+- Alles Übrige nach §7.1 wird bei der Löschung weiterhin sofort entfernt.
+- Bei Betrieb aus Australien werden Verbindungsmetadaten wie in §7.1 beschrieben
+  bei der Löschung entfernt.
+
+**Heute wird der Dienst aus Australien betrieben, die Frist beträgt 28 Tage, und
+Verbindungsmetadaten werden bei der Kontolöschung entfernt.**
+
 ### 3.4 Einladungen
 
 | Daten | Zweck | Rechtsgrundlage | Aufbewahrung |
@@ -210,7 +277,7 @@ Der Betreiber **kann** sehen:
 - welche Konten an einer Unterhaltung beteiligt sind und wann eine Nachricht
   gesendet wurde;
 - ungefähre Nachrichtengrössen;
-- Ihre IP-Adresse, während 28 Tagen;
+- Ihre IP-Adresse, während 28 Tagen — sechs Monate bei Betrieb aus der Schweiz (§3.3a);
 - welche Geräte Sie nutzen und wann sich jedes zuletzt verbunden hat;
 - **mit welchem Emoji Sie auf wessen Nachricht reagiert haben.** Matrix überträgt
   Reaktionen unverschlüsselt; die Nachricht selbst bleibt verschlüsselt. Wir legen
@@ -346,6 +413,10 @@ Sie können Ihr Konto jederzeit löschen, in der App oder unter
 Die Löschung entfernt: das Konto und sämtliche Sitzungen, Ihren Anzeigenamen und
 Ihr Bild, hochgeladene Dateien, Ihr verschlüsseltes Schlüssel-Backup, eine
 allfällige E-Mail-Adresse sowie Ihre IP- und User-Agent-Aufzeichnungen.
+
+**Bei Betrieb aus der Schweiz sind Verbindungsmetadaten die einzige Ausnahme** —
+sie werden für die gesetzliche Frist von sechs Monaten aufbewahrt und danach
+vernichtet. Siehe §3.3a.
 
 ### 7.2 Was nach der Löschung erhalten bleibt, und weshalb
 

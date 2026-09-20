@@ -43,14 +43,20 @@ lange sie aufbewahrt wird und wodurch sie verschwindet.
 
 | Daten | Aufbewahrung | Gelöscht durch |
 |---|---|---|
-| IP-Adressen | **28 Tage** | Automatischer Ablauf; **und Entfernung bei Kontolöschung** |
-| User-Agent-Zeichenfolgen | 28 Tage | Wie vor |
+| IP-Adressen | **28 Tage** — sechs Monate bei Betrieb aus der Schweiz | Automatischer Ablauf; Entfernung bei Kontolöschung, **ausser bei gesetzlicher Aufbewahrungspflicht** |
+| User-Agent-Zeichenfolgen | 28 Tage — sechs Monate bei Betrieb aus der Schweiz | Wie vor |
 | Geräteliste und öffentliche Schlüssel | Bis zur Entfernung des Geräts | Abmeldung; Entfernen des Geräts |
 | Push-Token | Bis Abmeldung oder Geräteentfernung | Abmeldung |
-| Serverprotokolle | 28 Tage | Automatische Rotation |
+| Serverprotokolle | 28 Tage — sechs Monate bei Betrieb aus der Schweiz | Automatische Rotation |
 
 **IP-Aufzeichnungen werden bei der Löschung entfernt, nicht bloss dem Ablauf
 überlassen.** Ein gelöschtes Konto hinterlässt keine 28 Tage Verbindungshistorie.
+
+**Dies gilt bei Betrieb aus Australien. Bei Betrieb aus der Schweiz gilt es
+nicht**, und §3.3a der Datenschutzerklärung sagt dies, statt beide Aussagen
+einander widersprechen zu lassen: Die sechsmonatige Aufbewahrungsfrist des BÜPF
+überdauert, wo sie gilt, die Kontolöschung. Alles Übrige wird weiterhin sofort
+entfernt.
 
 ## 4. Was die Kontolöschung überdauert
 

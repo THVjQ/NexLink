@@ -43,14 +43,19 @@ is kept, and what causes it to go.
 
 | Data | Retention | Deleted by |
 |---|---|---|
-| IP addresses | **28 days** | Automatic expiry; **and purged at Account deletion** |
-| User agent strings | 28 days | As above |
+| IP addresses | **28 days** — six months under Swiss operation | Automatic expiry; purged at Account deletion **except where a statutory retention period applies** |
+| User agent strings | 28 days — six months under Swiss operation | As above |
 | Device list and public keys | Until the Device is removed | Signing out; removing the Device |
 | Push routing token | Until sign-out or Device removal | Sign-out |
-| Server logs | 28 days | Automatic rotation |
+| Server logs | 28 days — six months under Swiss operation | Automatic rotation |
 
 **IP records are purged at deletion, not merely left to expire.** A deleted
 Account does not leave 28 days of connection history behind.
+
+**This holds under Australian operation. Under Swiss operation it does not**, and
+Privacy Policy §3.3a says so rather than leaving the two statements to disagree:
+BÜPF's six-month retention period, where it applies, survives Account deletion.
+Everything else is still removed immediately.
 
 ## 4. What survives account deletion
 

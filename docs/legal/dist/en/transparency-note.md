@@ -44,7 +44,9 @@ otherwise.
   which accounts are involved and the timing.
 - **How often you send messages, and roughly how large they are.**
 - **Your IP address**, which approximates your location and names your internet
-  provider. Kept 28 days.
+  provider. Kept 28 days — **six months if the service moves to Switzerland**,
+  because Swiss surveillance law sets that period. Privacy Policy §3.3a explains
+  it, including what it does to deletion.
 - **Which devices you use**, and when each last connected.
 - **Which emoji you react with, and to whose message.** Matrix sends reactions
   unencrypted. The message being reacted to stays encrypted; the reaction does
