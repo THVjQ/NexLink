@@ -76,8 +76,8 @@ android {
         // would recreate the fused release train D1 exists to prevent (§1.4.3).
         // Bump BOTH on every upload. Play rejects a repeated versionCode, and
         // it is the commonest way a second upload wastes ten minutes (§35.1).
-        versionCode 3
-        versionName "0.1.2"
+        versionCode 4
+        versionName "0.1.3"
         // §16.3.1 — the bridge permission's name. A custom permission is owned
         // account-wide by the first package to declare it, so debug and release
         // must not share one or they cannot both be installed. See the comment
