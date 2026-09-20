@@ -106,6 +106,38 @@ reworded so they no longer promise a postal address the page does not print.
 
 **Review needed by someone qualified:**
 
+- **⚠️ BÜPF / VÜPF — the largest unexamined risk, and it grows the day the server
+  moves.** Switzerland's Federal Act on the Surveillance of Post and
+  Telecommunications imposes obligations on "providers of derived communication
+  services", which can include retaining certain metadata for **six months** and
+  cooperating with lawful interception. Threema was litigated into the
+  reduced-obligation category as a small provider; that outcome is not automatic
+  and turns on facts about size and commercial character.
+
+  This matters concretely, not abstractly: **the Privacy Policy currently
+  promises 28-day IP retention and no data-retention obligation.** If BÜPF
+  applies to a Swiss-hosted NexLink Social, that promise becomes one the operator
+  cannot keep, and a privacy policy that promises a retention period the law
+  overrides is worse than one that never promised it. **Determine this before
+  moving the server, not after.**
+
+- **The Law Enforcement Guidelines describe an Australian posture only.** §1 says
+  the service is offered in both territories, but nothing in the document says
+  what happens when a *Swiss* prosecutor or the Federal Office of Justice makes a
+  request, or how mutual legal assistance between the two is handled. One
+  sentence acknowledging the territory is not the same as describing the process.
+  This is the least Swiss-aware document in the pack and the one where that
+  matters most.
+
+- **Swiss coverage is uneven by design, and should be checked against intent.**
+  Measured across the pack, excluding the shared appendix: Privacy Policy 20
+  Swiss references, ToS 14, Content Policy 1, Law Enforcement 1, Security
+  Disclosure 1, Retention Schedule 0, Transparency Note 0. The two zeros are
+  defensible — the Retention Schedule is factual and the Transparency Note is
+  deliberately non-legal — but the Retention Schedule stops being purely factual
+  the moment BÜPF applies to it.
+
+
 - **The Swiss additions are the least-tested part of this pack.** ToS §9.3
   (CO Art. 100(1), UCA Art. 8), §10.8 (PILA Art. 120), and PP §5.7 and §8.
   They were written from the statutes' substance, not from Swiss precedent.
