@@ -3,6 +3,16 @@ app/build/
 android-app/build/
 shared/build/
 wear/build/
+# Kept although the social modules moved to THVjQ/NexLink-Social on 2026-09-21.
+# Removing these lines while their build output was still on disk made a single
+# deletion commit sweep up 8,971 build artefacts — 629,303 insertions and a 2 GB
+# push. An ignore rule for a path that no longer exists costs nothing.
+social/build/
+social-core/build/
+social-ui/build/
+social-contract/build/
+social-rtc/build/
+rustls-tls/build/
 *.iml
 local.properties
 keystore.properties
@@ -10,11 +20,6 @@ keystore.properties
 *.keystore
 
 # NexLink Social modules
-social/build/
-social-core/build/
-social-ui/build/
-social-contract/build/
-social-rtc/build/
 
 # ── Firebase (§13.3) ────────────────────────────────────────────────────────
 # google-services.json ships inside the APK and its API key is restricted by

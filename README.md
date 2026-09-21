@@ -71,3 +71,22 @@ See [LICENSE](./LICENSE).
 ---
 
 <p align="center"><sub>Part of the <a href="https://thvjq.com.au">THVjQ</a> ecosystem.</sub></p>
+
+---
+
+## NexLink Social lives elsewhere
+
+The encrypted messenger companion moved to
+**[THVjQ/NexLink-Social](https://github.com/THVjQ/NexLink-Social)** on
+2026-09-21, along with its specification, server infrastructure and the legal
+pack it ships.
+
+This repository is NexLink itself: `:app`, `:shared` and `:wear`. The two apps
+never shared code — `:app` and `:wear` depend only on `:shared` — so the split
+removed nothing either of them used.
+
+The legal documents covering **all four** NexLink products, in English and
+German, are published at <https://thvjq.com.au/nexlink/legal/terms/> and
+maintained in the Social repository, because the Social app is what ships them
+inside an APK.
+

@@ -18,14 +18,15 @@ rootProject.name = "NexLink"
 // ── NexLink ───────────────────────────────────────────────────────────────
 include ':app'                 // com.thvjq.nexlink — SMS, dialer, inbox, bridge
 include ':shared'              // shared models and helpers
-include ':wear'                // Wear OS companion, NexLink only
+include ':wear'                // Wear OS companion
 
-// ── NexLink Social (docs/social/10-modules.md §10.3) ──────────────────────
-// :app may depend on :social-contract and NOTHING else from this list.
-// The rule is enforced in the root build.gradle — see §10.4.
-include ':rustls-tls'          // VENDORED — the SDK's TLS verifier. See its VENDORED.md.
-include ':social-contract'     // IPC types shared with :app. No SDK, no network.
-include ':social-core'         // Matrix session, store, crypto, sync
-include ':social-ui'           // chat, onboarding, settings screens
-include ':social-rtc'          // calls — §17, §18, §19. Added for phase 4 (§33.5).
-include ':social'              // com.thvjq.nexlink.social — the application
+// NexLink Social moved to THVjQ/NexLink-Social on 2026-09-21.
+//
+// The two apps never shared code — :app and :wear depend only on :shared, and
+// no source file here ever imported com.nexlink.social. §1.5's first success
+// criterion is that a NexLink user who never enables Social is unaffected, and
+// a repository boundary is the strongest form that rule can take.
+//
+// Do not re-add the social modules here. Both repositories building the same
+// app is how they come to disagree, and the legal documents the Social app
+// ships are the part where disagreeing actually matters.
