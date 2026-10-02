@@ -115,10 +115,21 @@ class ConversationActivity : AppCompatActivity() {
         ActivityResultContracts.GetContent()
     ) { uri -> uri?.let { sendAttachment(it, contentResolver.getType(it) ?: "image/*") } }
 
-    private val galleryMultiLauncher = registerForActivityResult(
-        ActivityResultContracts.GetMultipleContents()
-    ) { uris -> if (uris.size == 1) sendAttachment(uris[0], contentResolver.getType(uris[0]) ?: "image/*")
-                else if (uris.isNotEmpty()) sendMultipleImages(uris) }
+    /**
+     * Photos AND videos, several at once, in one message.
+     *
+     * PickMultipleVisualMedia rather than GetMultipleContents: it opens the
+     * system photo picker, which shows images and video together, and it needs
+     * NO media permission — which keeps §2.8's sixth invariant intact. The old
+     * contract could only be given one MIME filter, so "image/*" excluded video
+     * and "*/*" would have offered PDFs in a photo flow.
+     */
+    private val mediaMultiLauncher = registerForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(20)
+    ) { uris ->
+        if (uris.size == 1) sendAttachment(uris[0], contentResolver.getType(uris[0]) ?: "image/*")
+        else if (uris.isNotEmpty()) sendMultipleMedia(uris)
+    }
 
     private val videoLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
@@ -942,7 +953,11 @@ class ConversationActivity : AppCompatActivity() {
                 else reqCameraPermLauncher.launch(Manifest.permission.CAMERA)
             },
             NexPopup.Item("Photo",           R.drawable.ic_attach)  { galleryLauncher.launch("image/*") },
-            NexPopup.Item("Multiple Photos", R.drawable.ic_attach)  { galleryMultiLauncher.launch("image/*") },
+            NexPopup.Item("Photos & videos", R.drawable.ic_attach)  {
+                mediaMultiLauncher.launch(
+                    androidx.activity.result.PickVisualMediaRequest(
+                        ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+            },
             NexPopup.Item("Video",           R.drawable.ic_attach)  { videoLauncher.launch("video/*") },
             NexPopup.Item("Audio file",      R.drawable.ic_mic)     { audioLauncher.launch("audio/*") },
             NexPopup.Item("File",            R.drawable.ic_attach)  { fileLauncher.launch("*/*") }
@@ -957,20 +972,21 @@ class ConversationActivity : AppCompatActivity() {
         cameraLauncher.launch(uri)
     }
 
-    private fun sendMultipleImages(uris: List<android.net.Uri>) {
+    private fun sendMultipleMedia(uris: List<android.net.Uri>) {
         if (address.isEmpty()) return
         if (!requireDefaultSmsApp()) return
         val optimistic = SmsMessage(
             id = -System.currentTimeMillis(), threadId = threadId, address = address, body = "",
             timestamp = System.currentTimeMillis(), isIncoming = false, isMms = true,
-            mediaUri = uris.first().toString(), mimeType = "image/jpeg"
+            mediaUri = uris.first().toString(),
+            mimeType = contentResolver.getType(uris.first()) ?: "image/jpeg"
         )
         adapter.addOptimistic(optimistic)
         b.recycler.scrollToPosition(adapter.itemCount - 1)
         Thread {
             try {
                 SentMmsStore.save(this, optimistic)
-                SmsHelper.sendMultipleImagesMms(this, address, uris, selectedSimId,
+                SmsHelper.sendMultipleMediaMms(this, address, uris, selectedSimId,
                     extraRecipients = if (isGroup) participants.drop(1) else emptyList())
                 runOnUiThread { loadMessages() }
             } catch (e: SecurityException) {

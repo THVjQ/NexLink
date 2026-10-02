@@ -722,18 +722,34 @@ object SmsHelper {
         sendViaMms(ctx, listOf(to), parts, subId)
     }
 
-    fun sendMultipleImagesMms(ctx: Context, to: String, uris: List<android.net.Uri>,
-                              subId: Int = -1, extraRecipients: List<String> = emptyList()) {
+    /**
+     * Several attachments in ONE message — photos, videos, or a mix.
+     *
+     * Every part used to be labelled "image/jpeg" regardless of what it was,
+     * which is fine while only photos can be picked and wrong the moment a
+     * video can: the receiving phone is told the bytes are a JPEG and renders a
+     * broken image rather than a video. The type is now resolved per URI and
+     * carried through, and compressForMms already returns non-images untouched.
+     */
+    fun sendMultipleMediaMms(ctx: Context, to: String, uris: List<android.net.Uri>,
+                             subId: Int = -1, extraRecipients: List<String> = emptyList()) {
         val recipients = (listOf(to) + extraRecipients).distinct()
         val parts = uris.mapNotNull { uri ->
             runCatching {
-                val (data, _) = compressForMms(ctx, uri, "image/jpeg")
-                MmsPduBuilder.Part("image/jpeg", data)
+                val declared = ctx.contentResolver.getType(uri) ?: "image/jpeg"
+                val (data, effectiveMime) = compressForMms(ctx, uri, declared)
+                MmsPduBuilder.Part(effectiveMime, data)
             }.getOrNull()
         }
-        if (parts.isEmpty()) throw Exception("No images could be read")
+        if (parts.isEmpty()) throw Exception("None of those could be read")
         sendViaMms(ctx, recipients, parts, subId)
     }
+
+    @Deprecated("Use sendMultipleMediaMms — this one labelled every part image/jpeg",
+        ReplaceWith("sendMultipleMediaMms(ctx, to, uris, subId, extraRecipients)"))
+    fun sendMultipleImagesMms(ctx: Context, to: String, uris: List<android.net.Uri>,
+                              subId: Int = -1, extraRecipients: List<String> = emptyList()) =
+        sendMultipleMediaMms(ctx, to, uris, subId, extraRecipients)
 
     fun sendMediaMms(ctx: Context, to: String, mediaUri: android.net.Uri, mimeType: String,
                      subId: Int = -1, extraRecipients: List<String> = emptyList()) {
