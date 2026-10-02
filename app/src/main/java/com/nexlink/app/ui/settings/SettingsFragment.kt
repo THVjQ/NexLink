@@ -155,21 +155,7 @@ class SettingsFragment : Fragment() {
             importLauncher.launch(arrayOf("text/xml", "application/xml", "*/*"))
         }
 
-        b.btnReportBug.setOnClickListener {
-            val template = buildString {
-                appendLine("**Device:** ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
-                appendLine("**Android:** ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})")
-                appendLine()
-                appendLine("**Describe the bug:**")
-                appendLine()
-                appendLine("**Steps to reproduce:**")
-                appendLine()
-                appendLine("**Expected behaviour:**")
-            }
-            val encodedBody = android.net.Uri.encode(template)
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/THVjQ/NexLink/issues/new?body=$encodedBody"))
-            startActivity(intent)
-        }
+        b.btnReportBug.setOnClickListener { BugReport.send(requireContext()) }
 
         val ctx = requireContext()
 
