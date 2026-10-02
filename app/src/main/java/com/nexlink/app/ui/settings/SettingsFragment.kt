@@ -753,11 +753,21 @@ class SettingsFragment : Fragment() {
 
     private val appIconDrawables = intArrayOf(
         R.mipmap.ic_launcher,
-        R.mipmap.ic_launcher_1, R.mipmap.ic_launcher_2, R.mipmap.ic_launcher_3,
-        R.mipmap.ic_launcher_4, R.mipmap.ic_launcher_5, R.mipmap.ic_launcher_6,
-        R.mipmap.ic_launcher_7, R.mipmap.ic_launcher_8, R.mipmap.ic_launcher_9,
-        R.mipmap.ic_launcher_10
+        R.mipmap.ic_launcher_1,  R.mipmap.ic_launcher_2,  R.mipmap.ic_launcher_3,
+        R.mipmap.ic_launcher_4,  R.mipmap.ic_launcher_5,  R.mipmap.ic_launcher_6,
+        R.mipmap.ic_launcher_7,  R.mipmap.ic_launcher_8,  R.mipmap.ic_launcher_9,
+        R.mipmap.ic_launcher_10, R.mipmap.ic_launcher_11, R.mipmap.ic_launcher_12
     )
+
+    /**
+     * Named by colour, not numbered.
+     *
+     * These replaced "Design 1".."Design 10", which told the user nothing about
+     * which one they were choosing — the whole point of the grid is that you
+     * pick the one you like the look of, and the label should agree with what
+     * you can see. Default stays first and stays the default.
+     */
+    private val appIconNames = arrayOf("Default", "Ocean", "Midnight", "Teal", "Violet", "Paper", "Clay", "Navy", "Amber", "Rust", "Coral", "Sage", "Sand")
 
     private val notifIconDrawables = intArrayOf(
         R.drawable.ic_notif_nexlink,
@@ -769,14 +779,18 @@ class SettingsFragment : Fragment() {
 
     private fun refreshIconLabels() {
         val ctx = context ?: return
-        b.tvAppIconValue.text   = iconNames[IconPrefs.getAppIconIndex(ctx)]
-        b.tvNotifIconValue.text = iconNames[IconPrefs.getNotifIconIndex(ctx)]
+        b.tvAppIconValue.text   = appIconNames.getOrElse(IconPrefs.getAppIconIndex(ctx)) { "Default" }
+        b.tvNotifIconValue.text = iconNames.getOrElse(IconPrefs.getNotifIconIndex(ctx)) { "Default" }
     }
 
     private fun showIconPickerDialog(
         title: String,
         drawables: IntArray,
         current: Int,
+        // The app-icon grid and the notification-icon grid share this dialog and
+        // no longer have the same number of entries, so the labels come with the
+        // drawables rather than from one array that fits neither.
+        labels: Array<String>,
         onSelect: (Int) -> Unit
     ) {
         val ctx = requireContext()
@@ -815,7 +829,7 @@ class SettingsFragment : Fragment() {
                     try { setImageResource(drawables[pos]) } catch (_: Exception) {}
                 }
                 val tv = android.widget.TextView(ctx).apply {
-                    text = iconNames[pos]
+                    text = labels.getOrElse(pos) { "" }
                     textSize = 11f
                     gravity = android.view.Gravity.CENTER
                     setTextColor(ContextCompat.getColor(ctx, if (pos == current) R.color.accent else R.color.text2))
@@ -846,7 +860,7 @@ class SettingsFragment : Fragment() {
     private fun showAppIconDialog() {
         val ctx = requireContext()
         val current = IconPrefs.getAppIconIndex(ctx)
-        showIconPickerDialog("App Icon", appIconDrawables, current) { which ->
+        showIconPickerDialog("App Icon", appIconDrawables, current, appIconNames) { which ->
             IconPrefs.setAppIconIndex(ctx, which)
             switchAppIcon(ctx, which)
             if (IconPrefs.getNotifIconIndex(ctx) == 0 || IconPrefs.getNotifIconIndex(ctx) == current) {
@@ -860,7 +874,7 @@ class SettingsFragment : Fragment() {
     private fun showNotifIconDialog() {
         val ctx = requireContext()
         val current = IconPrefs.getNotifIconIndex(ctx)
-        showIconPickerDialog("Notification Icon", notifIconDrawables, current) { which ->
+        showIconPickerDialog("Notification Icon", notifIconDrawables, current, iconNames) { which ->
             IconPrefs.setNotifIconIndex(ctx, which)
             refreshIconLabels()
         }
@@ -871,7 +885,7 @@ class SettingsFragment : Fragment() {
         val pkg = ctx.packageName        // applicationId  = com.thvjq.nexlink
         val ns  = "com.nexlink.app"      // namespace / class prefix
         val allAliases = listOf(".MainActivityDefault") +
-            (1..10).map { ".MainActivityIcon$it" }
+            (1..12).map { ".MainActivityIcon$it" }
         val target = if (index == 0) ".MainActivityDefault" else ".MainActivityIcon$index"
         allAliases.forEach { alias ->
             val comp = ComponentName(pkg, ns + alias)  // pkg=identity, class=namespace+name

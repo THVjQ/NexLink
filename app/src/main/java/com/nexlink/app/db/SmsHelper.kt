@@ -817,19 +817,19 @@ object SmsHelper {
     private fun sendViaMms(ctx: Context, recipients: List<String>, parts: List<MmsPduBuilder.Part>,
                            subId: Int) {
         val txId = MmsPduBuilder.generateTxId()
-        val pduBytes = try {
-            MmsPduBuilder.build(ctx, recipients, parts, txId)
-        } catch (e: Throwable) {
-            android.util.Log.e("NexLink_MMS", "sendViaMms: PduComposer FAILED", e)
-            DebugLog.log(ctx, DebugLog.CAT_ERROR, recipients.joinToString(","),
-                "MMS build failed: ${e.message}")
-            return
-        }
-        DebugLog.log(ctx, DebugLog.CAT_SENT, recipients.joinToString(","),
-            "MMS queued · ${parts.size} part(s) [${parts.joinToString { it.contentType }}] · " +
-            "${pduBytes.size} B · txId=$txId")
-        android.util.Log.d("NexLink_MMS", "sendViaMms: recipients=$recipients txId=$txId pdu=${pduBytes.size}B subId=$subId")
 
+        // The local row goes in FIRST, before anything that can fail.
+        //
+        // This used to run after the PDU was built, and a build failure did
+        // `return` — not throw. The caller therefore saw a normal return, called
+        // loadMessages(), and the optimistic row was replaced by a database that
+        // had nothing in it. The message vanished when you left the conversation
+        // and came back, the recipient never got it, and NOTHING said so: no
+        // exception, no toast, only a DebugLog line nobody reads.
+        //
+        // Inserting first means every attempt leaves a visible row, exactly as
+        // sendSms has always done, and a failure marks that row FAILED — which
+        // the conversation already renders and already offers to retry.
         val threadId = runCatching {
             Telephony.Threads.getOrCreateThreadId(ctx, recipients.toSet())
         }.getOrDefault(0L)
@@ -837,6 +837,21 @@ object SmsHelper {
         val outboxUri = runCatching { insertToOutbox(ctx, recipients, parts, txId, threadId) }.getOrNull()
         val outboxId  = outboxUri?.lastPathSegment?.toLongOrNull() ?: -1L
         android.util.Log.d("NexLink_MMS", "sendViaMms: outbox row=$outboxUri threadId=$threadId")
+
+        val pduBytes = try {
+            MmsPduBuilder.build(ctx, recipients, parts, txId)
+        } catch (e: Throwable) {
+            android.util.Log.e("NexLink_MMS", "sendViaMms: PduComposer FAILED", e)
+            DebugLog.log(ctx, DebugLog.CAT_ERROR, recipients.joinToString(","),
+                "MMS build failed: ${e.message}")
+            markMmsFailed(ctx, outboxId)
+            // THROW. A silent return here is what made the message disappear.
+            throw Exception("That message could not be prepared: ${e.message}")
+        }
+        DebugLog.log(ctx, DebugLog.CAT_SENT, recipients.joinToString(","),
+            "MMS queued · ${parts.size} part(s) [${parts.joinToString { it.contentType }}] · " +
+            "${pduBytes.size} B · txId=$txId")
+        android.util.Log.d("NexLink_MMS", "sendViaMms: recipients=$recipients txId=$txId pdu=${pduBytes.size}B subId=$subId")
 
         val contentUri = MmsFileProvider.writePdu(ctx, pduBytes)
         android.util.Log.d("NexLink_MMS", "sendViaMms: pdu uri=$contentUri")
@@ -850,6 +865,24 @@ object SmsHelper {
             ctx.applicationContext, contentUri, null, configOverrides, makeSentIntent(ctx, outboxId))
         android.os.Handler(android.os.Looper.getMainLooper())
             .postDelayed({ java.io.File(ctx.cacheDir, contentUri.lastPathSegment ?: "").delete() }, 180_000L)
+    }
+
+    /**
+     * Flip an outbox row to FAILED so it stays visible and retryable.
+     *
+     * The conversation already renders MESSAGE_BOX_FAILED as a failed message
+     * with a retry, so a dispatch that cannot even start should land there
+     * rather than leaving the user with nothing to look at or act on.
+     */
+    private fun markMmsFailed(ctx: Context, outboxId: Long) {
+        if (outboxId <= 0) return
+        runCatching {
+            ctx.contentResolver.update(
+                android.content.ContentUris.withAppendedId(Telephony.Mms.CONTENT_URI, outboxId),
+                ContentValues().apply {
+                    put(Telephony.Mms.MESSAGE_BOX, Telephony.Mms.MESSAGE_BOX_FAILED)
+                }, null, null)
+        }
     }
 
     private fun insertToOutbox(ctx: Context, recipients: List<String>,
