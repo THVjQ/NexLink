@@ -44,6 +44,7 @@ import com.nexlink.app.db.GroupNameStore
 import com.nexlink.app.db.NotificationPrefs
 import com.nexlink.app.db.ReadTracker
 import com.nexlink.app.db.RecycleBinStore
+import com.nexlink.app.db.ReplacedThreadStore
 import com.nexlink.app.db.SentMmsStore
 import com.nexlink.shared.SimInfo
 import com.nexlink.app.db.SmsHelper
@@ -837,56 +838,31 @@ class ConversationActivity : AppCompatActivity() {
     // ── Group membership ──────────────────────────────────────────────────────
 
     /**
-     * Lists who is in the conversation, with a tick per person and a way to add more.
+     * Lists who is in the conversation, with a Remove button per person and a way to add more.
      *
      * MMS has no "add to group" operation: a thread *is* its recipient set, so a different set is
      * a different thread. Rather than pretend otherwise, changing the membership opens the
-     * conversation for the new set and leaves the existing thread untouched — which is also what
-     * the carrier does the moment you send to a different list of people.
+     * conversation for the new set — which is also what the carrier does the moment you send to a
+     * different list of people. The old group is hidden from the list (see [ReplacedThreadStore]),
+     * never deleted.
      *
      * [members] lets the contact picker hand back a list that isn't in [participants] yet, so the
      * dialog can reopen showing pending additions.
      */
     private fun showMembersDialog(members: List<String>? = null) {
-        // distinctBy the normalised key, not the raw text: adding someone already in the group
-        // from the contact picker would otherwise list them twice as 0412… and +61412….
-        val current = (members ?: participants)
-            .map { it.trim() }.filter { it.isNotBlank() }.distinctBy { memberKey(it) }
+        val current = MembersDialog.clean(members ?: participants)
         if (current.isEmpty()) {
             Toast.makeText(this, "No one to show in this conversation", Toast.LENGTH_SHORT).show()
             return
         }
-        val labels = current.map { num ->
-            val name = SmsHelper.getContactName(this, num)
-            if (name == num) num else "$name\n$num"
-        }.toTypedArray()
-        val keep = BooleanArray(current.size) { true }
-
-        val dialog = MaterialAlertDialogBuilder(this)
-            .setTitle(if (current.size > 1) "Group members" else "Members")
-            .setMultiChoiceItems(labels, keep) { _, which, checked -> keep[which] = checked }
-            .setNeutralButton("Add people…", null)
-            .setPositiveButton("Save", null)
-            .setNegativeButton("Cancel", null)
-            .show()
-
-        // Both buttons are wired after show() so they can leave the dialog open — the default
-        // listener dismisses on every click, which would drop the ticks on the way to the picker.
-        dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setOnClickListener {
-            dialog.dismiss()
-            openAddPeoplePicker(current.filterIndexed { i, _ -> keep[i] })
-        }
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
-            val kept = current.filterIndexed { i, _ -> keep[i] }
-            when {
-                kept.isEmpty() ->
-                    Toast.makeText(this, "A conversation needs at least one person", Toast.LENGTH_SHORT).show()
-                else -> { dialog.dismiss(); applyMembership(kept) }
-            }
-        }
+        MembersDialog.show(this,
+            title       = if (current.size > 1) "Group members" else "Members",
+            members     = current,
+            onAddPeople = { kept -> openAddPeoplePicker(kept) },
+            onSave      = { kept -> applyMembership(kept) })
     }
 
-    /** Contact picker for adding people, merged onto whoever is still ticked. */
+    /** Contact picker for adding people, merged onto whoever is still kept. */
     private fun openAddPeoplePicker(current: List<String>) {
         ContactPickerSheet(
             multiSelect  = true,
@@ -901,7 +877,7 @@ class ConversationActivity : AppCompatActivity() {
      * renamed group keeps its name after someone is added or removed.
      */
     private fun applyMembership(newMembers: List<String>) {
-        val cleaned = newMembers.map { it.trim() }.filter { it.isNotBlank() }.distinctBy { memberKey(it) }
+        val cleaned = MembersDialog.clean(newMembers)
         if (cleaned.isEmpty()) return
         // Compare on the same normalised key the thread list uses, so a number merely rewritten
         // as +61… doesn't read as a membership change.
@@ -917,10 +893,13 @@ class ConversationActivity : AppCompatActivity() {
         MaterialAlertDialogBuilder(this)
             .setTitle(if (cleaned.size > 1) "Start group with ${cleaned.size} people?" else "Start chat")
             .setMessage("A group message is addressed to a fixed set of people, so changing who is " +
-                        "in it opens a conversation with the new set. This chat and its messages " +
-                        "stay exactly as they are.")
+                        "in it starts a new group with the new set, and new messages go there. " +
+                        "The old group is tucked away, not deleted, and comes back if anyone " +
+                        "replies in it.")
             .setPositiveButton("Continue") { _, _ ->
                 if (cleaned.size > 1 && existingName != null) GroupNameStore.setName(this, cleaned, existingName)
+                // Only a group is "replaced". Adding people to a 1:1 leaves that 1:1 a real chat.
+                if (isGroup) ReplacedThreadStore.markReplaced(this, threadId)
                 startActivity(android.content.Intent(this, ConversationActivity::class.java).apply {
                     putExtra("address", cleaned.first())
                     putExtra("contact_name", newName)
@@ -934,14 +913,7 @@ class ConversationActivity : AppCompatActivity() {
     }
 
     /** Last 9 digits, matching the thread list's dedup key; alphanumeric senders keep their text. */
-    private fun memberKey(address: String): String {
-        val digits = address.filter { it.isDigit() }
-        return when {
-            digits.length >= 9  -> digits.takeLast(9)
-            digits.isNotEmpty() -> digits
-            else                -> address.trim().lowercase()
-        }
-    }
+    private fun memberKey(address: String) = MembersDialog.memberKey(address)
 
     // ── Attachments ───────────────────────────────────────────────────────────
 

@@ -280,20 +280,23 @@ class MmsSentReceiver : BroadcastReceiver() {
             "MMS",
             "MMS send result · httpOk=$isOk · MMSC=$statusDesc")
 
+        // Same rule as the log line above: an HTTP OK with no M-Send.conf body counts as sent (some
+        // carriers return none). Anything else is a failure and must leave the outbox — a row that
+        // stays there keeps its clock forever and is never offered a retry.
+        val sent = status == 0x80 || (status == null && isOk)
+        if (!sent) android.util.Log.e("NexLink_MMS", "MMSC REJECTED: $statusDesc — see pdu bytes above for full response")
         val outboxId = intent.getLongExtra("outbox_id", -1L)
-        if (status == 0x80 && outboxId > 0) {
-            // Flip outbox row → sent so the UI dedupes the optimistic bubble
+        if (outboxId > 0) {
             try {
                 val uri = android.content.ContentUris.withAppendedId(
                     android.provider.Telephony.Mms.CONTENT_URI, outboxId)
                 ctx.contentResolver.update(uri,
                     android.content.ContentValues().apply {
                         put(android.provider.Telephony.Mms.MESSAGE_BOX,
-                            android.provider.Telephony.Mms.MESSAGE_BOX_SENT)
+                            if (sent) android.provider.Telephony.Mms.MESSAGE_BOX_SENT
+                            else      android.provider.Telephony.Mms.MESSAGE_BOX_FAILED)
                     }, null, null)
             } catch (_: Exception) {}
-        } else if (status != null && status != 0x80) {
-            android.util.Log.e("NexLink_MMS", "MMSC REJECTED: $statusDesc — see pdu bytes above for full response")
         }
     }
 

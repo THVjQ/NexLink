@@ -17,8 +17,8 @@ android {
         applicationId "com.thvjq.nexlink"
         minSdk 26
         targetSdk 36
-        versionCode 39
-        versionName "2.5.9"
+        versionCode 40
+        versionName "2.6.0"
     }
 
     signingConfigs {

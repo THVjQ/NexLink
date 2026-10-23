@@ -22,6 +22,8 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.nexlink.app.R
 import com.nexlink.app.databinding.FragmentSmsBinding
 import com.nexlink.app.db.BlockStore
+import com.nexlink.app.db.BroadcastStore
+import com.nexlink.app.db.ReplacedThreadStore
 import com.nexlink.app.ui.NexPopup
 import com.nexlink.app.db.CategoryStore
 import com.nexlink.shared.Conversation
@@ -32,6 +34,8 @@ import com.nexlink.app.db.RecycleBinStore
 import com.nexlink.app.db.SmsHelper
 
 class SmsFragment : Fragment() {
+
+    private companion object { const val BROADCAST_PREFIX = "broadcast:" }
 
     private var _b: FragmentSmsBinding? = null
     private val b get() = _b!!
@@ -149,6 +153,23 @@ class SmsFragment : Fragment() {
         val blocked = BlockStore.blockedSet(requireContext())
         result = result.filter { conv -> !blocked.contains(conv.address.replace("\\s".toRegex(), "")) }
 
+        // A group replaced by a membership change stays hidden until someone posts in it again.
+        result = result.filter { conv -> !ReplacedThreadStore.isHidden(requireContext(), conv.threadId, conv.timestamp) }
+
+        // Broadcasts have no telephony thread, so they are listed from their own store. A negative
+        // threadId marks them — real thread ids are always positive.
+        result = result + BroadcastStore.getAll(requireContext()).map { bc ->
+            Conversation(
+                threadId     = -bc.id,
+                address      = BROADCAST_PREFIX + bc.id,
+                participants = bc.members,
+                contactName  = bc.name,
+                lastMessage  = bc.sent.lastOrNull()?.body?.let { "Broadcast: $it" }
+                               ?: "Broadcast · ${bc.members.size} people",
+                timestamp    = bc.sent.lastOrNull()?.timestamp ?: bc.id,
+                unreadCount  = 0)
+        }
+
         if (filterUnreadOnly) {
             val ctx = requireContext()
             result = result.filter { conv ->
@@ -180,7 +201,8 @@ class SmsFragment : Fragment() {
 
         val ctx = requireContext()
         val renamed = result.map { conv ->
-            val custom = GroupNameStore.getName(ctx, conv.participants)
+            // A broadcast keeps its own name, even if a group has the same members.
+            val custom = if (conv.threadId < 0) null else GroupNameStore.getName(ctx, conv.participants)
             if (custom != null) conv.copy(contactName = custom) else conv
         }
         adapter.setData(renamed)
@@ -188,6 +210,10 @@ class SmsFragment : Fragment() {
 
     private fun openConversation(conv: Conversation) {
         val ctx = requireContext()
+        if (conv.threadId < 0) {
+            startActivity(Intent(ctx, BroadcastActivity::class.java).putExtra("broadcast_id", -conv.threadId))
+            return
+        }
         val displayName = if (conv.participants.size > 1)
             GroupNameStore.getName(ctx, conv.participants) ?: conv.contactName
         else conv.contactName
@@ -201,6 +227,19 @@ class SmsFragment : Fragment() {
 
     private fun showConversationOptions(conv: Conversation, anchor: View) {
         val ctx = requireContext()
+        if (conv.threadId < 0) {
+            NexPopup.show(anchor, listOf(
+                NexPopup.Item("Delete broadcast", R.drawable.ic_delete, isDestructive = true) {
+                    MaterialAlertDialogBuilder(ctx)
+                        .setTitle("Delete broadcast?")
+                        .setMessage("This removes the list. Messages already sent stay in each person's chat.")
+                        .setPositiveButton("Delete") { _, _ ->
+                            BroadcastStore.delete(ctx, -conv.threadId); loadConversations()
+                        }
+                        .setNegativeButton("Cancel", null).show()
+                }))
+            return
+        }
         val isPinned  = PinStore.isPinned(ctx, conv.threadId)
         val isBlocked = BlockStore.isBlocked(ctx, conv.address)
         val cats      = CategoryStore.getAll(ctx)
@@ -390,8 +429,44 @@ class SmsFragment : Fragment() {
     private fun showNewChatMenu() {
         NexPopup.show(b.fabNewChat, listOf(
             NexPopup.Item("New message",    R.drawable.ic_compose)  { openContactPicker(multiSelect = false) },
-            NexPopup.Item("New group chat", R.drawable.ic_contacts) { openContactPicker(multiSelect = true)  }
+            NexPopup.Item("New group chat", R.drawable.ic_contacts) { openContactPicker(multiSelect = true)  },
+            NexPopup.Item("New broadcast",  R.drawable.ic_contacts) { openBroadcastPicker() }
         ))
+    }
+
+    /**
+     * Broadcast: the same message to several people, sent to each one separately. Unlike a group
+     * chat nobody sees the others, and replies come back privately.
+     */
+    private fun openBroadcastPicker() {
+        ContactPickerSheet(
+            multiSelect  = true,
+            onSinglePick = { contact, number -> showBroadcastNameDialog(listOf(number), contact.name) },
+            onGroupPick  = { contacts ->
+                showBroadcastNameDialog(contacts.map { it.number },
+                    contacts.joinToString(", ") { it.name.split(" ").first() })
+            },
+            titleText    = "New broadcast"
+        ).show(parentFragmentManager, "broadcast_picker")
+    }
+
+    private fun showBroadcastNameDialog(numbers: List<String>, defaultName: String) {
+        val ctx = requireContext()
+        val members = MembersDialog.clean(numbers)
+        if (members.isEmpty()) return
+        val nameInput = android.widget.EditText(ctx).apply {
+            hint = "Broadcast name"; setText(defaultName); setPadding(48, 24, 48, 24)
+        }
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle("Name your broadcast")
+            .setMessage("Each person gets their own copy and can't see who else got it. Replies come back to you privately.")
+            .setView(nameInput)
+            .setPositiveButton("Create") { _, _ ->
+                val bc = BroadcastStore.create(ctx, nameInput.text.toString().trim().ifEmpty { defaultName }, members)
+                startActivity(Intent(ctx, BroadcastActivity::class.java).putExtra("broadcast_id", bc.id))
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun openContactPicker(multiSelect: Boolean) {

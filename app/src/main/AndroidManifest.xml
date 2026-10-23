@@ -104,6 +104,12 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize"/>
 
+        <!-- ── Broadcast list (one SMS per member, replies come back privately) ── -->
+        <activity
+            android:name=".ui.sms.BroadcastActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"/>
+
         <!-- ── Debug console (Settings ▸ Debug) ── -->
         <activity
             android:name=".ui.settings.DebugActivity"

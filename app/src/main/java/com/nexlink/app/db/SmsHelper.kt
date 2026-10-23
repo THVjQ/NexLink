@@ -914,12 +914,21 @@ object SmsHelper {
         }
         // Media parts (Samsung may use these to recompose the PDU)
         for (part in parts) {
+            // The provider only gives a part a backing file when it is NOT text/plain or SMIL, so
+            // text must go in the `text` column. Streaming it threw FileNotFoundException, which left
+            // the row with an empty body (the conversation skips empty text MMS, so a group text showed
+            // its clock and then vanished) and lost the row id, so no sent/failed result could land on it.
+            val isText = part.contentType.startsWith("text/")
             val pUri = ctx.contentResolver.insert(partUri, ContentValues().apply {
                 put(Telephony.Mms.Part.CONTENT_TYPE, part.contentType)
                 put(Telephony.Mms.Part.NAME, outboxPartName(part.contentType))
-                if (part.contentType.startsWith("text/")) put(Telephony.Mms.Part.CHARSET, 106)
+                if (isText) {
+                    put(Telephony.Mms.Part.CHARSET, 106)
+                    put(Telephony.Mms.Part.TEXT, String(part.bytes, Charsets.UTF_8))
+                }
             }) ?: continue
-            ctx.contentResolver.openOutputStream(pUri)?.use { it.write(part.bytes) }
+            if (!isText) runCatching { ctx.contentResolver.openOutputStream(pUri)?.use { it.write(part.bytes) } }
+                .onFailure { android.util.Log.w("NexLink_MMS", "insertToOutbox: part write failed", it) }
         }
 
         android.util.Log.d("NexLink_MMS", "insertToOutbox: $mmsUri txId=$txId parts=${parts.size}")
