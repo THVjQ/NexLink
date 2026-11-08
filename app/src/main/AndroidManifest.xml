@@ -345,7 +345,7 @@
         <!-- ── Outgoing message capture via accessibility ── -->
         <service
             android:name=".services.NexLinkAccessibilityService"
-            android:label="NexLink (capture sent messages)"
+            android:label="NexLink sent-message capture"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="false">
             <intent-filter>

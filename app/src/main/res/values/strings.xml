@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">NexLink</string>
-    <string name="accessibility_capture_description">Lets NexLink record the messages you send inside Signal, WhatsApp, Telegram, Instagram, Discord and Steam so your sent replies appear in your NexLink inbox. NexLink only reads what is already on your screen while you use those apps.</string>
+    <string name="accessibility_capture_description">Optional feature, not an accessibility tool: NexLink reads the messages you send inside Signal, WhatsApp, Telegram, Messenger, Instagram, Discord and Steam, only while those apps are open on your screen, so your sent replies appear in your NexLink inbox. Nothing is read from any other app, and nothing leaves your phone.</string>
 </resources>

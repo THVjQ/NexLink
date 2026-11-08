@@ -102,9 +102,11 @@ class SettingsFragment : Fragment() {
             AlertDialog.Builder(requireContext())
                 .setTitle("Sent Message Capture")
                 .setMessage(
-                    "NexLink uses Android's Accessibility Service to read the messages " +
-                    "you send inside Signal, WhatsApp, Telegram, Instagram, Discord, and Steam " +
-                    "while those apps are open on your screen.\n\n" +
+                    "NexLink uses Android's Accessibility Service API to read the messages " +
+                    "you send inside Signal, WhatsApp, Telegram, Messenger, Instagram, Discord " +
+                    "and Steam while those apps are open on your screen. This is not an " +
+                    "accessibility tool for people with disabilities; the API is used only for " +
+                    "this optional feature.\n\n" +
                     "This lets NexLink show both sides of your conversations in the inbox — " +
                     "including replies you send — not just incoming messages.\n\n" +
                     "What NexLink reads:\n" +
@@ -114,12 +116,13 @@ class SettingsFragment : Fragment() {
                     "• Does not read passwords, banking apps, or any other app\n" +
                     "• Does not send or share any data off your device\n" +
                     "• All captured messages are stored locally on your phone only\n\n" +
-                    "Tap Enable to open Accessibility Settings and turn on NexLink."
+                    "You can turn this off at any time in Accessibility Settings.\n\n" +
+                    "Tap Agree to open Accessibility Settings and turn on NexLink."
                 )
-                .setPositiveButton("Enable") { _, _ ->
+                .setPositiveButton("Agree") { _, _ ->
                     startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                 }
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton("No thanks", null)
                 .show()
         }
         b.btnAppSettings.setOnClickListener {

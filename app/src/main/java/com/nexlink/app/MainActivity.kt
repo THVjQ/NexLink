@@ -7,6 +7,8 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Settings
 import android.provider.Telephony
+import android.telecom.TelecomManager
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.appcompat.app.AppCompatActivity
@@ -43,16 +45,22 @@ class MainActivity : AppCompatActivity() {
     private var currentNavId = R.id.nav_sms
     private var navigatingBack = false
 
-    companion object {
-        private val REQUIRED_PERMS = arrayOf(
-            Manifest.permission.READ_SMS,
-            Manifest.permission.SEND_SMS,
-            Manifest.permission.RECEIVE_SMS,
-            Manifest.permission.READ_CONTACTS,
-            Manifest.permission.READ_CALL_LOG,
-            Manifest.permission.CALL_PHONE,
-        )
-    }
+    // Play's SMS/Call Log policy: the default-handler prompt must come BEFORE any runtime
+    // permission request, and SMS / call-log permissions may only be asked for while NexLink
+    // holds that role. Firing them together put the permission dialog on top of the role
+    // prompt, which is what got 2.6.0 rejected. So first launch runs as a chain:
+    // SMS role → dialer role → remaining runtime permissions → notification access.
+    private val smsRoleLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { promptDefaultDialerApp() }
+
+    private val dialerRoleLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { requestMissingPermissions() }
+
+    private val permissionsLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { promptNotificationAccess() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         applyDarkMode()
@@ -67,9 +75,7 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        requestMissingPermissions()
-        promptDefaultSmsApp()
-        promptNotificationAccess()
+        if (savedInstanceState == null) promptDefaultSmsApp()
 
         binding.bottomNav.setOnItemSelectedListener { item ->
             val fragment = when (item.itemId) {
@@ -152,10 +158,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestMissingPermissions() {
-        val missing = REQUIRED_PERMS.filter {
+        val wanted = mutableListOf(Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE)
+        if (isDefaultSmsApp()) wanted += listOf(
+            Manifest.permission.READ_SMS, Manifest.permission.SEND_SMS, Manifest.permission.RECEIVE_SMS)
+        if (isDefaultDialer()) wanted += Manifest.permission.READ_CALL_LOG
+        val missing = wanted.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-        if (missing.isNotEmpty()) ActivityCompat.requestPermissions(this, missing.toTypedArray(), 0)
+        if (missing.isNotEmpty()) permissionsLauncher.launch(missing.toTypedArray())
+        else promptNotificationAccess()
     }
 
     private fun promptNotificationAccess() {
@@ -177,17 +188,40 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun promptDefaultSmsApp() {
-        if (Telephony.Sms.getDefaultSmsPackage(this) == packageName) return
         val prefs = getSharedPreferences("nexlink_prefs", MODE_PRIVATE)
-        if (prefs.getBoolean("sms_prompt_shown", false)) return
+        if (isDefaultSmsApp() || prefs.getBoolean("sms_prompt_shown", false)) {
+            promptDefaultDialerApp(); return
+        }
         prefs.edit().putBoolean("sms_prompt_shown", true).apply()
+        requestDefaultSmsRole()
+    }
 
-        MaterialAlertDialogBuilder(this)
-            .setTitle("Set NexLink as Default SMS App")
-            .setMessage("To receive SMS notifications and see new messages here, set NexLink as your default SMS app.")
-            .setPositiveButton("Set as Default") { _, _ -> requestDefaultSmsRole() }
-            .setNegativeButton("Not Now", null)
-            .show()
+    private fun promptDefaultDialerApp() {
+        val prefs = getSharedPreferences("nexlink_prefs", MODE_PRIVATE)
+        if (isDefaultDialer() || prefs.getBoolean("dialer_prompt_shown", false)) {
+            requestMissingPermissions(); return
+        }
+        prefs.edit().putBoolean("dialer_prompt_shown", true).apply()
+        if (!requestDefaultDialerRole()) requestMissingPermissions()
+    }
+
+    private fun isDefaultSmsApp() = Telephony.Sms.getDefaultSmsPackage(this) == packageName
+
+    fun isDefaultDialer() =
+        getSystemService(TelecomManager::class.java)?.defaultDialerPackage == packageName
+
+    /** Returns false when no prompt could be shown, so the caller can carry on. */
+    fun requestDefaultDialerRole(): Boolean {
+        val intent = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            val rm = getSystemService(android.app.role.RoleManager::class.java)
+            if (rm == null || !rm.isRoleAvailable(android.app.role.RoleManager.ROLE_DIALER) ||
+                rm.isRoleHeld(android.app.role.RoleManager.ROLE_DIALER)) return false
+            rm.createRequestRoleIntent(android.app.role.RoleManager.ROLE_DIALER)
+        } else {
+            Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER)
+                .putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName)
+        }
+        return try { dialerRoleLauncher.launch(intent); true } catch (_: Exception) { false }
     }
 
     fun requestDefaultSmsRole() {
@@ -195,15 +229,14 @@ class MainActivity : AppCompatActivity() {
             val rm = getSystemService(android.app.role.RoleManager::class.java)
             if (rm != null && rm.isRoleAvailable(android.app.role.RoleManager.ROLE_SMS) &&
                 !rm.isRoleHeld(android.app.role.RoleManager.ROLE_SMS)) {
-                startActivityForResult(rm.createRequestRoleIntent(android.app.role.RoleManager.ROLE_SMS), 42)
+                smsRoleLauncher.launch(rm.createRequestRoleIntent(android.app.role.RoleManager.ROLE_SMS))
                 return
             }
         }
         try {
-            startActivity(
+            smsRoleLauncher.launch(
                 Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT)
                     .putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         } catch (_: Exception) {
             startActivity(
