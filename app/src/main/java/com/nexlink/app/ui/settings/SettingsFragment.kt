@@ -703,7 +703,7 @@ class SettingsFragment : Fragment() {
         } catch (_: Exception) { false }
         b.statusAccessibility.text = if (accessibilityEnabled) "Enabled ✓" else "Not enabled — tap button below"
 
-        val isDefault = android.provider.Telephony.Sms.getDefaultSmsPackage(ctx) == ctx.packageName
+        val isDefault = com.nexlink.app.db.SmsHelper.isDefaultSmsApp(ctx)
         b.btnSetDefaultSms.visibility = if (isDefault) View.GONE else View.VISIBLE
     }
 

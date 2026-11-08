@@ -205,7 +205,7 @@ class MainActivity : AppCompatActivity() {
         if (!requestDefaultDialerRole()) requestMissingPermissions()
     }
 
-    private fun isDefaultSmsApp() = Telephony.Sms.getDefaultSmsPackage(this) == packageName
+    private fun isDefaultSmsApp() = com.nexlink.app.db.SmsHelper.isDefaultSmsApp(this)
 
     fun isDefaultDialer() =
         getSystemService(TelecomManager::class.java)?.defaultDialerPackage == packageName
