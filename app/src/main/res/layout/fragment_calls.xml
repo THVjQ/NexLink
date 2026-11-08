@@ -18,6 +18,26 @@
             </LinearLayout>
         </LinearLayout>
 
+        <!-- Shown until NexLink is the default phone app: call history is only requested after
+             the user grants that role (Play SMS/Call Log policy). -->
+        <LinearLayout
+            android:id="@+id/defaultDialerCard"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginHorizontal="16dp" android:layout_marginBottom="12dp"
+            android:orientation="vertical" android:padding="12dp"
+            android:background="@drawable/bg_input"
+            android:visibility="gone">
+            <TextView android:text="Make NexLink your phone app to see your call history here."
+                android:textSize="13sp" android:textColor="@color/text"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSetDefaultDialer"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Set as Default Phone App"
+                android:backgroundTint="@color/accent"/>
+        </LinearLayout>
+
         <TextView android:text="RECENT CALLS" android:textSize="11sp" android:textStyle="bold"
             android:textColor="@color/muted" android:letterSpacing="0.09"
             android:layout_width="wrap_content" android:layout_height="wrap_content"

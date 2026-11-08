@@ -54,6 +54,9 @@ class CallsFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        b.btnSetDefaultDialer.setOnClickListener {
+            (activity as? com.nexlink.app.MainActivity)?.requestDefaultDialerRole()
+        }
         b.btnDialpad.setOnClickListener {
             startActivity(Intent(requireContext(), DialerActivity::class.java))
         }
@@ -65,7 +68,12 @@ class CallsFragment : Fragment() {
         loadCallLog()
     }
 
-    override fun onResume() { super.onResume(); loadCallLog() }
+    override fun onResume() {
+        super.onResume()
+        val isDialer = (activity as? com.nexlink.app.MainActivity)?.isDefaultDialer() ?: true
+        b.defaultDialerCard.visibility = if (isDialer) View.GONE else View.VISIBLE
+        loadCallLog()
+    }
 
     private fun loadCallLog() {
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_CALL_LOG)
